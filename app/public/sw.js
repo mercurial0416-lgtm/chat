@@ -1,0 +1,34 @@
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: "새 메시지", body: "메시지가 도착했습니다." };
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(data.title || "새 메시지", {
+      body: data.body || "메시지가 도착했습니다.",
+      icon: "/icon.svg",
+      badge: "/icon.svg",
+      data: { url: data.url || "/" }
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || "/";
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if ("focus" in client) {
+          client.focus();
+          client.navigate(url);
+          return;
+        }
+      }
+      return clients.openWindow(url);
+    })
+  );
+});
