@@ -3,6 +3,28 @@ import "./styles.css";
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from "./lib/supabase";
 import { registerWebPush } from "./push";
 
+
+/* v18: 더보기 내 프로필 카드 클릭 시 프로필 설정 열기 */
+if (typeof window !== "undefined" && !window.__v18MoreProfileClickPatch) {
+  window.__v18MoreProfileClickPatch = true;
+
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!target || !target.closest) return;
+
+    const profileCard = target.closest(".morePage .myProfile, .morePage .profileCard, .morePage .profileSummary");
+    if (!profileCard) return;
+
+    const buttons = Array.from(document.querySelectorAll(".morePage .moreMenu button"));
+    const profileButton = buttons.find((button) => (button.textContent || "").includes("프로필"));
+
+    if (profileButton) {
+      event.preventDefault();
+      profileButton.click();
+    }
+  });
+}
+
 function uniqueBy(items, keyOrFn) {
   const arr = Array.isArray(items) ? items : [];
   const seen = new Set();

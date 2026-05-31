@@ -688,3 +688,211 @@ button{color:inherit;}
 }
 
 /* v17 end */
+
+/* =========================================================
+   v18 FIX
+   - PC 더보기 오른쪽 패널 잘림 해결
+   - 더보기 본문에서 설정 메뉴 제거
+   - 내 프로필 카드 클릭 가능하게 보이도록 정리
+   ========================================================= */
+
+/* PC 더보기 전체 레이아웃 */
+@media (min-width:768px){
+  .mainPanel{
+    min-width:0 !important;
+    overflow:hidden !important;
+  }
+
+  .content{
+    min-width:0 !important;
+    min-height:0 !important;
+    overflow:hidden !important;
+  }
+
+  .morePage{
+    width:100% !important;
+    max-width:none !important;
+    height:100% !important;
+    min-height:0 !important;
+    display:grid !important;
+    grid-template-columns:340px minmax(0, 1fr) !important;
+    gap:16px !important;
+    padding:0 20px 24px 20px !important;
+    overflow:hidden !important;
+    background:#000 !important;
+  }
+
+  .morePage > *{
+    min-width:0 !important;
+  }
+
+  .moreMenu{
+    grid-column:1 !important;
+    width:100% !important;
+    max-width:none !important;
+    height:100% !important;
+    min-height:0 !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    background:#10141c !important;
+    border:1px solid rgba(255,255,255,.08) !important;
+    border-radius:18px !important;
+    padding:16px !important;
+    display:flex !important;
+    flex-direction:column !important;
+    gap:10px !important;
+  }
+
+  .moreMenu button{
+    width:100% !important;
+    min-height:58px !important;
+    height:auto !important;
+    border-radius:16px !important;
+    background:#151922 !important;
+    border:1px solid rgba(255,255,255,.08) !important;
+    color:#f4f4f5 !important;
+    padding:0 14px !important;
+    text-align:left !important;
+    font-size:15px !important;
+    font-weight:900 !important;
+  }
+
+  .moreMenu button.selected,
+  .moreMenu button.active{
+    color:#fee500 !important;
+    background:#1d211d !important;
+    border-color:rgba(254,229,0,.45) !important;
+  }
+
+  /* 더보기 본문 설정 메뉴 제거: 설정은 우측 상단 아이콘만 */
+  .moreMenu button:nth-child(4){
+    display:none !important;
+  }
+
+  .moreDetail,
+  .selectedPanel,
+  .paneDetail,
+  .morePage > .moreDetail,
+  .morePage > .selectedPanel,
+  .morePage > .paneDetail{
+    grid-column:2 !important;
+    position:relative !important;
+    left:auto !important;
+    right:auto !important;
+    top:auto !important;
+    transform:none !important;
+    translate:none !important;
+    width:100% !important;
+    max-width:none !important;
+    min-width:0 !important;
+    height:100% !important;
+    min-height:0 !important;
+    max-height:none !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    margin:0 !important;
+    padding:24px !important;
+    border-radius:18px !important;
+    background:#10141c !important;
+    border:1px solid rgba(255,255,255,.08) !important;
+    color:#f4f4f5 !important;
+    box-shadow:none !important;
+    opacity:1 !important;
+    visibility:visible !important;
+  }
+
+  /* 더보기 안의 내 프로필 카드 */
+  .morePage .myProfile,
+  .morePage .profileCard,
+  .morePage .profileSummary{
+    cursor:pointer !important;
+    width:100% !important;
+    min-height:72px !important;
+    padding:12px !important;
+    margin:0 0 12px !important;
+    border-radius:16px !important;
+    background:#151922 !important;
+    border:1px solid rgba(255,255,255,.08) !important;
+    display:flex !important;
+    align-items:center !important;
+    gap:12px !important;
+  }
+
+  .morePage .myProfile:hover,
+  .morePage .profileCard:hover,
+  .morePage .profileSummary:hover{
+    background:#1b202b !important;
+    border-color:rgba(254,229,0,.35) !important;
+  }
+
+  .morePage .myProfile::after,
+  .morePage .profileCard::after,
+  .morePage .profileSummary::after{
+    content:"›" !important;
+    margin-left:auto !important;
+    color:#9aa0aa !important;
+    font-size:24px !important;
+    font-weight:700 !important;
+  }
+
+  .morePage input,
+  .morePage textarea{
+    width:100% !important;
+    height:44px !important;
+    border-radius:14px !important;
+    background:#1a1e27 !important;
+    border:1px solid rgba(255,255,255,.1) !important;
+    color:#f4f4f5 !important;
+    padding:0 14px !important;
+  }
+
+  .morePage input::placeholder,
+  .morePage textarea::placeholder{
+    color:#858b96 !important;
+    opacity:1 !important;
+  }
+
+  .morePage label,
+  .morePage b,
+  .morePage h2,
+  .morePage h3{
+    color:#f4f4f5 !important;
+  }
+
+  .morePage small,
+  .morePage span,
+  .morePage p{
+    color:#9aa0aa !important;
+  }
+
+  .morePage button.primary,
+  .morePage .primary{
+    background:#fee500 !important;
+    color:#191919 !important;
+    font-weight:900 !important;
+  }
+}
+
+/* 모바일은 기존 v17 비율 유지하면서 프로필 클릭 느낌만 추가 */
+@media (max-width:767px){
+  .morePage .myProfile,
+  .morePage .profileCard,
+  .morePage .profileSummary{
+    cursor:pointer !important;
+  }
+
+  .morePage .myProfile::after,
+  .morePage .profileCard::after,
+  .morePage .profileSummary::after{
+    content:"›" !important;
+    margin-left:auto !important;
+    color:#8f949f !important;
+    font-size:22px !important;
+  }
+
+  .moreMenu button:nth-child(4){
+    display:none !important;
+  }
+}
+
+/* v18 end */
