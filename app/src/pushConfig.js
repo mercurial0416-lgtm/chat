@@ -1,1 +1,1 @@
-export const VAPID_PUBLIC_KEY = "BCPYaqyhDPS3hxfDLe-3FAqCnzvQRqFhP4N8Fv48RQsXnlUpL8kinTazXNYZP4pNvYniQ8_vWTSnWxavd2D3c28";
+export const VAPID_PUBLIC_KEY = 'BCPYaqyhDPS3hxfDLe-3FAqCnzvQRqFhP4N8Fv48RQsXnlUpL8kinTazXNYZP4pNvYniQ8_vWTSnWxavd2D3c28';
