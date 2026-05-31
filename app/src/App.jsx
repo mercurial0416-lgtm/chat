@@ -3,6 +3,30 @@ import "./styles.css";
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from "./lib/supabase";
 import { registerWebPush } from "./push";
 
+function uniqueBy(items, keyOrFn) {
+  const arr = Array.isArray(items) ? items : [];
+  const seen = new Set();
+  const out = [];
+
+  for (const item of arr) {
+    if (!item) continue;
+
+    const rawKey =
+      typeof keyOrFn === "function"
+        ? keyOrFn(item)
+        : item?.[keyOrFn];
+
+    const key = rawKey == null ? JSON.stringify(item) : String(rawKey);
+
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+
+  return out;
+}
+
+
 const h = React.createElement;
 const TABS = { FRIENDS: "friends", CHATS: "chats", CALENDAR: "calendar", MORE: "more" };
 const NAV = [
