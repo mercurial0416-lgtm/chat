@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { supabase } from "./lib/supabase";
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from "./lib/supabase";
 import { registerWebPush } from "./push";
 
 const TABS = {
@@ -28,6 +28,53 @@ async function safeRpc(name, args = {}, label = name) {
   if (error) throw error;
   return data;
 }
+async function authFetch(path, payload, label = "Auth") {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    const text = await res.text();
+    let data = {};
+
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      data = { message: text };
+    }
+
+    if (!res.ok) {
+      throw new Error(
+        data.msg ||
+          data.message ||
+          data.error_description ||
+          data.error ||
+          `${label} 실패: ${res.status}`
+      );
+    }
+
+    return data;
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new Error(`${label} 시간초과`);
+    }
+
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 
 function timeText(value) {
   if (!value) return "";
@@ -73,6 +120,7 @@ function AuthScreen() {
     try {
       const cleanEmail = email.trim();
       const cleanPassword = password.trim();
+      const cleanNickname = nickname.trim() || cleanEmail.split("@")[0] || "익명";
 
       if (!cleanEmail || !cleanPassword) {
         throw new Error("이메일/비번 입력 필요");
@@ -83,44 +131,51 @@ function AuthScreen() {
       }
 
       if (mode === "signup") {
-        const { data, error } = await withTimeout(
-          supabase.auth.signUp({
+        const data = await authFetch(
+          "signup",
+          {
             email: cleanEmail,
             password: cleanPassword,
-            options: {
-              data: {
-                nickname: nickname.trim() || cleanEmail.split("@")[0],
-              },
+            data: {
+              nickname: cleanNickname,
             },
-          }),
-          30000,
+          },
           "가입"
         );
 
-        if (error) throw error;
+        if (data.access_token && data.refresh_token) {
+          await supabase.auth.setSession({
+            access_token: data.access_token,
+            refresh_token: data.refresh_token,
+          });
 
-        if (!data.session) {
-          setMsg("가입됨. 이메일 인증이 켜져 있으면 Supabase에서 Confirm email OFF 필요");
-        }
-
-        if (data.session) {
           setMsg("가입 성공. 이동중...");
-          setTimeout(() => window.location.reload(), 300);
+          setTimeout(() => window.location.reload(), 500);
+        } else {
+          setMsg("가입 요청 완료. 로그인으로 다시 들어가봐.");
+          setMode("login");
         }
       } else {
-        const { error } = await withTimeout(
-          supabase.auth.signInWithPassword({
+        const data = await authFetch(
+          "token?grant_type=password",
+          {
             email: cleanEmail,
             password: cleanPassword,
-          }),
-          30000,
+          },
           "로그인"
         );
 
-        if (error) throw error;
+        if (!data.access_token || !data.refresh_token) {
+          throw new Error("로그인 토큰을 못 받음");
+        }
+
+        await supabase.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+        });
 
         setMsg("로그인 성공. 이동중...");
-        setTimeout(() => window.location.reload(), 300);
+        setTimeout(() => window.location.reload(), 500);
       }
     } catch (err) {
       setMsg(errorText(err));
