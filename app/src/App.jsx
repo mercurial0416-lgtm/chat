@@ -3,7 +3,7 @@ import './styles.css';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './lib/supabase';
 import { registerWebPush } from './push';
 
-const PATCH_VERSION = 'v7-reviewed-20260601';
+const PATCH_VERSION = 'v8-stable-readable-20260601';
 
 const TABS = {
   FRIENDS: 'friends',
@@ -537,8 +537,12 @@ function ChatRoom({ room, me, onClose }) {
   const bottomRef = useRef(null);
   const typingChannelRef = useRef(null);
   const typingTimerRef = useRef(null);
+  const loadingRef = useRef(false);
 
-  async function load() {
+  async function load(options = {}) {
+    const silent = !!options.silent;
+    if (!room?.room_id || loadingRef.current) return;
+    loadingRef.current = true;
     try {
       const [messagesRes, membersRes] = await Promise.all([
         supabase
@@ -553,9 +557,12 @@ function ChatRoom({ room, me, onClose }) {
       if (membersRes.error) throw membersRes.error;
       setMessages(messagesRes.data || []);
       setMembers(membersRes.data || []);
-      await supabase.rpc('mark_room_read', { p_room_id: room.room_id });
+      supabase.rpc('mark_room_read', { p_room_id: room.room_id }).catch(() => {});
+      if (!silent) setMsg('');
     } catch (err) {
-      setMsg(errText(err));
+      if (!silent) setMsg(errText(err));
+    } finally {
+      loadingRef.current = false;
     }
   }
 
@@ -563,23 +570,15 @@ function ChatRoom({ room, me, onClose }) {
     if (!room?.room_id) return;
     setMessages([]);
     setMsg('');
-    load();
+    setTyping('');
+    load({ silent: false });
 
-    const pollTimer = setInterval(load, 1800);
-    const typingChannel = supabase.channel('typing-' + room.room_id, { config: { broadcast: { self: false } } });
-    typingChannel
-      .on('broadcast', { event: 'typing' }, ({ payload }) => {
-        if (payload?.userId === me.id) return;
-        setTyping(`${payload?.nickname || '상대'} 입력중...`);
-        clearTimeout(typingTimerRef.current);
-        typingTimerRef.current = setTimeout(() => setTyping(''), 1200);
-      })
-      .subscribe();
-    typingChannelRef.current = typingChannel;
+    // 안정판: Supabase Realtime 채널 충돌을 피하고, 0.8초 간격 폴링으로 즉시성 확보
+    const fastTimer = setInterval(() => load({ silent: true }), 800);
 
     return () => {
-      clearInterval(pollTimer);
-      supabase.removeChannel(typingChannel);
+      clearInterval(fastTimer);
+      clearTimeout(typingTimerRef.current);
     };
   }, [room?.room_id]);
 
@@ -588,6 +587,7 @@ function ChatRoom({ room, me, onClose }) {
   }, [messages.length, typing]);
 
   function readState(message) {
+    if (message.pending) return '전송중';
     if (message.sender_id !== me.id) return '';
     const others = members.filter((m) => m.user_id !== me.id);
     if (others.length === 0) return '읽음';
@@ -596,10 +596,26 @@ function ChatRoom({ room, me, onClose }) {
   }
 
   async function sendMessage(payload) {
+    const tempId = 'local-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+    const optimistic = {
+      ...payload,
+      id: tempId,
+      created_at: new Date().toISOString(),
+      edited_at: null,
+      deleted_at: null,
+      pending: true,
+      profiles: { nickname: me.nickname, avatar_url: me.avatar_url },
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 30);
+
     const { data, error } = await supabase.from('chat_messages').insert(payload).select('id').single();
-    if (error) throw error;
+    if (error) {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      throw error;
+    }
     callPush({ messageId: data.id, userId: me.id }).catch(() => {});
-    await load();
+    await load({ silent: true });
   }
 
   async function submit(e) {
@@ -624,11 +640,6 @@ function ChatRoom({ room, me, onClose }) {
 
   function changeText(value) {
     setText(value);
-    typingChannelRef.current?.send({
-      type: 'broadcast',
-      event: 'typing',
-      payload: { userId: me.id, nickname: me.nickname },
-    });
   }
 
   async function sendFile(file) {
@@ -704,7 +715,7 @@ function ChatRoom({ room, me, onClose }) {
         <button className="back" onClick={onClose}>‹</button>
         <div>
           <b>{room.title || '채팅'}</b>
-          <span>{members.length}명</span>
+          <span>{members.length}명 · 자동 새로고침</span>
         </div>
         <button className="roomMenuButton" onClick={() => setDrawerOpen(true)}>☰</button>
       </header>
@@ -720,7 +731,7 @@ function ChatRoom({ room, me, onClose }) {
               {message.message_type === 'system' ? (
                 <div className="systemMessage">{message.body}</div>
               ) : (
-                <div className={cx('messageRow', mine ? 'mine' : 'other')}>
+                <div className={cx('messageRow', mine ? 'mine' : 'other', message.pending && 'pending')}>
                   {!mine && <Avatar src={message.profiles?.avatar_url} name={message.profiles?.nickname} size={34} />}
                   <div className="messageStack">
                     {!mine && <span className="senderName">{message.profiles?.nickname || '익명'}</span>}
@@ -901,6 +912,7 @@ function CalendarPanel({ me }) {
       <div className="calendarTools">
         <button onClick={() => { const today = new Date(); setCursor(today); setSelectedDate(today); }}>오늘</button>
         <button className="yellow" onClick={() => { setEditingEvent(null); setEditorOpen(true); }}>일정 추가</button>
+        <span className="calendarHint">날짜 클릭: 선택 · 더블클릭: 일정 추가</span>
       </div>
       <div className="weekHeader">{['일', '월', '화', '수', '목', '금', '토'].map((d) => <b key={d}>{d}</b>)}</div>
       <div className="monthGrid">
@@ -1022,7 +1034,7 @@ function MorePanel({ me, setMe }) {
   const sections = [
     ['profile', '👤 내 프로필'],
     ['notifications', '🔔 알림센터'],
-    ['location', '📍 위치공유'],
+    ['location', '📍 위치공유/마지막 위치'],
     ['work', '📅 근무표'],
     ['settings', '⚙️ 앱 설정'],
   ];
@@ -1160,7 +1172,7 @@ function LocationManager({ me }) {
 
   useEffect(() => {
     load();
-    const timer = setInterval(load, 10000);
+    const timer = setInterval(load, 3000);
     return () => {
       clearInterval(timer);
       if (watchRef.current != null) navigator.geolocation?.clearWatch(watchRef.current);
@@ -1202,6 +1214,10 @@ function LocationManager({ me }) {
   async function respond(id, accept) {
     const { error } = await supabase.rpc('respond_location_share', { p_request_id: id, p_accept: accept });
     if (error) setMsg(errText(error));
+    else if (accept) {
+      setMsg('위치 공유를 승인했음. 내 위치 전송을 시작함.');
+      if (!watching) startWatch();
+    }
     load();
   }
 
@@ -1216,7 +1232,7 @@ function LocationManager({ me }) {
   return (
     <div className="settingsStack">
       <p className="helpText">서로 승인해야 위치가 보임. 앱이 꺼지면 마지막 위치와 몇 분 전인지 표시됨.</p>
-      <button className={watching ? 'danger' : 'yellow'} onClick={watching ? stopWatch : startWatch}>{watching ? '내 위치 전송 중지' : '내 위치 전송 시작'}</button>
+      <div className="locationActions"><button className={watching ? 'danger' : 'yellow'} onClick={watching ? stopWatch : startWatch}>{watching ? '내 위치 전송 중지' : '내 위치 전송 시작'}</button><button onClick={load}>새로고침</button></div>
       {pending.map((r) => (
         <div className="requestItem" key={r.id}>
           <b>{r.requester_nickname}</b>
