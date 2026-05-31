@@ -3,7 +3,7 @@ self.addEventListener("push", (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch {
-    data = { title: "새 메시지", body: "메시지가 도착했습니다." };
+    data = {};
   }
 
   event.waitUntil(
@@ -11,9 +11,12 @@ self.addEventListener("push", (event) => {
       body: data.body || "메시지가 도착했습니다.",
       icon: "/icon.svg",
       badge: "/icon.svg",
-      tag: data.roomId || "chat-message",
+      tag: data.roomId || "chat",
       renotify: true,
-      data: { url: data.url || "/", roomId: data.roomId || null },
+      data: {
+        url: data.url || "/",
+        roomId: data.roomId || null,
+      },
     })
   );
 });
@@ -22,8 +25,8 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const url = event.notification.data?.url || "/";
   event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
-      for (const client of list) {
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
         if ("focus" in client) {
           client.focus();
           client.navigate(url);
