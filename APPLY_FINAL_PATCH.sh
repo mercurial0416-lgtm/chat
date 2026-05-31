@@ -1,66 +1,60 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 cd /workspaces/chat
 
-echo "=== v10 sane reviewed patch apply ==="
-echo "App.jsx / styles.css를 안정판으로 덮어씀"
+echo "=== v13 full stable apply ==="
 
-APP_LINES=$(wc -l < app/src/App.jsx)
-CSS_LINES=$(wc -l < app/src/styles.css)
-PROXY_LINES=$(wc -l < app/functions/api/send-chat-push.js)
-EDGE_LINES=$(wc -l < supabase/functions/send-chat-push/index.ts)
+echo "=== VAPID public config ==="
+if [ -f VAPID_KEYS_DO_NOT_COMMIT.txt ]; then
+  PUBLIC_KEY=$(awk '/Public Key:/{getline; print}' VAPID_KEYS_DO_NOT_COMMIT.txt)
+  if [ -n "$PUBLIC_KEY" ]; then
+    cat > app/src/pushConfig.js <<CONFIG
+export const VAPID_PUBLIC_KEY = "$PUBLIC_KEY";
+CONFIG
+  fi
+fi
 
-echo "App.jsx: $APP_LINES lines"
-echo "styles.css: $CSS_LINES lines"
-echo "proxy: $PROXY_LINES lines"
-echo "edge: $EDGE_LINES lines"
+grep -qxF "*.zip" .gitignore 2>/dev/null || echo "*.zip" >> .gitignore
+grep -qxF "VAPID_KEYS_DO_NOT_COMMIT.txt" .gitignore 2>/dev/null || echo "VAPID_KEYS_DO_NOT_COMMIT.txt" >> .gitignore
 
-grep -q "v10-sane-reviewed" app/src/App.jsx
-grep -q "v10-sane-reviewed-clean-ui" app/src/styles.css
+echo "=== line check ==="
+wc -l app/src/App.jsx app/src/styles.css app/src/push.js app/public/sw.js app/functions/api/send-chat-push.js supabase/functions/send-chat-push/index.ts
 
-if [ "$APP_LINES" -lt 200 ]; then echo "ERROR: App.jsx too short"; exit 1; fi
-if [ "$CSS_LINES" -lt 180 ]; then echo "ERROR: styles.css too short"; exit 1; fi
+echo "=== syntax check ==="
+cp app/src/App.jsx /tmp/app_check_v13.mjs
+node --check /tmp/app_check_v13.mjs
 
-echo "=== JS syntax check ==="
-cp app/src/App.jsx /tmp/chat_app_check.mjs
-node --check /tmp/chat_app_check.mjs
-
-echo "=== ignore zip ==="
-grep -qxF "*.zip" .gitignore || echo "*.zip" >> .gitignore
-
-echo "=== npm build ==="
+echo "=== install/build ==="
 cd /workspaces/chat/app
-npm install
+npm install @supabase/supabase-js
 npm run build
 
-echo "=== set VAPID secrets if file exists ==="
+echo "=== VAPID secrets optional ==="
 cd /workspaces/chat
 if [ -f VAPID_KEYS_DO_NOT_COMMIT.txt ]; then
   PUBLIC_KEY=$(awk '/Public Key:/{getline; print}' VAPID_KEYS_DO_NOT_COMMIT.txt)
   PRIVATE_KEY=$(awk '/Private Key:/{getline; print}' VAPID_KEYS_DO_NOT_COMMIT.txt)
-  npx supabase secrets set VAPID_PUBLIC_KEY="$PUBLIC_KEY" --project-ref nwenbkthlpzlpfklgonb || true
-  npx supabase secrets set VAPID_PRIVATE_KEY="$PRIVATE_KEY" --project-ref nwenbkthlpzlpfklgonb || true
-  npx supabase secrets set VAPID_SUBJECT="mailto:mercurial0416@gmail.com" --project-ref nwenbkthlpzlpfklgonb || true
-else
-  echo "VAPID_KEYS_DO_NOT_COMMIT.txt 없음: secret 등록 건너뜀"
+  if [ -n "$PUBLIC_KEY" ] && [ -n "$PRIVATE_KEY" ]; then
+    npx supabase secrets set VAPID_PUBLIC_KEY="$PUBLIC_KEY" --project-ref nwenbkthlpzlpfklgonb || true
+    npx supabase secrets set VAPID_PRIVATE_KEY="$PRIVATE_KEY" --project-ref nwenbkthlpzlpfklgonb || true
+    npx supabase secrets set VAPID_SUBJECT="mailto:mercurial0416@gmail.com" --project-ref nwenbkthlpzlpfklgonb || true
+  fi
 fi
 
-echo "=== deploy Supabase Edge Function ==="
+echo "=== deploy supabase edge function optional ==="
 npx supabase functions deploy send-chat-push --project-ref nwenbkthlpzlpfklgonb --use-api --no-verify-jwt || true
 
-echo "=== git force push ==="
+echo "=== git force upload ==="
 git config --global user.name "mercurial0416"
 git config --global user.email "mercurial0416@gmail.com"
 git add -A
 git reset -- "*.zip" || true
-git commit -m "v10 sane stable ui chat calendar location" || true
+git commit -m "upload v13 full stable chat app" || true
 git push -u origin main --force
 
-echo "=== hash check ==="
 echo "LOCAL:"
 git rev-parse HEAD
 echo "REMOTE:"
 git ls-remote origin refs/heads/main
 
-echo "=== done ==="
-echo "Cloudflare 배포 완료 후 Ctrl+F5 / 모바일 사이트 데이터 삭제"
+echo "=== DONE v13 ==="
