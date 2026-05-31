@@ -7,8 +7,16 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return json({ ok: true, method: "OPTIONS" });
-  if (req.method === "GET") return json({ ok: true, message: "send-chat-push alive rest-only" });
+  if (req.method === "OPTIONS") {
+    return json({ ok: true, method: "OPTIONS" });
+  }
+
+  if (req.method === "GET") {
+    return json({
+      ok: true,
+      message: "send-chat-push alive rest-only",
+    });
+  }
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -24,17 +32,28 @@ serve(async (req) => {
       Deno.env.get("VAPID_SUBJECT") || "mailto:mercurial0416@gmail.com";
 
     const missing = [];
+
     if (!SUPABASE_URL) missing.push("SUPABASE_URL");
     if (!SERVICE_ROLE_KEY) missing.push("SUPABASE_SERVICE_ROLE_KEY");
     if (!VAPID_PUBLIC_KEY) missing.push("VAPID_PUBLIC_KEY");
     if (!VAPID_PRIVATE_KEY) missing.push("VAPID_PRIVATE_KEY");
 
-    if (missing.length) {
-      return json({ ok: false, error: "missing env", missing }, 500);
+    if (missing.length > 0) {
+      return json(
+        {
+          ok: false,
+          error: "missing env",
+          missing,
+        },
+        500
+      );
     }
 
     const userId = body.userId;
-    if (!userId) return json({ ok: false, error: "userId required" }, 400);
+
+    if (!userId) {
+      return json({ ok: false, error: "userId required" }, 400);
+    }
 
     async function db(path: string, init: RequestInit = {}) {
       const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -57,7 +76,9 @@ serve(async (req) => {
       }
 
       if (!res.ok) {
-        throw new Error(typeof data === "string" ? data : JSON.stringify(data));
+        throw new Error(
+          typeof data === "string" ? data : JSON.stringify(data)
+        );
       }
 
       return data;
@@ -65,7 +86,10 @@ serve(async (req) => {
 
     async function sendWebPush(subs: any[], payload: any) {
       if (!subs || subs.length === 0) {
-        return { sent: 0, failed: 0 };
+        return {
+          sent: 0,
+          failed: 0,
+        };
       }
 
       const mod = await import("npm:web-push@3.6.7");
@@ -86,11 +110,13 @@ serve(async (req) => {
             sub.subscription,
             JSON.stringify(payload)
           );
+
           sent += 1;
         } catch (err) {
           failed += 1;
 
           const statusCode = err?.statusCode || err?.status;
+
           if (statusCode === 404 || statusCode === 410) {
             await db(`push_subscriptions?id=eq.${sub.id}`, {
               method: "DELETE",
@@ -99,7 +125,10 @@ serve(async (req) => {
         }
       }
 
-      return { sent, failed };
+      return {
+        sent,
+        failed,
+      };
     }
 
     if (body.test) {
@@ -122,6 +151,7 @@ serve(async (req) => {
     }
 
     const messageId = body.messageId;
+
     if (!messageId) {
       return json({ ok: false, error: "messageId required" }, 400);
     }
@@ -160,6 +190,7 @@ serve(async (req) => {
     }
 
     const inList = targetIds.join(",");
+
     const subs = await db(
       `push_subscriptions?select=id,user_id,subscription&user_id=in.(${inList})`
     );
