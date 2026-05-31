@@ -325,3 +325,32 @@ do $$ begin
 end $$;
 create policy chat_uploads_select on storage.objects for select using(bucket_id='chat_uploads');
 create policy chat_uploads_insert on storage.objects for insert with check(bucket_id='chat_uploads' and auth.uid() is not null);
+
+-- v13.1 login/profile safety: create profile automatically on auth signup
+create or replace function public.handle_new_user_profile()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles(id, email, nickname)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data->>'nickname', split_part(new.email, '@', 1), '익명')
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created_profile on auth.users;
+create trigger on_auth_user_created_profile
+after insert on auth.users
+for each row execute function public.handle_new_user_profile();
+
+insert into public.profiles(id, email, nickname)
+select u.id, u.email, coalesce(u.raw_user_meta_data->>'nickname', split_part(u.email, '@', 1), '익명')
+from auth.users u
+on conflict (id) do nothing;

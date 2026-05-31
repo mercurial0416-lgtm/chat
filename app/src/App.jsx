@@ -97,15 +97,26 @@ function AuthScreen() {
     if (busy) return;
     setBusy(true); setMsg("");
     try {
-      if (!email.trim() || password.length < 6) throw new Error("이메일과 6자 이상 비밀번호 필요");
+      const cleanEmail = email.trim();
+      if (!cleanEmail || password.length < 6) throw new Error("이메일과 6자 이상 비밀번호 필요");
+
       if (mode === "signup") {
-        const data = await authFetch("signup", { email: email.trim(), password, data: { nickname: nickname.trim() || email.split("@")[0] } });
-        if (data.access_token) { saveSession(data); location.reload(); return; }
-        setMsg("가입 완료. 로그인해줘."); setMode("login");
-      } else {
-        const data = await authFetch("token?grant_type=password", { email: email.trim(), password });
-        saveSession(data); location.reload();
+        const { data, error } = await supabase.auth.signUp({
+          email: cleanEmail,
+          password,
+          options: { data: { nickname: nickname.trim() || cleanEmail.split("@")[0] } },
+        });
+        if (error) throw error;
+        if (data?.session) { location.reload(); return; }
+        setMsg("가입 완료. 로그인해줘.");
+        setMode("login");
+        return;
       }
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
+      if (error) throw error;
+      if (!data?.session) throw new Error("로그인 세션 생성 실패");
+      location.reload();
     } catch (err) { setMsg(errText(err)); } finally { setBusy(false); }
   }
   return h("div", { className: "authPage" }, h("form", { className: "authCard", onSubmit: submit },
@@ -189,7 +200,8 @@ function ChatRoom({ room, me, onBack }) {
         supabase.rpc("get_room_members", { p_room_id: room.room_id })
       ]);
       if (m.error) throw m.error; if (mem.error) throw mem.error;
-      setMessages(m.data || []); setMembers(mem.data || []); supabase.rpc("mark_room_read", { p_room_id: room.room_id }).catch(() => {});
+      setMessages(m.data || []); setMembers(mem.data || []);
+      await supabase.rpc("mark_room_read", { p_room_id: room.room_id });
       if (scroll) setTimeout(() => bottom.current?.scrollIntoView({ behavior: "smooth" }), 50);
     } catch (err) { setMsg(errText(err)); }
   }
@@ -250,7 +262,7 @@ function LocationSettings({ me }) {
   const [requests, setRequests] = useState([]); const [locations, setLocations] = useState([]); const [watching, setWatching] = useState(false); const [msg, setMsg] = useState(""); const watch = useRef(null);
   async function load() { try { const [r, l] = await Promise.all([supabase.rpc("get_location_requests"), supabase.rpc("get_visible_locations")]); if (r.error) throw r.error; if (l.error) throw l.error; setRequests(r.data || []); setLocations(l.data || []); } catch (err) { setMsg(errText(err)); } }
   useEffect(() => { load(); const t = setInterval(load, 3000); return () => { clearInterval(t); if (watch.current) navigator.geolocation.clearWatch(watch.current); }; }, []);
-  function start() { if (!navigator.geolocation) return setMsg("위치 미지원"); watch.current = navigator.geolocation.watchPosition(async pos => { await supabase.rpc("upsert_live_location", { p_latitude: pos.coords.latitude, p_longitude: pos.coords.longitude, p_accuracy: pos.coords.accuracy, p_heading: pos.coords.heading, p_speed: pos.coords.speed }).catch(e => setMsg(errText(e))); setWatching(true); load(); }, e => setMsg(e.message || "위치 권한 필요"), { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }); setWatching(true); }
+  function start() { if (!navigator.geolocation) return setMsg("위치 미지원"); watch.current = navigator.geolocation.watchPosition(async pos => { const res = await supabase.rpc("upsert_live_location", { p_latitude: pos.coords.latitude, p_longitude: pos.coords.longitude, p_accuracy: pos.coords.accuracy, p_heading: pos.coords.heading, p_speed: pos.coords.speed }); if (res.error) setMsg(errText(res.error)); setWatching(true); load(); }, e => setMsg(e.message || "위치 권한 필요"), { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }); setWatching(true); }
   function stop() { if (watch.current) navigator.geolocation.clearWatch(watch.current); watch.current = null; setWatching(false); }
   async function respond(id, accept) { const { error } = await supabase.rpc("respond_location_share", { p_request_id: id, p_accept: accept }); if (error) setMsg(errText(error)); else load(); }
   const pending = requests.filter(x => x.receiver_id === me.id && x.status === "pending");
@@ -279,7 +291,7 @@ function MainApp() {
   async function loadMe(user) {
     if (!user) return;
     const base = { id: user.id, email: user.email, nickname: user.user_metadata?.nickname || user.email?.split("@")[0] || "익명" };
-    await supabase.from("profiles").upsert(base).catch(() => {});
+    await supabase.from("profiles").upsert(base, { onConflict: "id" });
     const { data } = await supabase.from("profiles").select("id,email,nickname,avatar_url,status_message,dark_mode").eq("id", user.id).maybeSingle();
     const p = data || base; setMe(p); document.body.classList.toggle("dark", !!p.dark_mode);
   }
