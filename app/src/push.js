@@ -19,6 +19,8 @@ export async function registerWebPush(userId) {
   if (permission !== "granted") throw new Error("알림 권한 거부됨");
 
   const registration = await navigator.serviceWorker.register("/sw.js");
+  await navigator.serviceWorker.ready;
+
   let subscription = await registration.pushManager.getSubscription();
 
   if (!subscription) {

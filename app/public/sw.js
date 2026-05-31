@@ -1,3 +1,6 @@
+self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -11,7 +14,7 @@ self.addEventListener("push", (event) => {
       body: data.body || "메시지가 도착했습니다.",
       icon: "/icon.svg",
       badge: "/icon.svg",
-      tag: data.roomId || "chat",
+      tag: data.roomId || data.type || "chat",
       renotify: true,
       data: {
         url: data.url || "/",

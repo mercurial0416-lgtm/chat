@@ -85,6 +85,7 @@ serve(async (req) => {
       const result = await sendWebPush(subs || [], {
         title: "알림 테스트",
         body: "백그라운드 알림 연결됨",
+        type: "test",
         url: "/",
       });
 
@@ -100,7 +101,7 @@ serve(async (req) => {
     if (!messageId) return json({ ok: false, error: "messageId required" }, 400);
 
     const messages = await db(
-      `chat_messages?select=id,room_id,sender_id,body,message_type,file_name&id=eq.${messageId}&limit=1`
+      `chat_messages?select=id,room_id,sender_id,body,message_type,file_name&deleted_at=is.null&id=eq.${messageId}&limit=1`
     );
 
     const message = messages?.[0];
@@ -126,12 +127,19 @@ serve(async (req) => {
         ? "사진"
         : message.message_type === "file"
           ? message.file_name || "파일"
-          : message.body || "메시지가 도착했습니다.";
+          : message.message_type === "voice"
+            ? "음성 메시지"
+            : message.message_type === "location"
+              ? "위치"
+              : message.message_type === "poll"
+                ? "투표"
+                : message.body || "메시지가 도착했습니다.";
 
     const result = await sendWebPush(subs || [], {
       title: "새 메시지",
       body: notiBody,
       roomId: message.room_id,
+      type: "message",
       url: "/",
     });
 
