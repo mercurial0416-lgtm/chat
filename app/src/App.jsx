@@ -401,10 +401,8 @@ function MoreTab({ me, setMe, startGroup }) {
   async function testPush() {
     try {
       const token = authToken();
-      if (!token) throw new Error("로그인 토큰 없음");
       const { data, error } = await supabase.functions.invoke("send-chat-push", {
-        body: { test: true },
-        headers: { Authorization: `Bearer ${token}` },
+        body: { test: true, userId: me.id },
       });
       if (error) throw error;
       setMsg(`알림 테스트 요청됨: ${JSON.stringify(data)}`);
@@ -546,16 +544,9 @@ function ChatRoom({ room, me, back }) {
   }
 
   async function notifyPush(messageId) {
-    const token = authToken();
-    if (!token) {
-      setMsg("푸시 토큰 없음. 다시 로그인하거나 알림 등록해라.");
-      return;
-    }
-
     try {
       const { error } = await supabase.functions.invoke("send-chat-push", {
-        body: { messageId },
-        headers: { Authorization: `Bearer ${token}` },
+        body: { messageId, userId: me.id },
       });
       if (error) throw error;
     } catch (err) {
