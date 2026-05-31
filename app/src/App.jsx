@@ -565,12 +565,7 @@ function ChatRoom({ room, me, onClose }) {
     setMsg('');
     load();
 
-    const channel = supabase
-      .channel('room-' + room.room_id)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages', filter: `room_id=eq.${room.room_id}` }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_room_members', filter: `room_id=eq.${room.room_id}` }, load)
-      .subscribe();
-
+    const pollTimer = setInterval(load, 1800);
     const typingChannel = supabase.channel('typing-' + room.room_id, { config: { broadcast: { self: false } } });
     typingChannel
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
@@ -583,7 +578,7 @@ function ChatRoom({ room, me, onClose }) {
     typingChannelRef.current = typingChannel;
 
     return () => {
-      supabase.removeChannel(channel);
+      clearInterval(pollTimer);
       supabase.removeChannel(typingChannel);
     };
   }, [room?.room_id]);
