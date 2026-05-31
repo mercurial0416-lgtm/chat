@@ -7,22 +7,14 @@ function uniqueBy(items, keyOrFn) {
   const arr = Array.isArray(items) ? items : [];
   const seen = new Set();
   const out = [];
-
   for (const item of arr) {
     if (!item) continue;
-
-    const rawKey =
-      typeof keyOrFn === "function"
-        ? keyOrFn(item)
-        : item?.[keyOrFn];
-
+    const rawKey = typeof keyOrFn === "function" ? keyOrFn(item) : item?.[keyOrFn];
     const key = rawKey == null ? JSON.stringify(item) : String(rawKey);
-
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(item);
   }
-
   return out;
 }
 
@@ -204,13 +196,43 @@ function ChatsView({ activeRoom, setActiveRoom }) {
   const [q, setQ] = useState("");
   const [groupOpen, setGroupOpen] = useState(false);
   const [msg, setMsg] = useState("");
-  async function load() { try { const { data, error } = await supabase.rpc("get_my_chat_rooms"); if (error) throw error; setRooms(data || []); } catch (err) { setMsg(errText(err)); } }
+  async function load() {
+    try {
+      const { data, error } = await supabase.rpc("get_my_chat_rooms");
+      if (error) throw error;
+      setRooms(uniqueBy(data || [], x => x.room_id));
+    } catch (err) { setMsg(errText(err)); }
+  }
   useEffect(() => { load(); const t = setInterval(load, 1800); return () => clearInterval(t); }, []);
   const filtered = rooms.filter(r => `${r.title || ""} ${r.last_message || ""}`.toLowerCase().includes(q.toLowerCase()));
-  return h("div", { className: "listPane chatList" },
-    h("div", { className: "searchLine" }, h("input", { className: "search", value: q, onChange: e => setQ(e.target.value), placeholder: "채팅방 검색" }), h("button", { className: "roundBtn", onClick: () => setGroupOpen(true) }, "+")),
-    ...filtered.map(r => h("button", { key: r.room_id, className: cx("chatItem", activeRoom?.room_id === r.room_id && "selected"), onClick: () => setActiveRoom(r) }, h(Avatar, { src: r.avatar_url, name: r.title }), h("div", { className: "rowText" }, h("b", null, r.title || "채팅"), h("span", null, r.last_message || "메시지 없음")), h("div", { className: "roomMeta" }, h("span", null, timeText(r.last_message_at)), Number(r.unread_count) ? h("em", null, Number(r.unread_count) > 99 ? "99+" : r.unread_count) : null))),
-    filtered.length ? null : h(Empty, null, "채팅방이 없어요"), h(Notice, null, msg), groupOpen ? h(GroupModal, { onClose: () => setGroupOpen(false), onOpen: setActiveRoom }) : null);
+  const unreadTotal = rooms.reduce((sum, r) => sum + Number(r.unread_count || 0), 0);
+  return h("div", { className: "listPane chatList v15ChatList" },
+    h("div", { className: "v15MobileTop" },
+      h("b", null, "채팅"),
+      h("div", { className: "v15TopIcons" },
+        h("button", { title: "검색" }, ""),
+        h("button", { title: "대화 시작", onClick: () => setGroupOpen(true) }, ""))
+    ),
+    h("div", { className: "v15SearchWrap" },
+      h("i", null),
+      h("input", { className: "search", value: q, onChange: e => setQ(e.target.value), placeholder: "대화방, 사람, 메시지 검색" })
+    ),
+    h("div", { className: "v15ListHead" }, h("span", null, "대화"), unreadTotal ? h("em", null, unreadTotal > 99 ? "99+" : unreadTotal) : null),
+    ...filtered.map(r => h("button", { key: r.room_id, className: cx("chatItem v15ChatItem", activeRoom?.room_id === r.room_id && "selected"), onClick: () => setActiveRoom(r) },
+      h(Avatar, { src: r.avatar_url, name: r.title, size: 58 }),
+      h("div", { className: "rowText" },
+        h("div", { className: "v15RowTitle" }, h("b", null, r.title || "채팅"), r.member_count > 2 ? h("small", null, r.member_count) : null),
+        h("span", null, r.last_message || "아직 메시지가 없어요")
+      ),
+      h("div", { className: "roomMeta" },
+        h("span", null, timeText(r.last_message_at)),
+        Number(r.unread_count) ? h("em", null, Number(r.unread_count) > 99 ? "99+" : r.unread_count) : null
+      )
+    )),
+    filtered.length ? null : h(Empty, null, "채팅방이 없어요"),
+    h(Notice, null, msg),
+    groupOpen ? h(GroupModal, { onClose: () => setGroupOpen(false), onOpen: setActiveRoom }) : null
+  );
 }
 
 function GroupModal({ onClose, onOpen }) {
@@ -248,13 +270,40 @@ function ChatRoom({ room, me, onBack }) {
   async function submit(e) { e.preventDefault(); const body = text.trim(); if (!body || sending) return; await sendMessage({ room_id: room.room_id, sender_id: me.id, body, message_type: "text" }); }
   async function fileSend(file) { if (!file) return; try { setMsg("업로드중"); const up = await uploadFile(file, `rooms/${room.room_id}`); const img = file.type.startsWith("image/"); await sendMessage({ room_id: room.room_id, sender_id: me.id, body: img ? "사진" : up.name, message_type: img ? "image" : "file", image_url: img ? up.url : null, file_url: img ? null : up.url, file_name: up.name }); setMsg(""); } catch (err) { setMsg(errText(err)); } }
   function currentLocation() { navigator.geolocation?.getCurrentPosition(pos => sendMessage({ room_id: room.room_id, sender_id: me.id, body: "위치", message_type: "location", shared_latitude: pos.coords.latitude, shared_longitude: pos.coords.longitude }), err => setMsg(err.message || "위치 권한 필요"), { enableHighAccuracy: true, timeout: 10000 }); }
-  return h("div", { className: "room" }, h("header", { className: "roomHeader" }, h("button", { className: "backBtn", onClick: onBack }, "‹"), h("div", { className: "roomTitle" }, h("b", null, room.title || "채팅방"), h("span", null, `${members.length}명 · 자동 갱신`)), h("button", { onClick: () => load(true) }, "새로고침")),
-    h("main", { className: "messages" }, ...messages.map((m, i) => {
-      const mine = m.sender_id === me.id; const who = memberMap.get(m.sender_id); const prev = messages[i-1]; const showDate = !prev || new Date(prev.created_at).toDateString() !== new Date(m.created_at).toDateString();
-      const content = m.deleted_at ? "삭제된 메시지" : m.message_type === "image" && m.image_url ? h("img", { className: "chatImage", src: m.image_url, alt: "" }) : m.message_type === "file" && m.file_url ? h("a", { href: m.file_url, target: "_blank", rel: "noreferrer" }, `파일: ${m.file_name || "다운로드"}`) : m.message_type === "location" && m.shared_latitude ? h("a", { href: `https://www.google.com/maps?q=${m.shared_latitude},${m.shared_longitude}`, target: "_blank", rel: "noreferrer" }, "지도에서 위치 보기") : m.body;
-      return h(React.Fragment, { key: m.id }, showDate ? h("div", { className: "dateLine" }, new Date(m.created_at).toLocaleDateString("ko-KR")) : null, h("div", { className: cx("msg", mine ? "mine" : "other") }, !mine ? h(Avatar, { src: who?.avatar_url, name: who?.nickname, size: 34 }) : null, h("div", { className: "msgStack" }, !mine ? h("span", { className: "sender" }, who?.nickname || "상대") : null, h("div", { className: "bubble" }, content), h("div", { className: "msgMeta" }, h("span", null, timeText(m.created_at)), mine ? h("b", null, readState(m)) : null))));
-    }), sending ? h("div", { className: "sending" }, "전송중...") : null, h(Notice, null, msg), h("div", { ref: bottom })),
-    h("form", { className: "composer", onSubmit: submit }, h("label", { className: "iconBtn" }, "+", h("input", { type: "file", onChange: e => fileSend(e.target.files?.[0]) })), h("button", { type: "button", className: "iconBtn", onClick: currentLocation }, "위치"), h("input", { value: text, onChange: e => setText(e.target.value), placeholder: "메시지 입력" }), h("button", { className: "sendBtn", disabled: sending }, "전송")));
+  return h("div", { className: "room v15Room" },
+    h("header", { className: "roomHeader" },
+      h("button", { className: "backBtn", onClick: onBack, title: "뒤로" }, ""),
+      h(Avatar, { src: room.avatar_url, name: room.title, size: 38 }),
+      h("div", { className: "roomTitle" }, h("b", null, room.title || "채팅방"), h("span", null, `${members.length}명`)),
+      h("div", { className: "v15RoomTools" }, h("button", { onClick: () => load(true), title: "새로고침" }, ""), h("button", { title: "메뉴" }, ""))
+    ),
+    h("main", { className: "messages" },
+      ...messages.map((m, i) => {
+        const mine = m.sender_id === me.id; const who = memberMap.get(m.sender_id); const prev = messages[i-1]; const showDate = !prev || new Date(prev.created_at).toDateString() !== new Date(m.created_at).toDateString();
+        const content = m.deleted_at ? "삭제된 메시지" : m.message_type === "image" && m.image_url ? h("img", { className: "chatImage", src: m.image_url, alt: "" }) : m.message_type === "file" && m.file_url ? h("a", { href: m.file_url, target: "_blank", rel: "noreferrer" }, `파일: ${m.file_name || "다운로드"}`) : m.message_type === "location" && m.shared_latitude ? h("a", { href: `https://www.google.com/maps?q=${m.shared_latitude},${m.shared_longitude}`, target: "_blank", rel: "noreferrer" }, "지도에서 위치 보기") : m.body;
+        return h(React.Fragment, { key: m.id },
+          showDate ? h("div", { className: "dateLine" }, new Date(m.created_at).toLocaleDateString("ko-KR")) : null,
+          h("div", { className: cx("msg", mine ? "mine" : "other") },
+            !mine ? h(Avatar, { src: who?.avatar_url, name: who?.nickname, size: 34 }) : null,
+            h("div", { className: "msgStack" },
+              !mine ? h("span", { className: "sender" }, who?.nickname || "상대") : null,
+              h("div", { className: "bubble" }, content),
+              h("div", { className: "msgMeta" }, h("span", null, timeText(m.created_at)), mine ? h("b", null, readState(m)) : null)
+            )
+          )
+        );
+      }),
+      sending ? h("div", { className: "sending" }, "전송중...") : null,
+      h(Notice, null, msg),
+      h("div", { ref: bottom })
+    ),
+    h("form", { className: "composer", onSubmit: submit },
+      h("label", { className: "iconBtn attachBtn", title: "파일" }, "", h("input", { type: "file", onChange: e => fileSend(e.target.files?.[0]) })),
+      h("button", { type: "button", className: "iconBtn locBtn", onClick: currentLocation, title: "위치" }, ""),
+      h("input", { value: text, onChange: e => setText(e.target.value), placeholder: "메시지 입력" }),
+      h("button", { className: "sendBtn", disabled: sending }, "전송")
+    )
+  );
 }
 
 function CalendarView() {
@@ -274,14 +323,56 @@ function EventEditor({ event, date, onClose }) {
 
 function MoreView({ me, setMe }) {
   const [section, setSection] = useState("profile");
-  return h("div", { className: "morePage" }, h("div", { className: "moreMenu" }, ...[["profile","프로필"],["noti","알림"],["location","위치공유"],["settings","설정"]].map(([k, label]) => h("button", { key: k, className: section === k ? "selected" : "", onClick: () => setSection(k) }, label))), h("div", { className: "moreDetail" }, section === "profile" ? h(ProfileSettings, { me, setMe }) : section === "noti" ? h(NotificationSettings, { me }) : section === "location" ? h(LocationSettings, { me }) : h(AppSettings, { me, setMe })));
+  const items = [
+    ["profile", "프로필", "프로필 관리", "miProfile"],
+    ["noti", "알림", "PC/모바일 알림", "miBell"],
+    ["location", "위치공유", "승인한 친구 위치", "miPin"],
+    ["settings", "설정", "다크모드/로그아웃", "miGear"],
+  ];
+  const shortcuts = [
+    ["profile", "프로필"], ["noti", "알림"], ["location", "위치공유"], ["settings", "설정"],
+    ["calendar", "캘린더"], ["chat", "채팅"], ["cache", "캐시삭제"], ["logout", "로그아웃"],
+  ];
+  function shortcut(k) {
+    if (["profile", "noti", "location", "settings"].includes(k)) return setSection(k);
+    if (k === "cache") { localStorage.clear(); location.reload(); }
+    if (k === "logout") { localStorage.clear(); supabase.auth.signOut(); location.reload(); }
+  }
+  return h("div", { className: "morePage v15More" },
+    h("section", { className: "v15MoreLeft" },
+      h("div", { className: "v15MoreTabs" }, h("button", { className: "on" }, "홈"), h("button", null, "지갑")),
+      h("div", { className: "v15PayCard" }, h("b", null, "chat pay"), h("strong", null, "0원"), h("span", null, "송금"), h("span", null, "자산"), h("span", null, "결제")),
+      h("div", { className: "v15ShortcutGrid" },
+        ...shortcuts.map(([k, label], idx) => h("button", { key: k, onClick: () => shortcut(k), className: section === k ? "selected" : "" }, h("i", { className: `mi mi${idx}` }), h("span", null, label)))
+      ),
+      h("div", { className: "moreMenu" },
+        ...items.map(([k, label, desc, icon]) => h("button", { key: k, className: section === k ? "selected" : "", onClick: () => setSection(k) }, h("i", { className: `mi ${icon}` }), h("div", null, h("b", null, label), h("span", null, desc)), h("em", null, "›")))
+      )
+    ),
+    h("section", { className: "moreDetail" },
+      section === "profile" ? h(ProfileSettings, { me, setMe }) :
+      section === "noti" ? h(NotificationSettings, { me }) :
+      section === "location" ? h(LocationSettings, { me }) :
+      h(AppSettings, { me, setMe })
+    )
+  );
 }
+
 function ProfileSettings({ me, setMe }) {
   const [nick, setNick] = useState(me.nickname || ""); const [status, setStatus] = useState(me.status_message || ""); const [avatar, setAvatar] = useState(me.avatar_url || ""); const [msg, setMsg] = useState("");
   async function save() { try { const { data, error } = await supabase.from("profiles").update({ nickname: nick, status_message: status, avatar_url: avatar || null }).eq("id", me.id).select().single(); if (error) throw error; setMe(data); setMsg("저장됨"); } catch (err) { setMsg(errText(err)); } }
   async function upload(file) { if (!file) return; try { const up = await uploadFile(file, `avatars/${me.id}`); setAvatar(up.url); } catch (err) { setMsg(errText(err)); } }
-  return h("div", { className: "settingsPanel" }, h(Avatar, { src: avatar, name: nick, size: 76 }), h("input", { value: nick, onChange: e => setNick(e.target.value), placeholder: "닉네임" }), h("input", { value: status, onChange: e => setStatus(e.target.value), placeholder: "상태메시지" }), h("input", { value: avatar, onChange: e => setAvatar(e.target.value), placeholder: "프로필 이미지 URL" }), h("label", { className: "fileLabel" }, "사진 업로드", h("input", { type: "file", accept: "image/*", onChange: e => upload(e.target.files?.[0]) })), h("button", { className: "primaryBtn", onClick: save }, "저장"), h(Notice, null, msg));
+  return h("div", { className: "settingsPanel profileSettings v15Profile" },
+    h("div", { className: "v15ProfileHero" }, h(Avatar, { src: avatar, name: nick, size: 82 }), h("div", null, h("h2", null, nick || "프로필"), h("p", null, "프로필 정보를 관리하고 변경할 수 있습니다."))),
+    h("label", { className: "v15Field" }, h("b", null, "닉네임"), h("div", { className: "v15InputWrap" }, h("input", { value: nick, maxLength: 20, onChange: e => setNick(e.target.value), placeholder: "닉네임" }), h("small", null, `${nick.length} / 20`))),
+    h("label", { className: "v15Field" }, h("b", null, "상태메시지"), h("div", { className: "v15InputWrap" }, h("input", { value: status, maxLength: 60, onChange: e => setStatus(e.target.value), placeholder: "상태메시지" }), h("small", null, `${status.length} / 60`))),
+    h("label", { className: "v15Field" }, h("b", null, "프로필 이미지 URL"), h("input", { value: avatar, onChange: e => setAvatar(e.target.value), placeholder: "https://..." }), h("span", null, "이미지 URL을 입력하면 프로필 사진이 업데이트됩니다.")),
+    h("div", { className: "v15UploadLine" }, h("label", { className: "fileLabel" }, "이미지 업로드", h("input", { type: "file", accept: "image/*", onChange: e => upload(e.target.files?.[0]) })), h("span", null, "JPG, PNG, WEBP 파일을 업로드할 수 있습니다.")),
+    h("button", { className: "primaryBtn v15Save", onClick: save }, "저장"),
+    h(Notice, null, msg)
+  );
 }
+
 function NotificationSettings({ me }) {
   const [msg, setMsg] = useState("");
   async function on() { try { await registerWebPush(me.id); setMsg("이 기기 알림 등록됨"); } catch (err) { setMsg(errText(err)); } }

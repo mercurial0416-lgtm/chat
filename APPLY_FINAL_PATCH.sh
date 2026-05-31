@@ -1,60 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd /workspaces/chat
-
-echo "=== v13.2 duplicate friend fix apply ==="
-
-echo "=== VAPID public config ==="
-if [ -f VAPID_KEYS_DO_NOT_COMMIT.txt ]; then
-  PUBLIC_KEY=$(awk '/Public Key:/{getline; print}' VAPID_KEYS_DO_NOT_COMMIT.txt)
-  if [ -n "$PUBLIC_KEY" ]; then
-    cat > app/src/pushConfig.js <<CONFIG
-export const VAPID_PUBLIC_KEY = "$PUBLIC_KEY";
-CONFIG
-  fi
-fi
-
-grep -qxF "*.zip" .gitignore 2>/dev/null || echo "*.zip" >> .gitignore
-grep -qxF "VAPID_KEYS_DO_NOT_COMMIT.txt" .gitignore 2>/dev/null || echo "VAPID_KEYS_DO_NOT_COMMIT.txt" >> .gitignore
-
-echo "=== line check ==="
-wc -l app/src/App.jsx app/src/styles.css app/src/push.js app/public/sw.js app/functions/api/send-chat-push.js supabase/functions/send-chat-push/index.ts
-
-echo "=== syntax check ==="
-cp app/src/App.jsx /tmp/app_check_v13.mjs
-node --check /tmp/app_check_v13.mjs
-
-echo "=== install/build ==="
-cd /workspaces/chat/app
-npm install @supabase/supabase-js
+ROOT="/workspaces/chat"
+cd "$ROOT"
+echo "=== apply v15 screenshot-like UI ==="
+mkdir -p app/src app/src/lib app/public app/functions/api supabase/functions/send-chat-push supabase/migrations
+cp -f app/src/App.jsx "$ROOT/app/src/App.jsx"
+cp -f app/src/styles.css "$ROOT/app/src/styles.css"
+cp -f app/src/lib/supabase.js "$ROOT/app/src/lib/supabase.js"
+cp -f app/src/pushConfig.js "$ROOT/app/src/pushConfig.js"
+cp -f app/src/push.js "$ROOT/app/src/push.js"
+cp -f app/public/sw.js "$ROOT/app/public/sw.js"
+cp -f app/public/icon.svg "$ROOT/app/public/icon.svg"
+cp -f app/functions/api/send-chat-push.js "$ROOT/app/functions/api/send-chat-push.js"
+cp -f supabase/functions/send-chat-push/index.ts "$ROOT/supabase/functions/send-chat-push/index.ts"
+cp -f supabase/migrations/20260601_v13_full_stable.sql "$ROOT/supabase/migrations/20260601_v13_full_stable.sql"
+cd "$ROOT/app"
+echo "=== build ==="
 npm run build
-
-echo "=== VAPID secrets optional ==="
-cd /workspaces/chat
-if [ -f VAPID_KEYS_DO_NOT_COMMIT.txt ]; then
-  PUBLIC_KEY=$(awk '/Public Key:/{getline; print}' VAPID_KEYS_DO_NOT_COMMIT.txt)
-  PRIVATE_KEY=$(awk '/Private Key:/{getline; print}' VAPID_KEYS_DO_NOT_COMMIT.txt)
-  if [ -n "$PUBLIC_KEY" ] && [ -n "$PRIVATE_KEY" ]; then
-    npx supabase secrets set VAPID_PUBLIC_KEY="$PUBLIC_KEY" --project-ref nwenbkthlpzlpfklgonb || true
-    npx supabase secrets set VAPID_PRIVATE_KEY="$PRIVATE_KEY" --project-ref nwenbkthlpzlpfklgonb || true
-    npx supabase secrets set VAPID_SUBJECT="mailto:mercurial0416@gmail.com" --project-ref nwenbkthlpzlpfklgonb || true
-  fi
-fi
-
-echo "=== deploy supabase edge function optional ==="
-npx supabase functions deploy send-chat-push --project-ref nwenbkthlpzlpfklgonb --use-api --no-verify-jwt || true
-
-echo "=== git force upload ==="
-git config --global user.name "mercurial0416"
-git config --global user.email "mercurial0416@gmail.com"
+cd "$ROOT"
 git add -A
-git reset -- "*.zip" || true
-git commit -m "fix duplicate friends v13.2" || true
+git commit -m "redesign chat and more ui like reference v15" || true
 git push -u origin main --force
-
 echo "LOCAL:"
 git rev-parse HEAD
 echo "REMOTE:"
 git ls-remote origin refs/heads/main
-
-echo "=== DONE v13.2 ==="
