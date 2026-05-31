@@ -39,14 +39,14 @@ serve(async (req) => {
 
       if (error) throw error;
 
+      let sent = 0;
+      let failed = 0;
+
       const payload = JSON.stringify({
         title: "알림 테스트",
         body: "백그라운드 알림 연결됨",
         url: "/",
       });
-
-      let sent = 0;
-      let failed = 0;
 
       for (const sub of subs || []) {
         try {
@@ -71,6 +71,7 @@ serve(async (req) => {
     }
 
     const messageId = body.messageId;
+
     if (!messageId) {
       return json({ ok: false, error: "messageId required" }, 400);
     }
@@ -102,7 +103,14 @@ serve(async (req) => {
       .map((m) => m.user_id);
 
     if (targetIds.length === 0) {
-      return json({ ok: true, mode: "message", targets: 0, subscriptions: 0, sent: 0, failed: 0 });
+      return json({
+        ok: true,
+        mode: "message",
+        targets: 0,
+        subscriptions: 0,
+        sent: 0,
+        failed: 0,
+      });
     }
 
     const { data: subs, error: subsError } = await admin
