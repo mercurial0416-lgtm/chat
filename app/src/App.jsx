@@ -86,7 +86,7 @@ function getSavedSession() {
 }
 
 async function callPushFunction(body) {
-  const res = await fetch("https://nwenbkthlpzlpfklgonb.supabase.co/functions/v1/send-chat-push", {
+  const res = await fetch("/api/send-chat-push", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
