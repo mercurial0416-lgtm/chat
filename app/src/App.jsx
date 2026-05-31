@@ -143,7 +143,13 @@ function FriendsView({ me, openDirect, requestLocation }) {
         supabase.from("profiles").select("id,email,nickname,avatar_url,status_message,birthday").neq("id", me.id).order("nickname")
       ]);
       if (fr.error) throw fr.error; if (req.error) throw req.error; if (us.error) throw us.error;
-      setFriends(fr.data || []); setRequests(req.data || []); setUsers(us.data || []);
+      const cleanFriends = uniqueBy((fr.data || []).filter(x => x?.user_id && x.user_id !== me.id), x => x.user_id);
+      const friendSet = new Set(cleanFriends.map(x => x.user_id));
+      const cleanRequests = uniqueBy((req.data || []).filter(x => x?.user_id && x.user_id !== me.id && !friendSet.has(x.user_id)), x => x.friendship_id || x.user_id);
+      const cleanUsers = uniqueBy((us.data || []).filter(x => x?.id && x.id !== me.id && !friendSet.has(x.id)), x => x.id);
+      setFriends(cleanFriends);
+      setRequests(cleanRequests);
+      setUsers(cleanUsers);
     } catch (err) { setMsg(errText(err)); }
   }
   useEffect(() => { load(); const t = setInterval(load, 3500); return () => clearInterval(t); }, []);
@@ -158,7 +164,7 @@ function FriendsView({ me, openDirect, requestLocation }) {
     h("div", { className: "section" }, `친구 ${friends.length}`),
     ...friends.filter(filter).map(f => h("button", { className: cx("rowCard", selected?.user_id === f.user_id && "selected"), key: f.user_id, onClick: () => setSelected(f) }, h(Avatar, { src: f.avatar_url, name: f.nickname }), h("div", { className: "rowText" }, h("b", null, f.nickname), h("span", null, f.status_message || f.email || " ")), h("i", null, "열기"))),
     h("div", { className: "section" }, "전체 유저"),
-    ...users.filter(filter).map(u => h("button", { className: "rowCard", key: u.id, onClick: () => setSelected({ ...u, user_id: u.id }) }, h(Avatar, { src: u.avatar_url, name: u.nickname }), h("div", { className: "rowText" }, h("b", null, u.nickname || "익명"), h("span", null, u.email || " ")), h("i", null, friendIds.has(u.id) ? "친구" : "추가"))),
+    ...users.filter(filter).map(u => h("button", { className: "rowCard", key: u.id, onClick: () => setSelected({ ...u, user_id: u.id }) }, h(Avatar, { src: u.avatar_url, name: u.nickname }), h("div", { className: "rowText" }, h("b", null, u.nickname || "익명"), h("span", null, u.email || " ")), h("i", null, "추가"))),
     h(Notice, null, msg));
   const detail = selected ? h("div", { className: "detailCard" },
     h(Avatar, { src: selected.avatar_url, name: selected.nickname, size: 88 }), h("h2", null, selected.nickname || "익명"), h("p", null, selected.status_message || selected.email || "상태메시지 없음"),
@@ -185,7 +191,7 @@ function ChatsView({ activeRoom, setActiveRoom }) {
 
 function GroupModal({ onClose, onOpen }) {
   const [friends, setFriends] = useState([]); const [picked, setPicked] = useState([]); const [title, setTitle] = useState("그룹채팅"); const [msg, setMsg] = useState("");
-  useEffect(() => { supabase.rpc("get_my_friends").then(({ data }) => setFriends(data || [])); }, []);
+  useEffect(() => { supabase.rpc("get_my_friends").then(({ data }) => setFriends(uniqueBy(data || [], x => x.user_id))); }, []);
   async function create() { try { const { data, error } = await supabase.rpc("create_group_room", { p_title: title, p_member_ids: picked }); if (error) throw error; const rooms = await supabase.rpc("get_my_chat_rooms"); onClose(); onOpen((rooms.data || []).find(r => r.room_id === data) || { room_id: data, title }); } catch (err) { setMsg(errText(err)); } }
   return h(Modal, { title: "그룹방 만들기", onClose }, h("input", { value: title, onChange: e => setTitle(e.target.value), placeholder: "방 이름" }), h("div", { className: "pickList" }, ...friends.map(f => h("button", { key: f.user_id, className: cx("pick", picked.includes(f.user_id) && "on"), onClick: () => setPicked(picked.includes(f.user_id) ? picked.filter(x => x !== f.user_id) : [...picked, f.user_id]) }, h(Avatar, { src: f.avatar_url, name: f.nickname, size: 34 }), h("span", null, f.nickname)))), h(Notice, null, msg), h("div", { className: "modalActions" }, h("button", { onClick: onClose }, "취소"), h("button", { className: "primaryBtn", onClick: create }, "생성")));
 }

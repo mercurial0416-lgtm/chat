@@ -2,7 +2,7 @@
 set -euo pipefail
 cd /workspaces/chat
 
-echo "=== v13 full stable apply ==="
+echo "=== v13.2 duplicate friend fix apply ==="
 
 echo "=== VAPID public config ==="
 if [ -f VAPID_KEYS_DO_NOT_COMMIT.txt ]; then
@@ -49,7 +49,7 @@ git config --global user.name "mercurial0416"
 git config --global user.email "mercurial0416@gmail.com"
 git add -A
 git reset -- "*.zip" || true
-git commit -m "upload v13 full stable chat app" || true
+git commit -m "fix duplicate friends v13.2" || true
 git push -u origin main --force
 
 echo "LOCAL:"
@@ -57,4 +57,4 @@ git rev-parse HEAD
 echo "REMOTE:"
 git ls-remote origin refs/heads/main
 
-echo "=== DONE v13 ==="
+echo "=== DONE v13.2 ==="

@@ -354,3 +354,113 @@ insert into public.profiles(id, email, nickname)
 select u.id, u.email, coalesce(u.raw_user_meta_data->>'nickname', split_part(u.email, '@', 1), '익명')
 from auth.users u
 on conflict (id) do nothing;
+
+-- === v13.2 duplicate friend hotfix ===
+-- 기존 중복 친구관계 정리 + 앞으로 같은 2명 친구관계 1개만 허용
+with ranked_friendships as (
+  select
+    id,
+    row_number() over (
+      partition by least(requester_id, addressee_id), greatest(requester_id, addressee_id)
+      order by
+        case status when 'accepted' then 0 when 'pending' then 1 else 2 end,
+        updated_at desc nulls last,
+        created_at desc nulls last
+    ) as rn
+  from public.friendships
+)
+delete from public.friendships f
+using ranked_friendships r
+where f.id = r.id and r.rn > 1;
+
+drop index if exists public.friendships_pair_idx;
+create unique index if not exists friendships_pair_idx
+on public.friendships(least(requester_id, addressee_id), greatest(requester_id, addressee_id));
+
+drop function if exists public.get_my_friends();
+create or replace function public.get_my_friends()
+returns table(user_id uuid,email text,nickname text,avatar_url text,status_message text,birthday date,favorite boolean,created_at timestamptz)
+language sql security definer set search_path=public as $$
+  with raw_rows as (
+    select
+      case when f.requester_id = auth.uid() then f.addressee_id else f.requester_id end as user_id,
+      p.email,
+      p.nickname,
+      p.avatar_url,
+      p.status_message,
+      p.birthday,
+      case when f.requester_id = auth.uid() then coalesce(f.favorite_by_requester,false) else coalesce(f.favorite_by_addressee,false) end as favorite,
+      f.created_at
+    from public.friendships f
+    join public.profiles p on p.id = case when f.requester_id = auth.uid() then f.addressee_id else f.requester_id end
+    where f.status='accepted'
+      and (f.requester_id=auth.uid() or f.addressee_id=auth.uid())
+  ), deduped as (
+    select distinct on (user_id) *
+    from raw_rows
+    order by user_id, favorite desc, created_at desc
+  )
+  select user_id,email,nickname,avatar_url,status_message,birthday,favorite,created_at
+  from deduped
+  order by favorite desc, nickname asc nulls last, email asc nulls last;
+$$;
+
+drop function if exists public.get_friend_requests();
+create or replace function public.get_friend_requests()
+returns table(friendship_id uuid,user_id uuid,email text,nickname text,avatar_url text,status_message text,created_at timestamptz)
+language sql security definer set search_path=public as $$
+  with raw_rows as (
+    select f.id as friendship_id,p.id as user_id,p.email,p.nickname,p.avatar_url,p.status_message,f.created_at
+    from public.friendships f
+    join public.profiles p on p.id=f.requester_id
+    where f.addressee_id=auth.uid() and f.status='pending'
+  ), deduped as (
+    select distinct on (user_id) *
+    from raw_rows
+    order by user_id, created_at desc
+  )
+  select friendship_id,user_id,email,nickname,avatar_url,status_message,created_at
+  from deduped
+  order by created_at desc;
+$$;
+
+drop function if exists public.send_friend_request(uuid);
+create or replace function public.send_friend_request(p_addressee_id uuid)
+returns uuid language plpgsql security definer set search_path=public as $$
+declare
+  v_me uuid := auth.uid();
+  v_id uuid;
+  v_status text;
+begin
+  if v_me is null then raise exception 'login required'; end if;
+  if v_me = p_addressee_id then raise exception 'self request'; end if;
+
+  select id, status into v_id, v_status
+  from public.friendships
+  where least(requester_id,addressee_id)=least(v_me,p_addressee_id)
+    and greatest(requester_id,addressee_id)=greatest(v_me,p_addressee_id)
+  order by case status when 'accepted' then 0 when 'pending' then 1 else 2 end, updated_at desc nulls last
+  limit 1;
+
+  if v_id is not null then
+    if v_status = 'accepted' then
+      return v_id;
+    end if;
+    update public.friendships
+      set requester_id=v_me,
+          addressee_id=p_addressee_id,
+          status='pending',
+          updated_at=now()
+    where id=v_id;
+    return v_id;
+  end if;
+
+  insert into public.friendships(requester_id, addressee_id, status)
+  values(v_me,p_addressee_id,'pending')
+  returning id into v_id;
+
+  return v_id;
+end;
+$$;
+
+notify pgrst, 'reload schema';
