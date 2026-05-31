@@ -8,7 +8,7 @@ const TABS = {
   MORE: "more",
 };
 
-function withTimeout(promise, ms = 30000, label = "요청") {
+function withTimeout(promise, ms = 15000, label = "요청") {
   return Promise.race([
     promise,
     new Promise((_, reject) =>
@@ -24,13 +24,13 @@ function errorText(err) {
 }
 
 async function safeRpc(name, args = {}, label = name) {
-  const { data, error } = await withTimeout(supabase.rpc(name, args), 30000, label);
+  const { data, error } = await withTimeout(supabase.rpc(name, args), 15000, label);
   if (error) throw error;
   return data;
 }
 async function authFetch(path, payload, label = "Auth") {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 30000);
+  const timer = setTimeout(() => controller.abort(), 15000);
 
   try {
     const res = await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
@@ -73,6 +73,37 @@ async function authFetch(path, payload, label = "Auth") {
   } finally {
     clearTimeout(timer);
   }
+}
+
+function saveAuthSession(data) {
+  if (!data?.access_token || !data?.refresh_token) return false;
+
+  const session = {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token,
+    expires_in: data.expires_in || 3600,
+    expires_at:
+      data.expires_at ||
+      Math.floor(Date.now() / 1000) + (data.expires_in || 3600),
+    token_type: data.token_type || "bearer",
+    user: data.user || null,
+  };
+
+  try {
+    localStorage.setItem("sb-nwenbkthlpzlpfklgonb-auth-token", JSON.stringify(session));
+  } catch {}
+
+  // supabase-js 세션 저장은 백그라운드로만 시도. 여기서 기다리지 않음.
+  try {
+    supabase.auth
+      .setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      })
+      .catch(() => {});
+  } catch {}
+
+  return true;
 }
 
 
@@ -131,6 +162,8 @@ function AuthScreen() {
       }
 
       if (mode === "signup") {
+        setMsg("가입 요청중...");
+
         const data = await authFetch(
           "signup",
           {
@@ -144,42 +177,41 @@ function AuthScreen() {
         );
 
         if (data.access_token && data.refresh_token) {
-          await supabase.auth.setSession({
-            access_token: data.access_token,
-            refresh_token: data.refresh_token,
-          });
-
+          saveAuthSession(data);
           setMsg("가입 성공. 이동중...");
-          setTimeout(() => window.location.reload(), 500);
-        } else {
-          setMsg("가입 요청 완료. 로그인으로 다시 들어가봐.");
-          setMode("login");
-        }
-      } else {
-        const data = await authFetch(
-          "token?grant_type=password",
-          {
-            email: cleanEmail,
-            password: cleanPassword,
-          },
-          "로그인"
-        );
-
-        if (!data.access_token || !data.refresh_token) {
-          throw new Error("로그인 토큰을 못 받음");
+          setBusy(false);
+          setTimeout(() => window.location.href = "/?fresh=" + Date.now(), 300);
+          return;
         }
 
-        await supabase.auth.setSession({
-          access_token: data.access_token,
-          refresh_token: data.refresh_token,
-        });
-
-        setMsg("로그인 성공. 이동중...");
-        setTimeout(() => window.location.reload(), 500);
+        setMsg("가입은 됨. 로그인으로 다시 들어가봐.");
+        setMode("login");
+        setBusy(false);
+        return;
       }
+
+      setMsg("로그인 요청중...");
+
+      const data = await authFetch(
+        "token?grant_type=password",
+        {
+          email: cleanEmail,
+          password: cleanPassword,
+        },
+        "로그인"
+      );
+
+      if (!data.access_token || !data.refresh_token) {
+        throw new Error("로그인 토큰을 못 받음");
+      }
+
+      saveAuthSession(data);
+      setMsg("로그인 성공. 이동중...");
+      setBusy(false);
+      setTimeout(() => window.location.href = "/?fresh=" + Date.now(), 300);
+      return;
     } catch (err) {
       setMsg(errorText(err));
-    } finally {
       setBusy(false);
     }
   }
@@ -500,7 +532,7 @@ function MoreTab({ me, setMe, startGroup }) {
           .eq("id", me.id)
           .select()
           .single(),
-        30000,
+        15000,
         "프로필 저장"
       );
 
@@ -651,7 +683,7 @@ function ChatRoom({ room, me, back }) {
           })
           .select("id")
           .single(),
-        30000,
+        15000,
         "메시지 전송"
       );
 
