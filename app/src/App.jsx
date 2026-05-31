@@ -90,10 +90,10 @@ function saveAuthSession(data) {
   };
 
   try {
+    localStorage.setItem("chat-auth-session", JSON.stringify(session));
     localStorage.setItem("sb-nwenbkthlpzlpfklgonb-auth-token", JSON.stringify(session));
   } catch {}
 
-  // supabase-js 세션 저장은 백그라운드로만 시도. 여기서 기다리지 않음.
   try {
     supabase.auth
       .setSession({
@@ -105,7 +105,6 @@ function saveAuthSession(data) {
 
   return true;
 }
-
 
 function timeText(value) {
   if (!value) return "";
@@ -568,7 +567,7 @@ function MoreTab({ me, setMe, startGroup }) {
         <button onClick={save}>프로필 저장</button>
         <button onClick={startGroup}>그룹방 만들기</button>
         <button onClick={pushOn}>백그라운드 알림 켜기</button>
-        <button className="danger" onClick={() => supabase.auth.signOut()}>
+        <button className="danger" onClick={() => { localStorage.removeItem("chat-auth-session"); supabase.auth.signOut(); }}>
           로그아웃
         </button>
 
@@ -943,7 +942,38 @@ export default function App() {
     }
 
     async function boot() {
-      // 모바일에서 Supabase 세션 확인이 늦어져도 로그인 화면은 바로 보여준다.
+      try {
+        const raw = localStorage.getItem("chat-auth-session");
+        const saved = raw ? JSON.parse(raw) : null;
+
+        if (saved?.access_token && saved?.refresh_token && saved?.user) {
+          const fallback = {
+            id: saved.user.id,
+            email: saved.user.email,
+            nickname:
+              saved.user.user_metadata?.nickname ||
+              saved.user.email?.split("@")[0] ||
+              "익명",
+            avatar_url: null,
+            status_message: "",
+          };
+
+          setSession(saved);
+          setMe(fallback);
+          if (alive) setLoading(false);
+
+          supabase.auth
+            .setSession({
+              access_token: saved.access_token,
+              refresh_token: saved.refresh_token,
+            })
+            .catch(() => {});
+
+          loadMe(saved.user).catch(() => {});
+          return;
+        }
+      } catch {}
+
       if (alive) setLoading(false);
 
       supabase.auth
@@ -957,8 +987,7 @@ export default function App() {
           if (next?.user) {
             try {
               await loadMe(next.user);
-            } catch (err) {
-              setBootMsg(errorText(err));
+            } catch {
               setMe({
                 id: next.user.id,
                 email: next.user.email,
@@ -972,9 +1001,7 @@ export default function App() {
             }
           }
         })
-        .catch(() => {
-          // 세션 확인 실패는 로그인 화면 사용을 막지 않는다.
-        });
+        .catch(() => {});
     }
 
     boot();
