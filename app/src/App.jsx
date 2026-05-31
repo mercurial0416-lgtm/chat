@@ -3,6 +3,8 @@ import './styles.css';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './lib/supabase';
 import { registerWebPush } from './push';
 
+const PATCH_VERSION = 'v7-reviewed-20260601';
+
 const TABS = {
   FRIENDS: 'friends',
   CHATS: 'chats',
@@ -1355,7 +1357,37 @@ function LocationRequestModal({ targetId, onClose }) {
   );
 }
 
-export default function App() {
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('APP_RENDER_ERROR', error, info);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="crashScreen">
+          <h1>앱 화면 오류</h1>
+          <p>화면이 빈칸으로 멈추지 않도록 오류 내용을 표시합니다.</p>
+          <pre>{this.state.error?.message || String(this.state.error)}</pre>
+          <button onClick={() => location.reload()}>새로고침</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function AppInner() {
   const [session, setSession] = useState(null);
   const [me, setMe] = useState(null);
   const [tab, setTab] = useState(TABS.CHATS);
@@ -1518,5 +1550,13 @@ export default function App() {
 
       {locationTarget && <LocationRequestModal targetId={locationTarget} onClose={() => setLocationTarget(null)} />}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppInner />
+    </ErrorBoundary>
   );
 }
