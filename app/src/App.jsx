@@ -8,7 +8,7 @@ const TABS = {
   MORE: "more",
 };
 
-function withTimeout(promise, ms = 12000, label = "요청") {
+function withTimeout(promise, ms = 30000, label = "요청") {
   return Promise.race([
     promise,
     new Promise((_, reject) =>
@@ -24,7 +24,7 @@ function errorText(err) {
 }
 
 async function safeRpc(name, args = {}, label = name) {
-  const { data, error } = await withTimeout(supabase.rpc(name, args), 12000, label);
+  const { data, error } = await withTimeout(supabase.rpc(name, args), 30000, label);
   if (error) throw error;
   return data;
 }
@@ -93,7 +93,7 @@ function AuthScreen() {
               },
             },
           }),
-          12000,
+          30000,
           "가입"
         );
 
@@ -108,7 +108,7 @@ function AuthScreen() {
             email: cleanEmail,
             password: cleanPassword,
           }),
-          12000,
+          30000,
           "로그인"
         );
 
@@ -437,7 +437,7 @@ function MoreTab({ me, setMe, startGroup }) {
           .eq("id", me.id)
           .select()
           .single(),
-        12000,
+        30000,
         "프로필 저장"
       );
 
@@ -588,7 +588,7 @@ function ChatRoom({ room, me, back }) {
           })
           .select("id")
           .single(),
-        12000,
+        30000,
         "메시지 전송"
       );
 
@@ -817,7 +817,7 @@ export default function App() {
         email: user.email,
         nickname: fallbackName,
       }),
-      12000,
+      30000,
       "프로필 생성"
     );
 
@@ -829,7 +829,7 @@ export default function App() {
         .select("id,email,nickname,avatar_url,status_message")
         .eq("id", user.id)
         .single(),
-      12000,
+      30000,
       "프로필 조회"
     );
 
@@ -848,7 +848,7 @@ export default function App() {
 
     async function boot() {
       try {
-        const { data, error } = await withTimeout(supabase.auth.getSession(), 12000, "세션 확인");
+        const { data, error } = await withTimeout(supabase.auth.getSession(), 30000, "세션 확인");
 
         if (error) throw error;
         if (!alive) return;
@@ -867,20 +867,30 @@ export default function App() {
 
     boot();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, next) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
       setSession(next);
 
       if (next?.user) {
-        try {
-          await loadMe(next.user);
-        } catch (err) {
-          setBootMsg(errorText(err));
-        }
+        setTimeout(async () => {
+          try {
+            await loadMe(next.user);
+          } catch (err) {
+            setBootMsg(errorText(err));
+            setMe({
+              id: next.user.id,
+              email: next.user.email,
+              nickname: next.user.user_metadata?.nickname || next.user.email?.split("@")[0] || "익명",
+              avatar_url: null,
+              status_message: "",
+            });
+          } finally {
+            setLoading(false);
+          }
+        }, 0);
       } else {
         setMe(null);
+        setLoading(false);
       }
-
-      setLoading(false);
     });
 
     return () => {
