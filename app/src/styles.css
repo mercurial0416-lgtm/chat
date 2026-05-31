@@ -1,2 +1,999 @@
 *{box-sizing:border-box}html,body,#root{margin:0;width:100%;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#191919;background:#eef0f3}button,input,textarea,select{font:inherit}button{border:0;background:none;color:inherit;cursor:pointer}input,textarea,select{border:0;outline:0;border-radius:14px;background:#eef0f3;color:inherit;padding:12px 14px;width:100%;font-size:16px}textarea{min-height:92px;resize:vertical}a{color:#155ec7;text-decoration:none}:root{--yellow:#fee500;--bg:#f5f6f8;--card:#fff;--line:rgba(0,0,0,.09);--text:#191919;--sub:#74777f;--chat:#b9c8da;--dark:#20232a;--danger:#ff3b30}body.dark{--bg:#15171b;--card:#22252b;--line:rgba(255,255,255,.1);--text:#f1f3f5;--sub:#a8adb6;--chat:#222b35;background:var(--bg);color:var(--text)}.loading,.empty{display:grid;place-items:center;text-align:center;color:var(--sub);min-height:220px;line-height:1.6}.authPage{min-height:100dvh;display:grid;place-items:center;background:var(--yellow);padding:20px}.authCard{width:min(420px,100%);display:grid;gap:12px;background:#fff;border-radius:28px;padding:26px;box-shadow:0 18px 60px rgba(0,0,0,.16)}.authCard h1{margin:0;font-size:28px}.authCard p{margin:0 0 8px;color:#666}.brandMark{width:64px;height:64px;border-radius:22px;background:#191919;color:var(--yellow);display:grid;place-items:center;font-weight:900}.primaryBtn,.sendBtn{background:var(--yellow)!important;color:#191919!important;font-weight:900!important;border-radius:14px!important;padding:12px 14px!important}.dangerBtn{background:var(--danger)!important;color:#fff!important;font-weight:900;border-radius:14px;padding:12px 14px}.textBtn{padding:10px;color:#555;font-weight:800}.notice{margin-top:8px;padding:10px 12px;border-radius:14px;background:#fff4bf;color:#4b3b00;font-size:13px;word-break:break-word}.appShell{width:100vw;height:100vh;display:grid;grid-template-columns:92px minmax(0,1fr);overflow:hidden;background:var(--bg)}.pcRail{height:100vh;padding:16px 10px;background:var(--dark);color:#d8dbe2;display:flex;flex-direction:column;align-items:center;gap:10px;border-right:1px solid rgba(255,255,255,.06)}.railProfile{margin-bottom:8px}.pcRail button{width:72px;height:62px;border-radius:18px;display:grid;place-items:center;gap:4px;color:#cfd2d9}.pcRail button span{width:32px;height:30px;border-radius:12px;display:grid;place-items:center;font-size:12px;font-weight:900;background:rgba(255,255,255,.08);color:#fff}.pcRail button small{font-size:11px;font-weight:800}.pcRail button.active{background:rgba(254,229,0,.13);color:var(--yellow)}.pcRail button.active span{background:var(--yellow);color:#191919}.mainPanel{min-width:0;height:100vh;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}.top{height:60px;flex:0 0 60px;background:var(--card);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 22px}.top h1{margin:0;font-size:22px;letter-spacing:-.4px}.topUser{display:flex;align-items:center;gap:9px;color:var(--sub);font-size:13px}.content{flex:1;min-height:0;overflow:auto}.contentWithRoom{display:grid;grid-template-columns:390px minmax(0,1fr);overflow:hidden}.leftContent{min-height:0;overflow:auto}.contentWithRoom .leftContent{background:var(--card);border-right:1px solid var(--line)}.rightRoom{min-width:0;min-height:0;background:var(--chat);overflow:hidden}.splitPage{height:100%;display:grid;grid-template-columns:390px minmax(0,1fr);overflow:hidden}.listPane{height:100%;overflow:auto;padding:18px}.detailPane{height:100%;overflow:auto;padding:18px;background:var(--bg)}.detailCard{min-height:100%;display:grid;place-items:center;align-content:center;text-align:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:26px;padding:24px}.detailCard h2{margin:0}.detailCard p{margin:0;color:var(--sub)}.buttonGrid,.settingsPanel{display:grid;gap:10px;width:min(360px,100%)}.section{margin:18px 4px 8px;color:var(--sub);font-size:12px;font-weight:900;letter-spacing:.02em}.searchLine{display:grid;grid-template-columns:1fr 42px;gap:8px}.search{height:44px}.roundBtn{height:44px;border-radius:50%;background:var(--yellow);font-size:24px;font-weight:900}.avatar{flex:0 0 auto;border-radius:16px;background:#d9dce1;overflow:hidden;display:grid;place-items:center;font-weight:900;color:#666;box-shadow:inset 0 0 0 1px rgba(0,0,0,.06)}.avatar img{width:100%;height:100%;object-fit:cover}.profileRow,.rowCard,.chatItem,.eventRow,.locationCard,.noti{display:flex;align-items:center;gap:12px;width:100%;min-height:66px;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:11px 12px;margin-bottom:8px;box-shadow:0 1px 2px rgba(0,0,0,.03)}.rowCard:hover,.chatItem:hover,.rowCard.selected,.chatItem.selected{background:#fff8c9}.rowText{flex:1;min-width:0;display:grid;gap:4px}.rowText b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rowText span{font-size:13px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rowCard i{font-style:normal;color:var(--sub);font-size:12px}.roomMeta{display:grid;justify-items:end;gap:6px;color:var(--sub);font-size:12px}.roomMeta em{min-width:20px;height:20px;border-radius:999px;background:var(--danger);color:#fff;display:grid;place-items:center;font-style:normal;font-size:11px;font-weight:900}.room{width:100%;height:100%;display:flex;flex-direction:column;background:var(--chat);overflow:hidden}.roomHeader{flex:0 0 58px;min-height:58px;display:flex;align-items:center;gap:10px;padding:0 16px;background:rgba(255,255,255,.38);backdrop-filter:blur(10px);border-bottom:1px solid rgba(0,0,0,.06)}.backBtn{width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.45);font-size:30px;line-height:1}.roomTitle{flex:1;min-width:0;display:grid;gap:2px}.roomTitle b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.roomTitle span{color:rgba(0,0,0,.55);font-size:12px}.messages{flex:1;min-height:0;overflow:auto;padding:22px 28px 18px;scroll-behavior:smooth}.msg{display:flex;gap:8px;margin-bottom:12px}.msg.mine{justify-content:flex-end}.msgStack{max-width:min(72%,560px);display:grid;gap:4px}.mine .msgStack{justify-items:end}.sender{font-size:12px;color:rgba(0,0,0,.62);margin-left:3px}.bubble{font-size:15.5px;line-height:1.48;padding:11px 14px;border-radius:18px;word-break:break-word;white-space:pre-wrap;box-shadow:0 1px 2px rgba(0,0,0,.05)}.mine .bubble{background:var(--yellow);color:#191919;border-top-right-radius:6px}.other .bubble{background:#fff;color:#191919;border-top-left-radius:6px}.msgMeta{display:flex;gap:6px;justify-content:flex-end;font-size:11px;color:rgba(0,0,0,.55)}.chatImage{max-width:260px;max-height:320px;border-radius:14px;display:block;object-fit:cover}.dateLine,.sending{width:fit-content;margin:10px auto;padding:6px 10px;border-radius:999px;background:rgba(0,0,0,.16);color:#fff;font-size:12px}.composer{flex:0 0 auto;display:grid;grid-template-columns:42px 54px 1fr 62px;gap:8px;align-items:center;padding:10px 14px;background:#fff;border-top:1px solid var(--line)}.iconBtn{height:42px;border-radius:21px;background:#eef0f3;font-weight:900;display:grid;place-items:center;font-size:13px}.iconBtn input,.fileLabel input{display:none}.composer input{height:42px;border-radius:21px}.sendBtn{height:42px;padding:0!important}.calendarPage{height:100%;display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;padding:18px;overflow:hidden}.calMain,.selectedPanel{min-height:0;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:24px;padding:16px}.calHeader{display:flex;align-items:center;justify-content:center;gap:18px;margin-bottom:12px}.calHeader b{font-size:22px}.calHeader button{width:38px;height:38px;border-radius:50%;background:#eef0f3;font-size:24px}.calTools{display:flex;gap:8px;margin-bottom:10px}.calTools button{flex:1;border-radius:14px;background:#eef0f3;padding:10px;font-weight:900}.weekHead{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;color:var(--sub);font-size:12px;font-weight:900;margin-bottom:6px}.monthGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}.dayCell{height:92px;background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:7px;text-align:left;overflow:hidden}.dayCell.dim{opacity:.45}.dayCell.selected{background:#fff7bd;outline:2px solid var(--yellow)}.dayCell.today .dayNum{color:#d59f00}.dayNum{font-weight:900;margin-bottom:4px}.dayEvents{display:grid;gap:3px}.dayEvents i{font-style:normal;border-radius:7px;padding:2px 5px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#222}.selectedTop{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.selectedTop button{width:34px;height:34px;border-radius:50%;background:var(--yellow);font-size:22px;font-weight:900}.eventRow i{width:8px;align-self:stretch;border-radius:99px;flex:0 0 8px}.eventRow div{display:grid;gap:3px}.eventRow span{color:var(--sub);font-size:12px}.morePage{height:100%;display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;padding:18px;overflow:hidden}.moreMenu{display:grid;align-content:start;gap:8px}.moreMenu button{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;text-align:left;font-weight:900}.moreMenu button.selected{background:#fff7bd;border-color:var(--yellow)}.moreDetail{min-height:0;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:24px;padding:20px}.settingsPanel h2{margin:0 0 4px}.settingsPanel p{margin:0;color:var(--sub);line-height:1.5}.fileLabel{display:grid;place-items:center;background:#eef0f3;border-radius:14px;padding:12px;font-weight:900;cursor:pointer}.checkLine{display:flex;align-items:center;gap:8px}.checkLine input{width:auto}.locationCard{display:grid;align-items:start;gap:5px}.modalBackdrop{position:fixed;inset:0;background:rgba(0,0,0,.42);display:grid;place-items:center;z-index:2000;padding:18px}.modal{width:min(440px,100%);max-height:86dvh;overflow:auto;background:var(--card);border-radius:24px;padding:18px;box-shadow:0 24px 70px rgba(0,0,0,.3)}.modalWide{width:min(760px,100%)}.modalHeader{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.modalHeader b{font-size:20px}.modalHeader button,.modalActions button{border-radius:14px;background:#eef0f3;padding:10px 12px;font-weight:900}.modalActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.pickList{display:grid;gap:8px;margin:12px 0}.pick{display:flex;align-items:center;gap:10px;background:#f2f3f5;border-radius:14px;padding:10px;text-align:left}.pick.on{background:#fff7bd}.colorPick{display:flex;gap:8px}.colorPick button{width:32px;height:32px;border-radius:50%;border:3px solid transparent}.colorPick button.on{border-color:#191919}.fatal{padding:24px}.fatal pre{white-space:pre-wrap;background:#111;color:#fff;border-radius:14px;padding:16px}.mobileNav,.mobileRoom{display:none}body.dark .top,body.dark .listPane,body.dark .contentWithRoom .leftContent,body.dark .profileRow,body.dark .rowCard,body.dark .chatItem,body.dark .calMain,body.dark .selectedPanel,body.dark .moreMenu button,body.dark .moreDetail,body.dark .eventRow,body.dark .locationCard,body.dark .modal{background:var(--card);color:var(--text);border-color:var(--line)}body.dark input,body.dark textarea,body.dark select,body.dark .search,body.dark .iconBtn,body.dark .calTools button,body.dark .calHeader button,body.dark .fileLabel,body.dark .modalHeader button,body.dark .modalActions button{background:#2c3037;color:var(--text)}body.dark .other .bubble{background:#2d3138;color:var(--text)}body.dark .rowCard:hover,body.dark .chatItem:hover,body.dark .rowCard.selected,body.dark .chatItem.selected,body.dark .moreMenu button.selected,body.dark .dayCell.selected{background:#3b3520}
 @media(max-width:767px){html,body,#root{height:100%;overflow:hidden}.appShell{display:block;height:100dvh;overflow:hidden}.pcRail{display:none}.mainPanel{height:100dvh;display:flex;flex-direction:column;overflow:hidden}.top{height:calc(54px + env(safe-area-inset-top));flex:0 0 calc(54px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 16px 0}.top h1{font-size:22px}.topUser{display:none}.content{flex:1;min-height:0;overflow:auto;padding-bottom:calc(86px + env(safe-area-inset-bottom))}.contentWithRoom{display:block}.leftContent{height:auto;overflow:visible}.rightRoom{display:none}.splitPage{display:block;height:auto}.listPane,.detailPane{height:auto;overflow:visible;padding:14px}.detailPane{display:none}.mobileNav{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:10px;right:10px;bottom:calc(8px + env(safe-area-inset-bottom));height:64px;padding:6px;background:rgba(255,255,255,.96);border:1px solid var(--line);border-radius:24px;box-shadow:0 12px 30px rgba(0,0,0,.15);z-index:500}.mobileNav button{display:grid;place-items:center;gap:2px;border-radius:18px;color:#777;font-weight:900}.mobileNav button span{width:28px;height:24px;border-radius:10px;background:#eef0f3;display:grid;place-items:center;font-size:11px;font-weight:900}.mobileNav button small{font-size:10px}.mobileNav button.active{background:#fff7bd;color:#191919}.mobileNav button.active span{background:var(--yellow);color:#191919}.mobileRoom{display:block;position:fixed;inset:0;z-index:999;background:var(--chat)}.mobileRoom .room{width:100vw;height:100dvh}.mobileRoom .roomHeader{height:calc(54px + env(safe-area-inset-top));flex-basis:calc(54px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 10px 0}.mobileRoom .messages{padding:14px 12px 12px}.mobileRoom .composer{grid-template-columns:36px 48px 1fr 54px;padding:9px 8px calc(9px + env(safe-area-inset-bottom));min-height:calc(64px + env(safe-area-inset-bottom))}.msgStack{max-width:84%}.chatImage{max-width:220px;max-height:260px}.calendarPage{display:block;height:auto;overflow:visible;padding:14px 14px calc(104px + env(safe-area-inset-bottom))}.calMain,.selectedPanel{padding:14px;border-radius:22px;margin-bottom:12px}.monthGrid{gap:5px}.dayCell{height:74px;border-radius:14px;padding:6px}.dayEvents i{font-size:10px;padding:1px 4px}.morePage{display:block;height:auto;overflow:visible;padding:14px 14px calc(104px + env(safe-area-inset-bottom))}.moreMenu{grid-template-columns:1fr 1fr;display:grid;margin-bottom:12px}.moreMenu button{min-height:58px;padding:14px}.moreDetail{padding:14px;border-radius:22px}.profileRow,.rowCard,.chatItem{min-height:62px;border-radius:18px;padding:10px}.composer input{min-width:0}.authCard{border-radius:24px}}
+
+/* =========================================================
+   v14 UI REDESIGN
+   - 모바일: 카톡식 다크 채팅 리스트
+   - PC: 좌측 메뉴 + 목록 + 상세 다크 레이아웃
+   - 기능 JS 건드리지 않음
+   ========================================================= */
+
+:root{
+  --v14-bg:#050608;
+  --v14-panel:#101216;
+  --v14-card:#171a20;
+  --v14-card2:#1d2027;
+  --v14-line:rgba(255,255,255,.075);
+  --v14-text:#f3f4f7;
+  --v14-sub:#9b9fa8;
+  --v14-muted:#666b75;
+  --v14-accent:#7c6cff;
+  --v14-badge:#ff4b42;
+  --v14-green:#39d36b;
+  --v14-yellow:#fee500;
+  --v14-chat-bg:#121923;
+  --v14-radius:26px;
+}
+
+/* 기본 */
+html,
+body,
+#root{
+  width:100% !important;
+  height:100% !important;
+  margin:0 !important;
+  overflow:hidden !important;
+  background:var(--v14-bg) !important;
+  color:var(--v14-text) !important;
+}
+
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,sans-serif !important;
+}
+
+*{
+  box-sizing:border-box !important;
+}
+
+button,
+input,
+textarea,
+select{
+  font-family:inherit !important;
+}
+
+button{
+  -webkit-tap-highlight-color:transparent !important;
+}
+
+input,
+textarea,
+select{
+  font-size:16px !important;
+}
+
+/* 전체 앱 */
+.appShell{
+  background:var(--v14-bg) !important;
+  color:var(--v14-text) !important;
+}
+
+.mainPanel{
+  background:var(--v14-bg) !important;
+  color:var(--v14-text) !important;
+}
+
+/* 상단 */
+.top{
+  background:var(--v14-bg) !important;
+  color:var(--v14-text) !important;
+  border-bottom:0 !important;
+}
+
+.top h1{
+  color:var(--v14-text) !important;
+  font-weight:900 !important;
+  letter-spacing:-.8px !important;
+}
+
+.topMe{
+  color:var(--v14-sub) !important;
+}
+
+.topMe img,
+.avatar img{
+  object-fit:cover !important;
+}
+
+/* 검색창 */
+.search,
+input.search,
+.page input[placeholder*="검색"],
+.page input[placeholder*="친구"],
+.page input[placeholder*="이메일"],
+.page input[placeholder*="대화"]{
+  width:100% !important;
+  height:50px !important;
+  border:0 !important;
+  outline:none !important;
+  border-radius:18px !important;
+  background:#171a20 !important;
+  color:var(--v14-text) !important;
+  padding:0 18px !important;
+  box-shadow:none !important;
+}
+
+.search::placeholder,
+input::placeholder{
+  color:#767b85 !important;
+}
+
+/* 공통 카드 */
+.row,
+.chatRow,
+.myProfile,
+.eventRow,
+.locationCard,
+.locationReq,
+.noti,
+.paneDetail,
+.moreDetail,
+.selectedPanel,
+.modal{
+  background:var(--v14-card) !important;
+  color:var(--v14-text) !important;
+  border:1px solid var(--v14-line) !important;
+  box-shadow:none !important;
+}
+
+.row:hover,
+.chatRow:hover,
+.chatRow.selected,
+.row.selected{
+  background:var(--v14-card2) !important;
+}
+
+/* 프로필/아바타 */
+.avatar{
+  border-radius:24px !important;
+  overflow:hidden !important;
+  background:linear-gradient(135deg,#2e3440,#151820) !important;
+  color:#dfe3ea !important;
+  box-shadow:none !important;
+}
+
+.avatar.small{
+  border-radius:14px !important;
+}
+
+/* 텍스트 */
+.meta b,
+.chatTop b,
+.roomTitle b,
+.row b,
+.chatRow b{
+  color:var(--v14-text) !important;
+  font-weight:900 !important;
+  letter-spacing:-.3px !important;
+}
+
+.meta span,
+.chatBottom,
+.chatBottom span,
+.sub,
+.muted,
+small{
+  color:var(--v14-sub) !important;
+}
+
+/* 배지 */
+.badge,
+.unread,
+.count,
+.notiBadge{
+  background:var(--v14-badge) !important;
+  color:#fff !important;
+  border:0 !important;
+  min-width:22px !important;
+  height:22px !important;
+  border-radius:999px !important;
+  display:inline-grid !important;
+  place-items:center !important;
+  font-size:12px !important;
+  font-weight:900 !important;
+}
+
+/* 버튼 */
+button{
+  border:0 !important;
+}
+
+.ghost,
+button.ghost{
+  color:var(--v14-sub) !important;
+  background:transparent !important;
+}
+
+.primary,
+button.primary,
+.composer button{
+  background:var(--v14-accent) !important;
+  color:#fff !important;
+  font-weight:900 !important;
+}
+
+/* =========================
+   모바일: 카톡식 다크 UI
+   ========================= */
+@media (max-width:767px){
+  .appShell{
+    width:100vw !important;
+    height:100dvh !important;
+    display:block !important;
+    overflow:hidden !important;
+    background:var(--v14-bg) !important;
+  }
+
+  .pcRail{
+    display:none !important;
+  }
+
+  .mainPanel{
+    width:100vw !important;
+    height:100dvh !important;
+    min-height:0 !important;
+    display:flex !important;
+    flex-direction:column !important;
+    overflow:hidden !important;
+    background:var(--v14-bg) !important;
+  }
+
+  .top{
+    flex:0 0 calc(72px + env(safe-area-inset-top)) !important;
+    height:calc(72px + env(safe-area-inset-top)) !important;
+    min-height:calc(72px + env(safe-area-inset-top)) !important;
+    padding:calc(18px + env(safe-area-inset-top)) 20px 8px !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:space-between !important;
+    background:var(--v14-bg) !important;
+    border:0 !important;
+  }
+
+  .top h1{
+    font-size:32px !important;
+    line-height:1 !important;
+    margin:0 !important;
+  }
+
+  .topMe{
+    display:none !important;
+  }
+
+  .content{
+    flex:1 1 auto !important;
+    min-height:0 !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    padding:0 12px calc(96px + env(safe-area-inset-bottom)) !important;
+    background:var(--v14-bg) !important;
+  }
+
+  .page{
+    padding:0 4px calc(108px + env(safe-area-inset-bottom)) !important;
+    background:var(--v14-bg) !important;
+  }
+
+  /* 검색창을 상단 바로 밑에 크게 */
+  .page > input:first-child,
+  .page .search:first-child,
+  .search{
+    margin:0 0 16px !important;
+  }
+
+  /* 채팅/친구 목록: 큰 라운드 카드 */
+  .chatRow,
+  .row,
+  .myProfile{
+    min-height:96px !important;
+    border-radius:24px !important;
+    padding:16px 16px !important;
+    margin:0 0 8px !important;
+    background:linear-gradient(180deg,#171a20,#14171d) !important;
+    border:1px solid rgba(255,255,255,.055) !important;
+    display:flex !important;
+    align-items:center !important;
+    gap:14px !important;
+  }
+
+  .chatRow:active,
+  .row:active{
+    transform:scale(.992) !important;
+    background:#20242c !important;
+  }
+
+  .chatRow .avatar,
+  .row .avatar,
+  .myProfile .avatar{
+    width:64px !important;
+    height:64px !important;
+    min-width:64px !important;
+    border-radius:22px !important;
+    font-size:18px !important;
+    font-weight:900 !important;
+  }
+
+  .chatInfo,
+  .meta{
+    min-width:0 !important;
+    flex:1 1 auto !important;
+  }
+
+  .chatTop,
+  .meta{
+    min-width:0 !important;
+  }
+
+  .chatTop b,
+  .meta b{
+    font-size:20px !important;
+    line-height:1.15 !important;
+  }
+
+  .chatBottom,
+  .chatBottom span,
+  .meta span{
+    display:block !important;
+    margin-top:8px !important;
+    font-size:15px !important;
+    line-height:1.25 !important;
+    color:#9aa0aa !important;
+    overflow:hidden !important;
+    white-space:nowrap !important;
+    text-overflow:ellipsis !important;
+  }
+
+  .chatTime{
+    color:#9aa0aa !important;
+    font-size:13px !important;
+    white-space:nowrap !important;
+  }
+
+  /* 모바일 하단 네비: 떠있는 다크바 */
+  .mobileNav{
+    position:fixed !important;
+    left:10px !important;
+    right:10px !important;
+    bottom:calc(8px + env(safe-area-inset-bottom)) !important;
+    height:76px !important;
+    padding:7px 8px !important;
+    display:grid !important;
+    grid-template-columns:repeat(4,1fr) !important;
+    gap:4px !important;
+    z-index:700 !important;
+    background:rgba(18,20,25,.92) !important;
+    border:1px solid rgba(255,255,255,.08) !important;
+    border-radius:28px !important;
+    box-shadow:0 20px 40px rgba(0,0,0,.45) !important;
+    backdrop-filter:blur(18px) !important;
+  }
+
+  .mobileNav button{
+    height:62px !important;
+    border-radius:22px !important;
+    background:transparent !important;
+    color:#8b9099 !important;
+    display:grid !important;
+    place-items:center !important;
+    gap:3px !important;
+    font-size:11px !important;
+    font-weight:800 !important;
+    position:relative !important;
+  }
+
+  .mobileNav button span{
+    width:30px !important;
+    height:30px !important;
+    display:block !important;
+    position:relative !important;
+    font-size:0 !important;
+    background:transparent !important;
+  }
+
+  .mobileNav button small{
+    color:inherit !important;
+    font-size:11px !important;
+    font-weight:800 !important;
+    line-height:1 !important;
+  }
+
+  .mobileNav button.active{
+    color:#fff !important;
+    background:rgba(255,255,255,.04) !important;
+  }
+
+  .mobileNav button.active::after{
+    content:"" !important;
+    position:absolute !important;
+    bottom:4px !important;
+    width:5px !important;
+    height:5px !important;
+    border-radius:999px !important;
+    background:var(--v14-accent) !important;
+  }
+
+  /* CSS 아이콘 - 친구 */
+  .mobileNav button:nth-child(1) span::before{
+    content:"" !important;
+    position:absolute !important;
+    left:9px !important;
+    top:3px !important;
+    width:12px !important;
+    height:12px !important;
+    border:2px solid currentColor !important;
+    border-radius:50% !important;
+  }
+
+  .mobileNav button:nth-child(1) span::after{
+    content:"" !important;
+    position:absolute !important;
+    left:5px !important;
+    bottom:3px !important;
+    width:20px !important;
+    height:10px !important;
+    border:2px solid currentColor !important;
+    border-radius:12px 12px 4px 4px !important;
+  }
+
+  /* CSS 아이콘 - 채팅 */
+  .mobileNav button:nth-child(2) span::before{
+    content:"" !important;
+    position:absolute !important;
+    left:3px !important;
+    top:6px !important;
+    width:23px !important;
+    height:17px !important;
+    border-radius:10px !important;
+    background:currentColor !important;
+  }
+
+  .mobileNav button:nth-child(2) span::after{
+    content:"" !important;
+    position:absolute !important;
+    left:8px !important;
+    bottom:3px !important;
+    width:8px !important;
+    height:8px !important;
+    background:currentColor !important;
+    transform:rotate(45deg) !important;
+  }
+
+  /* CSS 아이콘 - 캘린더 */
+  .mobileNav button:nth-child(3) span::before{
+    content:"" !important;
+    position:absolute !important;
+    left:4px !important;
+    top:5px !important;
+    width:22px !important;
+    height:22px !important;
+    border:2px solid currentColor !important;
+    border-radius:6px !important;
+  }
+
+  .mobileNav button:nth-child(3) span::after{
+    content:"" !important;
+    position:absolute !important;
+    left:8px !important;
+    top:11px !important;
+    width:14px !important;
+    height:2px !important;
+    background:currentColor !important;
+    box-shadow:0 6px 0 currentColor !important;
+  }
+
+  /* CSS 아이콘 - 더보기 */
+  .mobileNav button:nth-child(4) span::before{
+    content:"" !important;
+    position:absolute !important;
+    left:5px !important;
+    top:7px !important;
+    width:20px !important;
+    height:3px !important;
+    border-radius:99px !important;
+    background:currentColor !important;
+    box-shadow:0 7px 0 currentColor,0 14px 0 currentColor !important;
+  }
+
+  .rightRoom{
+    display:none !important;
+  }
+
+  /* 모바일 채팅방은 전체화면 */
+  .mobileRoom{
+    position:fixed !important;
+    inset:0 !important;
+    width:100vw !important;
+    height:100dvh !important;
+    z-index:999 !important;
+    background:var(--v14-chat-bg) !important;
+    overflow:hidden !important;
+    display:block !important;
+  }
+
+  .mobileRoom .room{
+    width:100vw !important;
+    height:100dvh !important;
+    display:flex !important;
+    flex-direction:column !important;
+    background:var(--v14-chat-bg) !important;
+    overflow:hidden !important;
+  }
+
+  .mobileRoom .roomHeader{
+    flex:0 0 calc(60px + env(safe-area-inset-top)) !important;
+    height:calc(60px + env(safe-area-inset-top)) !important;
+    min-height:calc(60px + env(safe-area-inset-top)) !important;
+    padding:env(safe-area-inset-top) 12px 0 !important;
+    background:rgba(18,25,35,.92) !important;
+    color:#fff !important;
+    border-bottom:1px solid rgba(255,255,255,.075) !important;
+    backdrop-filter:blur(14px) !important;
+  }
+
+  .mobileRoom .messages{
+    flex:1 1 auto !important;
+    min-height:0 !important;
+    overflow-y:auto !important;
+    padding:16px 12px 14px !important;
+    background:var(--v14-chat-bg) !important;
+  }
+
+  .mobileRoom .composer{
+    flex:0 0 auto !important;
+    min-height:calc(68px + env(safe-area-inset-bottom)) !important;
+    padding:10px 10px calc(10px + env(safe-area-inset-bottom)) !important;
+    background:#0e1117 !important;
+    border-top:1px solid rgba(255,255,255,.08) !important;
+  }
+
+  .composer{
+    grid-template-columns:38px 38px minmax(0,1fr) 58px !important;
+    gap:7px !important;
+  }
+
+  .composer input{
+    height:44px !important;
+    border-radius:22px !important;
+    background:#1b1f27 !important;
+    color:#fff !important;
+    border:0 !important;
+    min-width:0 !important;
+  }
+
+  .plusFile,
+  .composerMini,
+  .composer button{
+    height:44px !important;
+    border-radius:22px !important;
+  }
+
+  /* 모바일 캘린더/더보기 */
+  .calendarPage,
+  .morePage,
+  .twoPaneInner{
+    display:block !important;
+  }
+
+  .monthGrid{
+    gap:6px !important;
+  }
+
+  .dayCell{
+    min-height:72px !important;
+    border-radius:16px !important;
+    background:var(--v14-card) !important;
+    border:1px solid var(--v14-line) !important;
+    color:var(--v14-text) !important;
+  }
+
+  .dayCell.selected{
+    outline:2px solid var(--v14-accent) !important;
+    background:#202336 !important;
+  }
+
+  .moreMenu{
+    display:grid !important;
+    grid-template-columns:1fr 1fr !important;
+    gap:10px !important;
+  }
+
+  .moreMenu button{
+    min-height:74px !important;
+    border-radius:22px !important;
+    background:var(--v14-card) !important;
+    color:var(--v14-text) !important;
+    text-align:left !important;
+    padding:16px !important;
+    font-weight:900 !important;
+    border:1px solid var(--v14-line) !important;
+  }
+
+  .moreMenu button.selected{
+    background:#202336 !important;
+    border-color:rgba(124,108,255,.55) !important;
+  }
+}
+
+/* =========================
+   PC: 다크 3단 레이아웃
+   ========================= */
+@media (min-width:768px){
+  .appShell{
+    width:100vw !important;
+    height:100vh !important;
+    display:grid !important;
+    grid-template-columns:96px minmax(0,1fr) !important;
+    overflow:hidden !important;
+    background:var(--v14-bg) !important;
+  }
+
+  .pcRail{
+    width:96px !important;
+    min-width:96px !important;
+    max-width:96px !important;
+    height:100vh !important;
+    padding:18px 10px !important;
+    display:flex !important;
+    flex-direction:column !important;
+    gap:10px !important;
+    background:#0b0d12 !important;
+    border-right:1px solid var(--v14-line) !important;
+  }
+
+  .pcRail button{
+    width:76px !important;
+    min-height:70px !important;
+    border-radius:24px !important;
+    display:grid !important;
+    place-items:center !important;
+    gap:4px !important;
+    color:#868c96 !important;
+    background:transparent !important;
+    position:relative !important;
+  }
+
+  .pcRail button:hover{
+    background:#171a20 !important;
+    color:#fff !important;
+  }
+
+  .pcRail button.active{
+    background:#1d2130 !important;
+    color:#fff !important;
+  }
+
+  .pcRail button.active::after{
+    content:"" !important;
+    position:absolute !important;
+    right:7px !important;
+    top:50% !important;
+    width:4px !important;
+    height:24px !important;
+    transform:translateY(-50%) !important;
+    border-radius:999px !important;
+    background:var(--v14-accent) !important;
+  }
+
+  .pcRail button span{
+    width:34px !important;
+    height:34px !important;
+    display:block !important;
+    font-size:0 !important;
+    position:relative !important;
+    background:transparent !important;
+    color:currentColor !important;
+  }
+
+  .pcRail button small{
+    font-size:11px !important;
+    font-weight:800 !important;
+    color:inherit !important;
+  }
+
+  /* PC 아이콘 */
+  .pcRail button:nth-child(1) span::before{
+    content:"" !important;
+    position:absolute !important;
+    left:10px !important;
+    top:4px !important;
+    width:12px !important;
+    height:12px !important;
+    border:2px solid currentColor !important;
+    border-radius:50% !important;
+  }
+
+  .pcRail button:nth-child(1) span::after{
+    content:"" !important;
+    position:absolute !important;
+    left:5px !important;
+    bottom:4px !important;
+    width:22px !important;
+    height:11px !important;
+    border:2px solid currentColor !important;
+    border-radius:13px 13px 5px 5px !important;
+  }
+
+  .pcRail button:nth-child(2) span::before{
+    content:"" !important;
+    position:absolute !important;
+    left:4px !important;
+    top:7px !important;
+    width:25px !important;
+    height:18px !important;
+    border-radius:11px !important;
+    background:currentColor !important;
+  }
+
+  .pcRail button:nth-child(2) span::after{
+    content:"" !important;
+    position:absolute !important;
+    left:10px !important;
+    bottom:4px !important;
+    width:8px !important;
+    height:8px !important;
+    background:currentColor !important;
+    transform:rotate(45deg) !important;
+  }
+
+  .pcRail button:nth-child(3) span::before{
+    content:"" !important;
+    position:absolute !important;
+    left:5px !important;
+    top:5px !important;
+    width:23px !important;
+    height:23px !important;
+    border:2px solid currentColor !important;
+    border-radius:7px !important;
+  }
+
+  .pcRail button:nth-child(3) span::after{
+    content:"" !important;
+    position:absolute !important;
+    left:9px !important;
+    top:12px !important;
+    width:15px !important;
+    height:2px !important;
+    background:currentColor !important;
+    box-shadow:0 7px 0 currentColor !important;
+  }
+
+  .pcRail button:nth-child(4) span::before{
+    content:"" !important;
+    position:absolute !important;
+    left:6px !important;
+    top:8px !important;
+    width:22px !important;
+    height:3px !important;
+    border-radius:99px !important;
+    background:currentColor !important;
+    box-shadow:0 8px 0 currentColor,0 16px 0 currentColor !important;
+  }
+
+  .mainPanel{
+    height:100vh !important;
+    min-width:0 !important;
+    overflow:hidden !important;
+    display:flex !important;
+    flex-direction:column !important;
+    background:var(--v14-bg) !important;
+  }
+
+  .top{
+    flex:0 0 76px !important;
+    height:76px !important;
+    min-height:76px !important;
+    padding:0 28px !important;
+    display:flex !important;
+    align-items:center !important;
+    background:var(--v14-bg) !important;
+    border:0 !important;
+  }
+
+  .top h1{
+    font-size:34px !important;
+    margin:0 !important;
+  }
+
+  .content{
+    flex:1 1 auto !important;
+    min-height:0 !important;
+    overflow:hidden !important;
+    background:var(--v14-bg) !important;
+  }
+
+  .contentWithRoom{
+    width:100% !important;
+    height:100% !important;
+    display:grid !important;
+    grid-template-columns:420px minmax(0,1fr) !important;
+    overflow:hidden !important;
+    min-height:0 !important;
+  }
+
+  .contentWithRoom .leftContent,
+  .desktopList{
+    width:420px !important;
+    min-width:420px !important;
+    max-width:420px !important;
+    height:100% !important;
+    min-height:0 !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    background:var(--v14-bg) !important;
+    border-right:1px solid var(--v14-line) !important;
+    padding:0 14px 20px !important;
+  }
+
+  .page{
+    padding:0 14px 20px !important;
+    background:var(--v14-bg) !important;
+  }
+
+  .chatRow,
+  .row,
+  .myProfile{
+    min-height:84px !important;
+    border-radius:22px !important;
+    padding:14px !important;
+    margin-bottom:8px !important;
+    background:var(--v14-card) !important;
+    border:1px solid rgba(255,255,255,.055) !important;
+  }
+
+  .chatRow .avatar,
+  .row .avatar,
+  .myProfile .avatar{
+    width:56px !important;
+    height:56px !important;
+    min-width:56px !important;
+    border-radius:20px !important;
+  }
+
+  .chatTop b,
+  .meta b{
+    font-size:18px !important;
+  }
+
+  .rightRoom{
+    display:block !important;
+    width:100% !important;
+    height:100% !important;
+    min-width:0 !important;
+    min-height:0 !important;
+    overflow:hidden !important;
+    background:var(--v14-chat-bg) !important;
+  }
+
+  .rightRoom .room{
+    width:100% !important;
+    height:100% !important;
+    max-width:none !important;
+    min-height:0 !important;
+    display:flex !important;
+    flex-direction:column !important;
+    background:var(--v14-chat-bg) !important;
+    overflow:hidden !important;
+  }
+
+  .rightRoom .roomHeader{
+    flex:0 0 66px !important;
+    height:66px !important;
+    min-height:66px !important;
+    padding:0 20px !important;
+    background:rgba(18,25,35,.92) !important;
+    color:#fff !important;
+    border-bottom:1px solid rgba(255,255,255,.075) !important;
+  }
+
+  .rightRoom .messages{
+    flex:1 1 auto !important;
+    min-height:0 !important;
+    overflow-y:auto !important;
+    padding:24px 34px 20px !important;
+    background:var(--v14-chat-bg) !important;
+  }
+
+  .rightRoom .composer{
+    flex:0 0 auto !important;
+    min-height:72px !important;
+    padding:12px 16px !important;
+    background:#0e1117 !important;
+    border-top:1px solid rgba(255,255,255,.08) !important;
+  }
+
+  .mobileRoom,
+  .mobileNav{
+    display:none !important;
+  }
+}
+
+/* =========================
+   채팅방 말풍선
+   ========================= */
+.room{
+  background:var(--v14-chat-bg) !important;
+  color:var(--v14-text) !important;
+}
+
+.roomHeader{
+  color:var(--v14-text) !important;
+}
+
+.messages{
+  background:var(--v14-chat-bg) !important;
+  scroll-behavior:smooth !important;
+}
+
+.msg{
+  margin-bottom:12px !important;
+}
+
+.msgStack{
+  max-width:min(72%,620px) !important;
+}
+
+@media (max-width:767px){
+  .msgStack{
+    max-width:84% !important;
+  }
+}
+
+.bubble{
+  font-size:15.5px !important;
+  line-height:1.5 !important;
+  padding:11px 14px !important;
+  border-radius:19px !important;
+  word-break:break-word !important;
+  white-space:pre-wrap !important;
+  box-shadow:none !important;
+}
+
+.mine .bubble{
+  background:var(--v14-yellow) !important;
+  color:#191919 !important;
+  border-top-right-radius:7px !important;
+}
+
+.other .bubble{
+  background:#222731 !important;
+  color:#fff !important;
+  border-top-left-radius:7px !important;
+}
+
+.msgMeta{
+  color:#8d939d !important;
+  font-size:11px !important;
+}
+
+.msgActions{
+  opacity:.38 !important;
+}
+
+.msgActions:hover{
+  opacity:1 !important;
+}
+
+.dateLine,
+.systemMsg{
+  background:rgba(255,255,255,.11) !important;
+  color:#d8dce5 !important;
+  border-radius:999px !important;
+  font-size:12px !important;
+  padding:5px 10px !important;
+}
+
+/* 스크롤바 */
+.content::-webkit-scrollbar,
+.desktopList::-webkit-scrollbar,
+.messages::-webkit-scrollbar{
+  width:7px !important;
+}
+
+.content::-webkit-scrollbar-thumb,
+.desktopList::-webkit-scrollbar-thumb,
+.messages::-webkit-scrollbar-thumb{
+  background:rgba(255,255,255,.16) !important;
+  border-radius:99px !important;
+}
+
+/* v14 end */
