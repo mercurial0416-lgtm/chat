@@ -61,11 +61,16 @@ serve(async (req) => {
         }
       }
 
-      return json({ ok: true, mode: "test", subscriptions: subs?.length || 0, sent, failed });
+      return json({
+        ok: true,
+        mode: "test",
+        subscriptions: subs?.length || 0,
+        sent,
+        failed,
+      });
     }
 
     const messageId = body.messageId;
-
     if (!messageId) {
       return json({ ok: false, error: "messageId required" }, 400);
     }
@@ -97,7 +102,7 @@ serve(async (req) => {
       .map((m) => m.user_id);
 
     if (targetIds.length === 0) {
-      return json({ ok: true, mode: "message", sent: 0, failed: 0, reason: "no targets" });
+      return json({ ok: true, mode: "message", targets: 0, subscriptions: 0, sent: 0, failed: 0 });
     }
 
     const { data: subs, error: subsError } = await admin
