@@ -6,39 +6,21 @@ function urlBase64ToUint8Array(base64String) {
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
   const outputArray = new Uint8Array(rawData.length);
-
-  for (let i = 0; i < rawData.length; i += 1) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-
+  for (let i = 0; i < rawData.length; i += 1) outputArray[i] = rawData.charCodeAt(i);
   return outputArray;
 }
 
 export async function registerWebPush(userId) {
-  if (!("serviceWorker" in navigator)) {
-    throw new Error("이 브라우저는 Service Worker를 지원하지 않음");
-  }
-
-  if (!("PushManager" in window)) {
-    throw new Error("이 브라우저는 Web Push를 지원하지 않음");
-  }
-
-  if (!VAPID_PUBLIC_KEY) {
-    throw new Error("VAPID_PUBLIC_KEY 없음");
-  }
+  if (!("serviceWorker" in navigator)) throw new Error("Service Worker 미지원");
+  if (!("PushManager" in window)) throw new Error("Web Push 미지원");
+  if (!VAPID_PUBLIC_KEY) throw new Error("VAPID_PUBLIC_KEY 없음");
 
   const permission = await Notification.requestPermission();
-
-  if (permission !== "granted") {
-    throw new Error("알림 권한이 허용되지 않음");
-  }
+  if (permission !== "granted") throw new Error("알림 권한 거부됨");
 
   const registration = await navigator.serviceWorker.register("/sw.js");
-
   const oldSub = await registration.pushManager.getSubscription();
-  if (oldSub) {
-    await oldSub.unsubscribe();
-  }
+  if (oldSub) await oldSub.unsubscribe();
 
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
@@ -52,12 +34,9 @@ export async function registerWebPush(userId) {
       subscription: subscription.toJSON(),
       user_agent: navigator.userAgent,
     },
-    {
-      onConflict: "endpoint",
-    }
+    { onConflict: "endpoint" }
   );
 
   if (error) throw error;
-
   return subscription;
 }
