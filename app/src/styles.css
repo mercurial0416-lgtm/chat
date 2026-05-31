@@ -1596,3 +1596,702 @@ body.dark .composer{
 }
 
 /* v19 end */
+
+/* =========================================================
+   v20 FINAL OVERRIDE
+   - 라이트모드 기본 강제
+   - 캘린더/더보기 라이트모드 누락 수정
+   - 모바일 베젤/패딩 과다 제거
+   - PC 더보기 오른쪽 잘림 수정
+   ========================================================= */
+
+/* 기본은 무조건 라이트. body.dark일 때만 다크 */
+html:not([data-theme="dark"]) body:not(.dark),
+html:not([data-theme="dark"]) body:not(.dark) #root{
+  background:#f4f5f7 !important;
+  color:#17181c !important;
+}
+
+/* =========================
+   LIGHT MODE 강제 보정
+   ========================= */
+
+body:not(.dark) .appShell,
+body:not(.dark) .mainPanel,
+body:not(.dark) .content,
+body:not(.dark) .leftContent,
+body:not(.dark) .desktopList,
+body:not(.dark) .calendarPage,
+body:not(.dark) .morePage,
+body:not(.dark) .v15More,
+body:not(.dark) .splitPage,
+body:not(.dark) .twoPaneInner{
+  background:#f4f5f7 !important;
+  color:#17181c !important;
+}
+
+body:not(.dark) .top,
+body:not(.dark) .v15MobileTop,
+body:not(.dark) .v19MoreHeader{
+  background:#f4f5f7 !important;
+  color:#17181c !important;
+}
+
+body:not(.dark) h1,
+body:not(.dark) h2,
+body:not(.dark) h3,
+body:not(.dark) b,
+body:not(.dark) label,
+body:not(.dark) strong{
+  color:#17181c !important;
+}
+
+body:not(.dark) span,
+body:not(.dark) small,
+body:not(.dark) p,
+body:not(.dark) .muted,
+body:not(.dark) .sub,
+body:not(.dark) .chatBottom,
+body:not(.dark) .chatBottom span,
+body:not(.dark) .rowText span,
+body:not(.dark) .meta span{
+  color:#69707d !important;
+}
+
+/* 라이트 카드 */
+body:not(.dark) .v15ChatItem,
+body:not(.dark) .chatItem,
+body:not(.dark) .chatRow,
+body:not(.dark) .row,
+body:not(.dark) .rowCard,
+body:not(.dark) .profileRow,
+body:not(.dark) .myProfile,
+body:not(.dark) .v15MoreLeft,
+body:not(.dark) .moreMenu,
+body:not(.dark) .moreMenu button,
+body:not(.dark) .moreDetail,
+body:not(.dark) .selectedPanel,
+body:not(.dark) .paneDetail,
+body:not(.dark) .settingsPanel,
+body:not(.dark) .detailCard,
+body:not(.dark) .locationCard,
+body:not(.dark) .locationReq,
+body:not(.dark) .noti,
+body:not(.dark) .eventRow,
+body:not(.dark) .dayCell,
+body:not(.dark) .monthGrid,
+body:not(.dark) .modal{
+  background:#ffffff !important;
+  color:#17181c !important;
+  border-color:rgba(20,24,32,.08) !important;
+  box-shadow:none !important;
+}
+
+/* 라이트 input */
+body:not(.dark) input,
+body:not(.dark) textarea,
+body:not(.dark) select,
+body:not(.dark) .search,
+body:not(.dark) .v15SearchWrap{
+  background:#ffffff !important;
+  color:#17181c !important;
+  border:1px solid rgba(20,24,32,.08) !important;
+}
+
+body:not(.dark) input::placeholder,
+body:not(.dark) textarea::placeholder{
+  color:#9aa0aa !important;
+  opacity:1 !important;
+}
+
+/* 라이트 하단바/사이드바 */
+body:not(.dark) .mobileNav{
+  background:rgba(255,255,255,.96) !important;
+  border-top:1px solid rgba(20,24,32,.08) !important;
+  box-shadow:0 -8px 24px rgba(15,23,42,.08) !important;
+}
+
+body:not(.dark) .mobileNav button{
+  color:#8a909a !important;
+}
+
+body:not(.dark) .mobileNav button.active{
+  color:#17181c !important;
+}
+
+body:not(.dark) .pcRail{
+  background:#ffffff !important;
+  border-right:1px solid rgba(20,24,32,.08) !important;
+}
+
+body:not(.dark) .pcRail button{
+  color:#6f7682 !important;
+}
+
+body:not(.dark) .pcRail button.active{
+  background:#fff4a6 !important;
+  color:#17181c !important;
+}
+
+/* 라이트 채팅방 */
+body:not(.dark) .room,
+body:not(.dark) .v15Room,
+body:not(.dark) .rightRoom,
+body:not(.dark) .mobileRoom,
+body:not(.dark) .messages{
+  background:#e9eff7 !important;
+  color:#17181c !important;
+}
+
+body:not(.dark) .roomHeader{
+  background:rgba(255,255,255,.9) !important;
+  color:#17181c !important;
+  border-bottom:1px solid rgba(20,24,32,.08) !important;
+}
+
+body:not(.dark) .other .bubble{
+  background:#ffffff !important;
+  color:#17181c !important;
+}
+
+body:not(.dark) .mine .bubble{
+  background:#fee500 !important;
+  color:#191919 !important;
+}
+
+body:not(.dark) .composer{
+  background:#ffffff !important;
+  border-top:1px solid rgba(20,24,32,.08) !important;
+}
+
+/* =========================
+   SOFT DARK
+   ========================= */
+
+body.dark,
+body.dark #root,
+body.dark .appShell,
+body.dark .mainPanel,
+body.dark .content,
+body.dark .leftContent,
+body.dark .desktopList,
+body.dark .calendarPage,
+body.dark .morePage,
+body.dark .v15More{
+  background:#15171d !important;
+  color:#f3f4f7 !important;
+}
+
+body.dark .top,
+body.dark .v15MobileTop{
+  background:#15171d !important;
+  color:#f3f4f7 !important;
+}
+
+body.dark .v15ChatItem,
+body.dark .chatItem,
+body.dark .chatRow,
+body.dark .row,
+body.dark .rowCard,
+body.dark .profileRow,
+body.dark .myProfile,
+body.dark .v15MoreLeft,
+body.dark .moreMenu,
+body.dark .moreMenu button,
+body.dark .moreDetail,
+body.dark .selectedPanel,
+body.dark .paneDetail,
+body.dark .settingsPanel,
+body.dark .detailCard,
+body.dark .locationCard,
+body.dark .locationReq,
+body.dark .noti,
+body.dark .eventRow,
+body.dark .dayCell,
+body.dark .monthGrid,
+body.dark .modal{
+  background:#20232b !important;
+  color:#f3f4f7 !important;
+  border-color:rgba(255,255,255,.08) !important;
+  box-shadow:none !important;
+}
+
+body.dark input,
+body.dark textarea,
+body.dark select,
+body.dark .search,
+body.dark .v15SearchWrap{
+  background:#252933 !important;
+  color:#f3f4f7 !important;
+  border:1px solid rgba(255,255,255,.09) !important;
+}
+
+body.dark input::placeholder,
+body.dark textarea::placeholder{
+  color:#9aa1ad !important;
+  opacity:1 !important;
+}
+
+/* =========================
+   MOBILE 비율/베젤 수정
+   ========================= */
+
+@media (max-width:767px){
+
+  html,
+  body,
+  #root{
+    width:100% !important;
+    height:100% !important;
+    overflow:hidden !important;
+  }
+
+  .appShell,
+  .mainPanel{
+    width:100vw !important;
+    height:100dvh !important;
+    min-height:0 !important;
+    overflow:hidden !important;
+  }
+
+  /* 바깥 베젤 제거 */
+  .content{
+    width:100vw !important;
+    height:100dvh !important;
+    min-height:0 !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    padding:calc(10px + env(safe-area-inset-top)) 14px calc(74px + env(safe-area-inset-bottom)) !important;
+    margin:0 !important;
+  }
+
+  .page,
+  .leftContent,
+  .desktopList,
+  .calendarPage,
+  .morePage,
+  .v15More,
+  .splitPage,
+  .twoPaneInner{
+    width:100% !important;
+    max-width:none !important;
+    min-width:0 !important;
+    margin:0 !important;
+    padding:0 !important;
+    border:0 !important;
+    box-shadow:none !important;
+  }
+
+  .mainPanel > .top{
+    display:none !important;
+  }
+
+  /* 모바일 내부 제목 */
+  .v15MobileTop{
+    height:42px !important;
+    min-height:42px !important;
+    margin:0 0 12px !important;
+    padding:0 !important;
+  }
+
+  .v15MobileTop b{
+    font-size:28px !important;
+    line-height:1 !important;
+    letter-spacing:-.8px !important;
+  }
+
+  .v15TopIcons button{
+    width:32px !important;
+    height:32px !important;
+  }
+
+  .v15SearchWrap,
+  .search,
+  input.search,
+  .page input[placeholder*="검색"],
+  .page input[placeholder*="친구"],
+  .page input[placeholder*="대화"]{
+    height:42px !important;
+    min-height:42px !important;
+    border-radius:15px !important;
+    font-size:14px !important;
+    margin:0 0 14px !important;
+  }
+
+  .v15ListHead{
+    height:24px !important;
+    margin:2px 0 6px !important;
+  }
+
+  .v15ListHead span{
+    font-size:13px !important;
+  }
+
+  /* 친구/채팅 리스트는 카드 말고 얇은 리스트 */
+  .v15ChatItem,
+  .chatItem,
+  .chatRow,
+  .row,
+  .rowCard,
+  .profileRow,
+  .myProfile{
+    min-height:66px !important;
+    height:auto !important;
+    padding:8px 0 !important;
+    margin:0 !important;
+    border-radius:0 !important;
+    background:transparent !important;
+    border-left:0 !important;
+    border-right:0 !important;
+    border-top:0 !important;
+    border-bottom:1px solid rgba(128,128,128,.14) !important;
+    display:flex !important;
+    align-items:center !important;
+    gap:11px !important;
+  }
+
+  body.dark .v15ChatItem,
+  body.dark .chatItem,
+  body.dark .chatRow,
+  body.dark .row,
+  body.dark .rowCard,
+  body.dark .profileRow,
+  body.dark .myProfile{
+    background:transparent !important;
+  }
+
+  body:not(.dark) .v15ChatItem,
+  body:not(.dark) .chatItem,
+  body:not(.dark) .chatRow,
+  body:not(.dark) .row,
+  body:not(.dark) .rowCard,
+  body:not(.dark) .profileRow,
+  body:not(.dark) .myProfile{
+    background:transparent !important;
+  }
+
+  .v15ChatItem .avatar,
+  .chatItem .avatar,
+  .chatRow .avatar,
+  .row .avatar,
+  .rowCard .avatar,
+  .profileRow .avatar,
+  .myProfile .avatar{
+    width:48px !important;
+    height:48px !important;
+    min-width:48px !important;
+    border-radius:16px !important;
+  }
+
+  .v15RowTitle b,
+  .chatTop b,
+  .rowText b,
+  .meta b,
+  .profileRow b,
+  .myProfile b{
+    font-size:17px !important;
+    line-height:1.2 !important;
+  }
+
+  .rowText span,
+  .chatBottom span,
+  .chatBottom,
+  .meta span,
+  .profileRow span,
+  .myProfile span{
+    font-size:13px !important;
+    line-height:1.25 !important;
+    margin-top:4px !important;
+  }
+
+  /* 더보기 */
+  .v15More{
+    position:relative !important;
+    display:block !important;
+  }
+
+  .leftContent:has(.v15More)::before{
+    content:"더보기" !important;
+    display:block !important;
+    font-size:28px !important;
+    font-weight:900 !important;
+    line-height:1 !important;
+    letter-spacing:-.8px !important;
+    margin:0 0 14px !important;
+    color:inherit !important;
+  }
+
+  .v19MoreHeader{
+    position:static !important;
+    height:0 !important;
+    margin:0 !important;
+    padding:0 !important;
+  }
+
+  .v19MoreHeader h2{
+    display:none !important;
+  }
+
+  .v19SettingsBtn{
+    position:absolute !important;
+    top:-46px !important;
+    right:0 !important;
+    width:34px !important;
+    height:34px !important;
+    border-radius:12px !important;
+    background:transparent !important;
+    border:0 !important;
+    color:inherit !important;
+  }
+
+  .v19SettingsBtn::before{
+    content:"⚙" !important;
+    font-size:24px !important;
+    line-height:34px !important;
+  }
+
+  .v15MoreLeft,
+  .moreMenu,
+  .moreDetail,
+  .selectedPanel,
+  .paneDetail{
+    width:100% !important;
+    max-width:none !important;
+    margin:0 !important;
+    box-shadow:none !important;
+  }
+
+  .v15MoreLeft{
+    padding:0 !important;
+    border:0 !important;
+    background:transparent !important;
+  }
+
+  .v15MoreTabs,
+  .v15PayCard,
+  .v15ShortcutGrid,
+  .walletCard,
+  .payCard,
+  .quickGrid,
+  .adCard,
+  .promoCard{
+    display:none !important;
+  }
+
+  .moreMenu{
+    display:grid !important;
+    grid-template-columns:1fr !important;
+    gap:8px !important;
+    padding:0 !important;
+    background:transparent !important;
+    border:0 !important;
+  }
+
+  .moreMenu button{
+    min-height:54px !important;
+    border-radius:16px !important;
+    padding:0 14px !important;
+    font-size:15px !important;
+  }
+
+  .moreMenu button:nth-child(4){
+    display:none !important;
+  }
+
+  .moreDetail,
+  .selectedPanel,
+  .paneDetail{
+    margin-top:10px !important;
+    padding:14px !important;
+    border-radius:18px !important;
+  }
+
+  .mobileNav{
+    height:calc(64px + env(safe-area-inset-bottom)) !important;
+    padding:6px 8px calc(6px + env(safe-area-inset-bottom)) !important;
+    border-radius:0 !important;
+  }
+
+  .mobileNav button{
+    height:52px !important;
+  }
+
+  .mobileNav button span{
+    width:25px !important;
+    height:25px !important;
+  }
+
+  .mobileNav button small{
+    font-size:10.5px !important;
+  }
+}
+
+/* =========================
+   PC 더보기 잘림 수정
+   ========================= */
+
+@media (min-width:768px){
+
+  .appShell{
+    width:100vw !important;
+    height:100vh !important;
+    display:grid !important;
+    grid-template-columns:78px minmax(0,1fr) !important;
+    overflow:hidden !important;
+  }
+
+  .mainPanel,
+  .content{
+    min-width:0 !important;
+    min-height:0 !important;
+    overflow:hidden !important;
+  }
+
+  .top{
+    height:64px !important;
+    min-height:64px !important;
+    flex:0 0 64px !important;
+  }
+
+  .top h1{
+    font-size:28px !important;
+  }
+
+  .pcRail{
+    width:78px !important;
+    min-width:78px !important;
+    max-width:78px !important;
+  }
+
+  /* 더보기는 2단: 왼쪽 340, 오른쪽 전체 */
+  .morePage,
+  .morePage.v15More,
+  .v15More{
+    width:100% !important;
+    max-width:none !important;
+    height:100% !important;
+    min-width:0 !important;
+    min-height:0 !important;
+    overflow:hidden !important;
+    display:grid !important;
+    grid-template-columns:340px minmax(0,1fr) !important;
+    grid-template-rows:1fr !important;
+    gap:16px !important;
+    padding:0 20px 20px !important;
+    margin:0 !important;
+  }
+
+  .v19MoreHeader{
+    position:absolute !important;
+    right:22px !important;
+    top:12px !important;
+    width:auto !important;
+    height:auto !important;
+    z-index:5 !important;
+  }
+
+  .v19MoreHeader h2{
+    display:none !important;
+  }
+
+  .v19SettingsBtn{
+    width:36px !important;
+    height:36px !important;
+    border-radius:12px !important;
+    background:transparent !important;
+    border:0 !important;
+    color:inherit !important;
+  }
+
+  .v19SettingsBtn::before{
+    content:"⚙" !important;
+    font-size:23px !important;
+    line-height:36px !important;
+  }
+
+  .v15MoreLeft,
+  .moreMenu{
+    grid-column:1 !important;
+    grid-row:1 !important;
+    width:100% !important;
+    min-width:0 !important;
+    max-width:none !important;
+    height:100% !important;
+    min-height:0 !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+  }
+
+  .v15MoreLeft{
+    padding:16px !important;
+    border-radius:18px !important;
+  }
+
+  .moreMenu{
+    display:flex !important;
+    flex-direction:column !important;
+    gap:10px !important;
+    padding:0 !important;
+    border:0 !important;
+    background:transparent !important;
+  }
+
+  .moreMenu button{
+    width:100% !important;
+    min-height:56px !important;
+    height:auto !important;
+    border-radius:16px !important;
+    padding:0 14px !important;
+  }
+
+  .moreMenu button:nth-child(4){
+    display:none !important;
+  }
+
+  .moreDetail,
+  .selectedPanel,
+  .paneDetail,
+  .settingsPanel{
+    grid-column:2 !important;
+    grid-row:1 !important;
+    position:relative !important;
+    left:auto !important;
+    right:auto !important;
+    top:auto !important;
+    transform:none !important;
+    translate:none !important;
+    width:100% !important;
+    max-width:none !important;
+    min-width:0 !important;
+    height:100% !important;
+    min-height:0 !important;
+    max-height:none !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    margin:0 !important;
+    padding:24px !important;
+    border-radius:18px !important;
+    box-sizing:border-box !important;
+  }
+
+  .moreDetail *,
+  .selectedPanel *,
+  .paneDetail *,
+  .settingsPanel *{
+    max-width:100% !important;
+    box-sizing:border-box !important;
+  }
+
+  .moreDetail input,
+  .selectedPanel input,
+  .paneDetail input,
+  .settingsPanel input,
+  .moreDetail textarea,
+  .selectedPanel textarea,
+  .paneDetail textarea,
+  .settingsPanel textarea{
+    width:100% !important;
+  }
+}
+
+/* v20 end */
