@@ -1,0 +1,63 @@
+import { supabase } from "./lib/supabase";
+import { VAPID_PUBLIC_KEY } from "./pushConfig";
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; i += 1) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+
+  return outputArray;
+}
+
+export async function registerWebPush(userId) {
+  if (!("serviceWorker" in navigator)) {
+    throw new Error("이 브라우저는 Service Worker를 지원하지 않음");
+  }
+
+  if (!("PushManager" in window)) {
+    throw new Error("이 브라우저는 Web Push를 지원하지 않음");
+  }
+
+  if (!VAPID_PUBLIC_KEY) {
+    throw new Error("VAPID_PUBLIC_KEY 없음");
+  }
+
+  const permission = await Notification.requestPermission();
+
+  if (permission !== "granted") {
+    throw new Error("알림 권한이 허용되지 않음");
+  }
+
+  const registration = await navigator.serviceWorker.register("/sw.js");
+
+  const oldSub = await registration.pushManager.getSubscription();
+  if (oldSub) {
+    await oldSub.unsubscribe();
+  }
+
+  const subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+  });
+
+  const { error } = await supabase.from("push_subscriptions").upsert(
+    {
+      user_id: userId,
+      endpoint: subscription.endpoint,
+      subscription: subscription.toJSON(),
+      user_agent: navigator.userAgent,
+    },
+    {
+      onConflict: "endpoint",
+    }
+  );
+
+  if (error) throw error;
+
+  return subscription;
+}
