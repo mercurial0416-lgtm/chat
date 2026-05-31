@@ -896,3 +896,703 @@ button{color:inherit;}
 }
 
 /* v18 end */
+
+/* =========================================================
+   v19
+   - 기본 화이트모드
+   - 다크모드는 body.dark일 때만
+   - 모바일 중복 상단 제거
+   - 더보기 설정은 우측 상단 버튼만
+   ========================================================= */
+
+/* ---------- 기본 LIGHT ---------- */
+
+html,
+body,
+#root{
+  background:#f3f4f6 !important;
+  color:#17181c !important;
+}
+
+body:not(.dark),
+body.theme-light{
+  background:#f3f4f6 !important;
+  color:#17181c !important;
+}
+
+body:not(.dark) .appShell,
+body:not(.dark) .mainPanel,
+body:not(.dark) .content,
+body:not(.dark) .leftContent,
+body.theme-light .appShell,
+body.theme-light .mainPanel,
+body.theme-light .content,
+body.theme-light .leftContent{
+  background:#f3f4f6 !important;
+  color:#17181c !important;
+}
+
+body:not(.dark) .top,
+body.theme-light .top{
+  background:#f3f4f6 !important;
+  color:#17181c !important;
+  border-bottom:0 !important;
+}
+
+body:not(.dark) .top h1,
+body.theme-light .top h1{
+  color:#17181c !important;
+}
+
+body:not(.dark) .search,
+body:not(.dark) input,
+body:not(.dark) textarea,
+body:not(.dark) select,
+body.theme-light .search,
+body.theme-light input,
+body.theme-light textarea,
+body.theme-light select{
+  background:#ffffff !important;
+  color:#17181c !important;
+  border:1px solid rgba(20,24,32,.08) !important;
+}
+
+body:not(.dark) input::placeholder,
+body:not(.dark) textarea::placeholder,
+body.theme-light input::placeholder,
+body.theme-light textarea::placeholder{
+  color:#9aa0aa !important;
+  opacity:1 !important;
+}
+
+body:not(.dark) .chatItem,
+body:not(.dark) .v15ChatItem,
+body:not(.dark) .rowCard,
+body:not(.dark) .profileRow,
+body:not(.dark) .myProfile,
+body:not(.dark) .moreDetail,
+body:not(.dark) .v15MoreLeft,
+body:not(.dark) .settingsPanel,
+body:not(.dark) .detailCard,
+body:not(.dark) .selectedPanel,
+body:not(.dark) .paneDetail,
+body:not(.dark) .locationCard,
+body:not(.dark) .noti,
+body.theme-light .chatItem,
+body.theme-light .v15ChatItem,
+body.theme-light .rowCard,
+body.theme-light .profileRow,
+body.theme-light .myProfile,
+body.theme-light .moreDetail,
+body.theme-light .v15MoreLeft,
+body.theme-light .settingsPanel,
+body.theme-light .detailCard,
+body.theme-light .selectedPanel,
+body.theme-light .paneDetail,
+body.theme-light .locationCard,
+body.theme-light .noti{
+  background:#ffffff !important;
+  color:#17181c !important;
+  border:1px solid rgba(20,24,32,.08) !important;
+}
+
+body:not(.dark) b,
+body:not(.dark) h1,
+body:not(.dark) h2,
+body:not(.dark) h3,
+body:not(.dark) label,
+body.theme-light b,
+body.theme-light h1,
+body.theme-light h2,
+body.theme-light h3,
+body.theme-light label{
+  color:#17181c !important;
+}
+
+body:not(.dark) span,
+body:not(.dark) small,
+body:not(.dark) p,
+body.theme-light span,
+body.theme-light small,
+body.theme-light p{
+  color:#69707d !important;
+}
+
+body:not(.dark) .mobileNav,
+body.theme-light .mobileNav{
+  background:rgba(255,255,255,.96) !important;
+  border-top:1px solid rgba(20,24,32,.08) !important;
+  box-shadow:0 -8px 28px rgba(15,23,42,.08) !important;
+}
+
+body:not(.dark) .mobileNav button,
+body.theme-light .mobileNav button{
+  color:#8a909a !important;
+}
+
+body:not(.dark) .mobileNav button.active,
+body.theme-light .mobileNav button.active{
+  color:#17181c !important;
+}
+
+body:not(.dark) .pcRail,
+body.theme-light .pcRail{
+  background:#ffffff !important;
+  border-right:1px solid rgba(20,24,32,.08) !important;
+}
+
+body:not(.dark) .pcRail button,
+body.theme-light .pcRail button{
+  color:#6f7682 !important;
+}
+
+body:not(.dark) .pcRail button.active,
+body.theme-light .pcRail button.active{
+  background:#fff7bc !important;
+  color:#17181c !important;
+}
+
+body:not(.dark) .room,
+body:not(.dark) .v15Room,
+body:not(.dark) .rightRoom,
+body.theme-light .room,
+body.theme-light .v15Room,
+body.theme-light .rightRoom{
+  background:#e8eef6 !important;
+  color:#17181c !important;
+}
+
+body:not(.dark) .roomHeader,
+body.theme-light .roomHeader{
+  background:rgba(255,255,255,.86) !important;
+  color:#17181c !important;
+  border-bottom:1px solid rgba(20,24,32,.08) !important;
+}
+
+body:not(.dark) .messages,
+body.theme-light .messages{
+  background:#e8eef6 !important;
+}
+
+body:not(.dark) .other .bubble,
+body.theme-light .other .bubble{
+  background:#ffffff !important;
+  color:#17181c !important;
+}
+
+body:not(.dark) .composer,
+body.theme-light .composer{
+  background:#ffffff !important;
+  border-top:1px solid rgba(20,24,32,.08) !important;
+}
+
+/* ---------- SOFT DARK ---------- */
+
+body.dark{
+  background:#111318 !important;
+  color:#f3f4f7 !important;
+}
+
+body.dark .appShell,
+body.dark .mainPanel,
+body.dark .content,
+body.dark .leftContent{
+  background:#111318 !important;
+  color:#f3f4f7 !important;
+}
+
+body.dark .top{
+  background:#111318 !important;
+  color:#f3f4f7 !important;
+}
+
+body.dark .chatItem,
+body.dark .v15ChatItem,
+body.dark .rowCard,
+body.dark .profileRow,
+body.dark .myProfile,
+body.dark .moreDetail,
+body.dark .v15MoreLeft,
+body.dark .settingsPanel,
+body.dark .detailCard,
+body.dark .selectedPanel,
+body.dark .paneDetail,
+body.dark .locationCard,
+body.dark .noti{
+  background:#1a1d24 !important;
+  color:#f3f4f7 !important;
+  border:1px solid rgba(255,255,255,.075) !important;
+}
+
+body.dark .search,
+body.dark input,
+body.dark textarea,
+body.dark select{
+  background:#20242c !important;
+  color:#f3f4f7 !important;
+  border:1px solid rgba(255,255,255,.08) !important;
+}
+
+body.dark input::placeholder,
+body.dark textarea::placeholder{
+  color:#8f96a3 !important;
+  opacity:1 !important;
+}
+
+body.dark b,
+body.dark h1,
+body.dark h2,
+body.dark h3,
+body.dark label{
+  color:#f3f4f7 !important;
+}
+
+body.dark span,
+body.dark small,
+body.dark p{
+  color:#a3a9b4 !important;
+}
+
+body.dark .pcRail,
+body.dark .mobileNav{
+  background:#151820 !important;
+  border-color:rgba(255,255,255,.075) !important;
+}
+
+body.dark .room,
+body.dark .v15Room,
+body.dark .rightRoom,
+body.dark .messages{
+  background:#202a36 !important;
+}
+
+body.dark .roomHeader{
+  background:rgba(24,28,36,.88) !important;
+  border-bottom:1px solid rgba(255,255,255,.075) !important;
+}
+
+body.dark .other .bubble{
+  background:#2b303a !important;
+  color:#f3f4f7 !important;
+}
+
+body.dark .composer{
+  background:#181b22 !important;
+  border-top:1px solid rgba(255,255,255,.075) !important;
+}
+
+/* ---------- 모바일 비율/중복 제목 수정 ---------- */
+
+@media (max-width:767px){
+
+  html,
+  body,
+  #root{
+    width:100% !important;
+    height:100% !important;
+    overflow:hidden !important;
+  }
+
+  .appShell,
+  .mainPanel{
+    width:100vw !important;
+    height:100dvh !important;
+    overflow:hidden !important;
+  }
+
+  /* 상단 중복 제목 제거: 안쪽 화면 헤더만 사용 */
+  .mainPanel > .top{
+    display:none !important;
+    height:0 !important;
+    min-height:0 !important;
+    flex:0 0 0 !important;
+    padding:0 !important;
+    overflow:hidden !important;
+  }
+
+  .content{
+    height:100dvh !important;
+    min-height:0 !important;
+    overflow-y:auto !important;
+    padding:calc(12px + env(safe-area-inset-top)) 18px calc(78px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .leftContent{
+    width:100% !important;
+    min-width:0 !important;
+  }
+
+  /* 채팅 탭 내부 헤더 */
+  .v15MobileTop{
+    height:44px !important;
+    min-height:44px !important;
+    margin:0 0 14px !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:space-between !important;
+  }
+
+  .v15MobileTop b{
+    font-size:30px !important;
+    line-height:1 !important;
+    letter-spacing:-.9px !important;
+  }
+
+  .v15TopIcons{
+    display:flex !important;
+    gap:14px !important;
+  }
+
+  .v15TopIcons button{
+    width:34px !important;
+    height:34px !important;
+    opacity:.75 !important;
+  }
+
+  .v15SearchWrap{
+    height:44px !important;
+    min-height:44px !important;
+    margin:0 0 16px !important;
+    border-radius:16px !important;
+  }
+
+  .v15SearchWrap input,
+  .search{
+    height:44px !important;
+    min-height:44px !important;
+    font-size:15px !important;
+    border-radius:16px !important;
+  }
+
+  .v15ListHead{
+    height:26px !important;
+    margin:0 0 8px !important;
+  }
+
+  .v15ListHead span{
+    font-size:14px !important;
+    font-weight:900 !important;
+  }
+
+  .chatItem,
+  .v15ChatItem{
+    min-height:72px !important;
+    padding:9px 0 !important;
+    margin:0 !important;
+    border-radius:0 !important;
+    background:transparent !important;
+    border-left:0 !important;
+    border-right:0 !important;
+    border-top:0 !important;
+    display:flex !important;
+    align-items:center !important;
+    gap:12px !important;
+  }
+
+  .chatItem .avatar,
+  .v15ChatItem .avatar{
+    width:52px !important;
+    height:52px !important;
+    min-width:52px !important;
+    border-radius:18px !important;
+  }
+
+  .v15RowTitle b,
+  .chatTop b{
+    font-size:18px !important;
+    line-height:1.15 !important;
+  }
+
+  .rowText span,
+  .chatBottom span{
+    margin-top:5px !important;
+    font-size:13px !important;
+    line-height:1.25 !important;
+  }
+
+  .roomMeta span{
+    font-size:12px !important;
+  }
+
+  .roomMeta em,
+  .v15ListHead em{
+    min-width:20px !important;
+    height:20px !important;
+    font-size:11px !important;
+  }
+
+  /* 친구/캘린더/더보기는 숨긴 top 대신 제목 생성 */
+  .leftContent:has(.splitPage)::before{
+    content:"친구";
+    display:block;
+    font-size:30px;
+    font-weight:900;
+    line-height:1;
+    letter-spacing:-.9px;
+    margin:0 0 18px;
+    color:inherit;
+  }
+
+  .leftContent:has(.calendarPage)::before{
+    content:"캘린더";
+    display:block;
+    font-size:30px;
+    font-weight:900;
+    line-height:1;
+    letter-spacing:-.9px;
+    margin:0 0 18px;
+    color:inherit;
+  }
+
+  .leftContent:has(.v15More)::before{
+    content:"더보기";
+    display:block;
+    font-size:30px;
+    font-weight:900;
+    line-height:1;
+    letter-spacing:-.9px;
+    margin:0 0 14px;
+    color:inherit;
+  }
+
+  .rowCard,
+  .profileRow,
+  .myProfile{
+    min-height:64px !important;
+    padding:8px 0 !important;
+    margin:0 !important;
+    border-radius:0 !important;
+    background:transparent !important;
+    border-left:0 !important;
+    border-right:0 !important;
+    border-top:0 !important;
+    box-shadow:none !important;
+  }
+
+  .rowCard .avatar,
+  .profileRow .avatar,
+  .myProfile .avatar{
+    width:48px !important;
+    height:48px !important;
+    min-width:48px !important;
+    border-radius:16px !important;
+  }
+
+  .rowText b,
+  .profileRow b,
+  .myProfile b{
+    font-size:17px !important;
+    line-height:1.2 !important;
+  }
+
+  .rowText span,
+  .profileRow span,
+  .myProfile span{
+    font-size:13px !important;
+    line-height:1.25 !important;
+  }
+
+  .mobileNav{
+    height:calc(66px + env(safe-area-inset-bottom)) !important;
+    padding:6px 8px calc(6px + env(safe-area-inset-bottom)) !important;
+    border-radius:0 !important;
+    box-shadow:none !important;
+  }
+
+  .mobileNav button{
+    height:54px !important;
+  }
+
+  .mobileNav button span{
+    width:26px !important;
+    height:26px !important;
+  }
+
+  .mobileNav button small{
+    font-size:11px !important;
+  }
+
+  /* 더보기: 본문 설정 제거, 우측상단 설정 버튼만 */
+  .v15More{
+    position:relative !important;
+    display:block !important;
+    padding:0 !important;
+  }
+
+  .v19MoreHeader{
+    display:flex !important;
+    align-items:center !important;
+    justify-content:flex-end !important;
+    height:0 !important;
+    margin:0 !important;
+  }
+
+  .v19MoreHeader h2{
+    display:none !important;
+  }
+
+  .v19SettingsBtn{
+    position:absolute !important;
+    right:0 !important;
+    top:-46px !important;
+    width:38px !important;
+    height:38px !important;
+    border-radius:14px !important;
+    background:transparent !important;
+    border:0 !important;
+    color:inherit !important;
+  }
+
+  .v19SettingsBtn::before{
+    content:"⚙" !important;
+    font-size:25px !important;
+    line-height:38px !important;
+  }
+
+  .v15MoreLeft{
+    padding:0 !important;
+    border:0 !important;
+    background:transparent !important;
+  }
+
+  .v15MoreTabs,
+  .v15PayCard,
+  .v15ShortcutGrid{
+    display:none !important;
+  }
+
+  .moreMenu{
+    display:grid !important;
+    gap:9px !important;
+    margin:0 0 12px !important;
+  }
+
+  .moreMenu button{
+    min-height:56px !important;
+    border-radius:18px !important;
+    padding:0 14px !important;
+  }
+
+  .moreMenu button:nth-child(4){
+    display:none !important;
+  }
+
+  .moreDetail{
+    margin-top:12px !important;
+    padding:16px !important;
+    border-radius:20px !important;
+  }
+
+  .settingsPanel h2{
+    font-size:22px !important;
+    margin:0 0 14px !important;
+  }
+}
+
+/* ---------- PC 비율 ---------- */
+
+@media (min-width:768px){
+
+  .appShell{
+    grid-template-columns:78px minmax(0,1fr) !important;
+  }
+
+  .pcRail{
+    width:78px !important;
+    min-width:78px !important;
+    max-width:78px !important;
+  }
+
+  .top{
+    height:64px !important;
+    min-height:64px !important;
+    flex:0 0 64px !important;
+    padding:0 24px !important;
+  }
+
+  .top h1{
+    font-size:28px !important;
+  }
+
+  .content{
+    min-height:0 !important;
+    overflow:hidden !important;
+  }
+
+  .contentWithRoom{
+    grid-template-columns:380px minmax(0,1fr) !important;
+  }
+
+  .contentWithRoom .leftContent,
+  .desktopList{
+    width:380px !important;
+    min-width:380px !important;
+    max-width:380px !important;
+  }
+
+  .morePage{
+    width:100% !important;
+    height:100% !important;
+    display:grid !important;
+    grid-template-columns:340px minmax(0,1fr) !important;
+    gap:16px !important;
+    padding:0 22px 22px !important;
+    overflow:hidden !important;
+  }
+
+  .v19MoreHeader{
+    grid-column:1 / -1 !important;
+    height:0 !important;
+    display:flex !important;
+    justify-content:flex-end !important;
+    position:relative !important;
+  }
+
+  .v19MoreHeader h2{
+    display:none !important;
+  }
+
+  .v19SettingsBtn{
+    position:absolute !important;
+    right:0 !important;
+    top:-48px !important;
+    width:38px !important;
+    height:38px !important;
+    border-radius:14px !important;
+    background:transparent !important;
+    color:inherit !important;
+  }
+
+  .v19SettingsBtn::before{
+    content:"⚙" !important;
+    font-size:24px !important;
+    line-height:38px !important;
+  }
+
+  .v15MoreLeft{
+    grid-column:1 !important;
+    width:100% !important;
+    min-width:0 !important;
+    overflow-y:auto !important;
+  }
+
+  .moreDetail{
+    grid-column:2 !important;
+    width:100% !important;
+    min-width:0 !important;
+    height:100% !important;
+    overflow-y:auto !important;
+  }
+
+  .v15MoreTabs,
+  .v15PayCard,
+  .v15ShortcutGrid{
+    display:none !important;
+  }
+
+  .moreMenu button:nth-child(4){
+    display:none !important;
+  }
+}
+
+/* v19 end */

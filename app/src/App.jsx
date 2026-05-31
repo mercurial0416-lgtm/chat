@@ -453,7 +453,12 @@ function LocationSettings({ me }) {
 }
 function AppSettings({ me, setMe }) {
   const [dark, setDark] = useState(!!me.dark_mode); const [msg, setMsg] = useState("");
-  async function save() { try { const { data, error } = await supabase.from("profiles").update({ dark_mode: dark }).eq("id", me.id).select().single(); if (error) throw error; setMe(data); document.body.classList.toggle("dark", !!data.dark_mode); setMsg("저장됨"); } catch (err) { setMsg(errText(err)); } }
+  async function save() { try { const { data, error } = await supabase.from("profiles").update({ dark_mode: dark }).eq("id", me.id).select().single(); if (error) throw error; setMe(data);
+    const isDark = data.dark_mode === true;
+    document.body.classList.toggle("dark", isDark);
+    document.body.classList.toggle("theme-light", !isDark);
+    document.documentElement.dataset.theme = isDark ? "dark" : "light";
+    setMsg("저장됨"); } catch (err) { setMsg(errText(err)); } }
   function logout() { localStorage.clear(); supabase.auth.signOut(); location.reload(); }
   return h("div", { className: "settingsPanel" }, h("h2", null, "앱 설정"), h("label", { className: "checkLine" }, h("input", { type: "checkbox", checked: dark, onChange: e => setDark(e.target.checked) }), "다크모드"), h("button", { className: "primaryBtn", onClick: save }, "저장"), h("button", { onClick: () => { localStorage.clear(); location.reload(); } }, "캐시 삭제"), h("button", { className: "dangerBtn", onClick: logout }, "로그아웃"), h(Notice, null, msg));
 }
@@ -476,7 +481,12 @@ function MainApp() {
     const base = { id: user.id, email: user.email, nickname: user.user_metadata?.nickname || user.email?.split("@")[0] || "익명" };
     await supabase.from("profiles").upsert(base, { onConflict: "id" });
     const { data } = await supabase.from("profiles").select("id,email,nickname,avatar_url,status_message,dark_mode").eq("id", user.id).maybeSingle();
-    const p = data || base; setMe(p); document.body.classList.toggle("dark", !!p.dark_mode);
+    const p = data || base;
+    setMe(p);
+    const isDark = p.dark_mode === true;
+    document.body.classList.toggle("dark", isDark);
+    document.body.classList.toggle("theme-light", !isDark);
+    document.documentElement.dataset.theme = isDark ? "dark" : "light";
   }
   useEffect(() => {
     let alive = true;
