@@ -2295,3 +2295,483 @@ body.dark textarea::placeholder{
 }
 
 /* v20 end */
+
+
+/* === FINAL_COMPACT_UI_START === */
+
+/* 기본: 라이트모드. body.dark가 붙은 경우만 부드러운 다크 */
+html, body, #root {
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+}
+
+body:not(.dark),
+body.theme-light {
+  background: #f4f5f7 !important;
+  color: #17181c !important;
+}
+
+/* 라이트 공통 배경 */
+body:not(.dark) :where(.appShell,.mainPanel,.content,.leftContent,.desktopList,.page,.splitPage,.twoPaneInner,.calendarPage,.morePage,.top) {
+  background: #f4f5f7 !important;
+  color: #17181c !important;
+}
+
+/* 라이트 카드/패널 */
+body:not(.dark) :where(.chatRow,.chatItem,.roomRow,.friendRow,.userRow,.row,.rowCard,.profileRow,.myProfile,.moreMenu,.moreMenu button,.moreDetail,.selectedPanel,.paneDetail,.settingsPanel,.detailCard,.locationCard,.locationReq,.noti,.eventRow,.dayCell,.modal,.monthGrid) {
+  background: #fff !important;
+  color: #17181c !important;
+  border-color: rgba(20,24,32,.08) !important;
+  box-shadow: none !important;
+}
+
+body:not(.dark) :where(h1,h2,h3,b,strong,label,.title,.roomTitle) {
+  color: #17181c !important;
+}
+
+body:not(.dark) :where(span,small,p,.sub,.muted,.meta span,.rowText span,.chatBottom,.chatBottom span) {
+  color: #69707d !important;
+}
+
+body:not(.dark) :where(input,textarea,select,.search,.searchBox) {
+  background: #fff !important;
+  color: #17181c !important;
+  border: 1px solid rgba(20,24,32,.09) !important;
+}
+
+body:not(.dark) :where(input,textarea)::placeholder {
+  color: #9aa0aa !important;
+  opacity: 1 !important;
+}
+
+/* 라이트 채팅방 */
+body:not(.dark) :where(.rightRoom,.mobileRoom,.room,.messages) {
+  background: #e9eff7 !important;
+  color: #17181c !important;
+}
+
+body:not(.dark) .roomHeader {
+  background: rgba(255,255,255,.92) !important;
+  color: #17181c !important;
+  border-bottom: 1px solid rgba(20,24,32,.08) !important;
+}
+
+body:not(.dark) .composer {
+  background: #fff !important;
+  border-top: 1px solid rgba(20,24,32,.08) !important;
+}
+
+body:not(.dark) .other .bubble {
+  background: #fff !important;
+  color: #17181c !important;
+}
+
+body:not(.dark) .mine .bubble {
+  background: #fee500 !important;
+  color: #191919 !important;
+}
+
+/* 사이드/하단 라이트 */
+body:not(.dark) .pcRail {
+  background: #fff !important;
+  border-right: 1px solid rgba(20,24,32,.08) !important;
+}
+
+body:not(.dark) .pcRail button {
+  color: #6f7682 !important;
+}
+
+body:not(.dark) .pcRail button.active {
+  background: #fff4a6 !important;
+  color: #17181c !important;
+}
+
+body:not(.dark) .mobileNav {
+  background: rgba(255,255,255,.96) !important;
+  border-top: 1px solid rgba(20,24,32,.08) !important;
+  box-shadow: 0 -8px 24px rgba(15,23,42,.08) !important;
+}
+
+body:not(.dark) .mobileNav button {
+  color: #8a909a !important;
+}
+
+body:not(.dark) .mobileNav button.active {
+  color: #17181c !important;
+}
+
+/* 부드러운 다크 */
+body.dark,
+body.dark :where(.appShell,.mainPanel,.content,.leftContent,.desktopList,.page,.splitPage,.twoPaneInner,.calendarPage,.morePage,.top) {
+  background: #15171d !important;
+  color: #f3f4f7 !important;
+}
+
+body.dark :where(.chatRow,.chatItem,.roomRow,.friendRow,.userRow,.row,.rowCard,.profileRow,.myProfile,.moreMenu,.moreMenu button,.moreDetail,.selectedPanel,.paneDetail,.settingsPanel,.detailCard,.locationCard,.locationReq,.noti,.eventRow,.dayCell,.modal,.monthGrid) {
+  background: #20232b !important;
+  color: #f3f4f7 !important;
+  border-color: rgba(255,255,255,.08) !important;
+  box-shadow: none !important;
+}
+
+body.dark :where(h1,h2,h3,b,strong,label,.title,.roomTitle) {
+  color: #f3f4f7 !important;
+}
+
+body.dark :where(span,small,p,.sub,.muted,.meta span,.rowText span,.chatBottom,.chatBottom span) {
+  color: #a3a9b4 !important;
+}
+
+body.dark :where(input,textarea,select,.search,.searchBox) {
+  background: #252933 !important;
+  color: #f3f4f7 !important;
+  border: 1px solid rgba(255,255,255,.09) !important;
+}
+
+body.dark :where(input,textarea)::placeholder {
+  color: #9aa1ad !important;
+  opacity: 1 !important;
+}
+
+body.dark :where(.rightRoom,.mobileRoom,.room,.messages) {
+  background: #202a36 !important;
+}
+
+body.dark .roomHeader {
+  background: rgba(24,28,36,.88) !important;
+  border-bottom: 1px solid rgba(255,255,255,.075) !important;
+}
+
+body.dark .composer {
+  background: #181b22 !important;
+  border-top: 1px solid rgba(255,255,255,.075) !important;
+}
+
+body.dark .other .bubble {
+  background: #2b303a !important;
+  color: #f3f4f7 !important;
+}
+
+/* 모바일: 중복 제목/큰 베젤 제거 */
+@media (max-width: 767px) {
+  .appShell,
+  .mainPanel {
+    width: 100vw !important;
+    height: 100dvh !important;
+    overflow: hidden !important;
+  }
+
+  .mainPanel > .top {
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .content {
+    width: 100vw !important;
+    height: 100dvh !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding: calc(10px + env(safe-area-inset-top)) 14px calc(74px + env(safe-area-inset-bottom)) !important;
+    margin: 0 !important;
+  }
+
+  :where(.page,.leftContent,.desktopList,.splitPage,.twoPaneInner,.calendarPage,.morePage) {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* 안쪽 헤더 */
+  :where(.mobileTop,.chatTopBar,.v15MobileTop) {
+    height: 42px !important;
+    min-height: 42px !important;
+    margin: 0 0 12px !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+
+  :where(.mobileTop,.chatTopBar,.v15MobileTop) b,
+  :where(.mobileTop,.chatTopBar,.v15MobileTop) h1 {
+    font-size: 28px !important;
+    line-height: 1 !important;
+    letter-spacing: -.8px !important;
+    margin: 0 !important;
+  }
+
+  :where(.search,.searchBox,input.search) {
+    height: 42px !important;
+    min-height: 42px !important;
+    border-radius: 15px !important;
+    font-size: 14px !important;
+    margin: 0 0 14px !important;
+  }
+
+  /* 리스트는 얇게 */
+  :where(.chatRow,.chatItem,.roomRow,.friendRow,.userRow,.row,.rowCard,.profileRow,.myProfile) {
+    min-height: 66px !important;
+    height: auto !important;
+    padding: 8px 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+    border-top: 0 !important;
+    border-bottom: 1px solid rgba(128,128,128,.14) !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 11px !important;
+    box-shadow: none !important;
+  }
+
+  :where(.chatRow,.chatItem,.roomRow,.friendRow,.userRow,.row,.rowCard,.profileRow,.myProfile) .avatar,
+  .avatar {
+    width: 48px !important;
+    height: 48px !important;
+    min-width: 48px !important;
+    border-radius: 16px !important;
+  }
+
+  :where(.chatRow,.chatItem,.roomRow,.friendRow,.userRow,.row,.rowCard,.profileRow,.myProfile) b {
+    font-size: 17px !important;
+    line-height: 1.2 !important;
+  }
+
+  :where(.chatRow,.chatItem,.roomRow,.friendRow,.userRow,.row,.rowCard,.profileRow,.myProfile) span,
+  :where(.chatBottom,.rowText span,.meta span) {
+    font-size: 13px !important;
+    line-height: 1.25 !important;
+    margin-top: 4px !important;
+  }
+
+  .mobileNav {
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    height: calc(64px + env(safe-area-inset-bottom)) !important;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom)) !important;
+    border-radius: 0 !important;
+    z-index: 700 !important;
+  }
+
+  .mobileNav button {
+    height: 52px !important;
+  }
+
+  .mobileNav button span {
+    width: 25px !important;
+    height: 25px !important;
+  }
+
+  .mobileNav button small {
+    font-size: 10.5px !important;
+  }
+
+  /* 더보기 */
+  .morePage {
+    position: relative !important;
+    display: block !important;
+  }
+
+  .finalSettingsBtn {
+    position: absolute !important;
+    top: 0 !important;
+    right: 0 !important;
+    width: 36px !important;
+    height: 36px !important;
+    border: 0 !important;
+    border-radius: 12px !important;
+    background: transparent !important;
+    z-index: 10 !important;
+  }
+
+  .finalSettingsBtn::before {
+    content: "⚙" !important;
+    font-size: 24px !important;
+    line-height: 36px !important;
+  }
+
+  .moreMenu {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: 0 !important;
+  }
+
+  .moreMenu button {
+    min-height: 54px !important;
+    border-radius: 16px !important;
+    padding: 0 14px !important;
+    font-size: 15px !important;
+  }
+
+  .moreMenu button:nth-child(4) {
+    display: none !important;
+  }
+
+  .moreDetail,
+  .selectedPanel,
+  .paneDetail,
+  .settingsPanel {
+    margin-top: 10px !important;
+    padding: 14px !important;
+    border-radius: 18px !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+}
+
+/* PC: 더보기 안 잘리게 */
+@media (min-width: 768px) {
+  .appShell {
+    width: 100vw !important;
+    height: 100vh !important;
+    display: grid !important;
+    grid-template-columns: 78px minmax(0, 1fr) !important;
+    overflow: hidden !important;
+  }
+
+  .pcRail {
+    width: 78px !important;
+    min-width: 78px !important;
+    max-width: 78px !important;
+  }
+
+  .mainPanel,
+  .content {
+    min-width: 0 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .top {
+    height: 64px !important;
+    min-height: 64px !important;
+    flex: 0 0 64px !important;
+  }
+
+  .top h1 {
+    font-size: 28px !important;
+  }
+
+  .contentWithRoom {
+    grid-template-columns: 380px minmax(0, 1fr) !important;
+  }
+
+  .contentWithRoom .leftContent,
+  .desktopList {
+    width: 380px !important;
+    min-width: 380px !important;
+    max-width: 380px !important;
+  }
+
+  .morePage {
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    display: grid !important;
+    grid-template-columns: 340px minmax(0, 1fr) !important;
+    grid-template-rows: 1fr !important;
+    gap: 16px !important;
+    padding: 0 20px 20px !important;
+    margin: 0 !important;
+    position: relative !important;
+  }
+
+  .finalSettingsBtn {
+    position: absolute !important;
+    right: 22px !important;
+    top: -48px !important;
+    width: 36px !important;
+    height: 36px !important;
+    border: 0 !important;
+    border-radius: 12px !important;
+    background: transparent !important;
+    z-index: 10 !important;
+  }
+
+  .finalSettingsBtn::before {
+    content: "⚙" !important;
+    font-size: 23px !important;
+    line-height: 36px !important;
+  }
+
+  .moreMenu {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: 100% !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    padding: 16px !important;
+    border-radius: 18px !important;
+  }
+
+  .moreMenu button {
+    width: 100% !important;
+    min-height: 56px !important;
+    border-radius: 16px !important;
+    padding: 0 14px !important;
+  }
+
+  .moreMenu button:nth-child(4) {
+    display: none !important;
+  }
+
+  .moreDetail,
+  .selectedPanel,
+  .paneDetail,
+  .settingsPanel {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    position: relative !important;
+    left: auto !important;
+    right: auto !important;
+    top: auto !important;
+    transform: none !important;
+    translate: none !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    margin: 0 !important;
+    padding: 24px !important;
+    border-radius: 18px !important;
+    box-sizing: border-box !important;
+  }
+
+  :where(.moreDetail,.selectedPanel,.paneDetail,.settingsPanel) * {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* === FINAL_COMPACT_UI_END === */
+
