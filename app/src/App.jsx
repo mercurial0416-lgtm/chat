@@ -102,6 +102,11 @@ function AuthScreen() {
         if (!data.session) {
           setMsg("가입됨. 이메일 인증이 켜져 있으면 Supabase에서 Confirm email OFF 필요");
         }
+
+        if (data.session) {
+          setMsg("가입 성공. 이동중...");
+          setTimeout(() => window.location.reload(), 300);
+        }
       } else {
         const { error } = await withTimeout(
           supabase.auth.signInWithPassword({
@@ -113,6 +118,9 @@ function AuthScreen() {
         );
 
         if (error) throw error;
+
+        setMsg("로그인 성공. 이동중...");
+        setTimeout(() => window.location.reload(), 300);
       }
     } catch (err) {
       setMsg(errorText(err));
@@ -809,34 +817,35 @@ export default function App() {
   async function loadMe(user) {
     if (!user) return null;
 
-    const fallbackName = user.user_metadata?.nickname || user.email?.split("@")[0] || "익명";
+    const fallback = {
+      id: user.id,
+      email: user.email,
+      nickname: user.user_metadata?.nickname || user.email?.split("@")[0] || "익명",
+      avatar_url: null,
+      status_message: "",
+    };
 
-    const upsert = await withTimeout(
-      supabase.from("profiles").upsert({
+    try {
+      await supabase.from("profiles").upsert({
         id: user.id,
         email: user.email,
-        nickname: fallbackName,
-      }),
-      30000,
-      "프로필 생성"
-    );
+        nickname: fallback.nickname,
+      });
 
-    if (upsert.error) throw upsert.error;
-
-    const { data, error } = await withTimeout(
-      supabase
+      const { data } = await supabase
         .from("profiles")
         .select("id,email,nickname,avatar_url,status_message")
         .eq("id", user.id)
-        .single(),
-      30000,
-      "프로필 조회"
-    );
+        .maybeSingle();
 
-    if (error) throw error;
-
-    setMe(data);
-    return data;
+      const profile = data || fallback;
+      setMe(profile);
+      return profile;
+    } catch (err) {
+      setMe(fallback);
+      setBootMsg("");
+      return fallback;
+    }
   }
 
   useEffect(() => {
