@@ -323,37 +323,77 @@ function EventEditor({ event, date, onClose }) {
 
 function MoreView({ me, setMe }) {
   const [section, setSection] = useState("profile");
-  const items = [
-    ["profile", "프로필", "프로필 관리", "miProfile"],
-    ["noti", "알림", "PC/모바일 알림", "miBell"],
-    ["location", "위치공유", "승인한 친구 위치", "miPin"],
-    ["settings", "설정", "다크모드/로그아웃", "miGear"],
-  ];
-  const shortcuts = [
-    ["profile", "프로필"], ["noti", "알림"], ["location", "위치공유"], ["settings", "설정"],
-    ["calendar", "캘린더"], ["chat", "채팅"], ["cache", "캐시삭제"], ["logout", "로그아웃"],
-  ];
-  function shortcut(k) {
-    if (["profile", "noti", "location", "settings"].includes(k)) return setSection(k);
-    if (k === "cache") { localStorage.clear(); location.reload(); }
-    if (k === "logout") { localStorage.clear(); supabase.auth.signOut(); location.reload(); }
+
+  function go(k) {
+    if (k === "cache") {
+      localStorage.clear();
+      location.reload();
+      return;
+    }
+    if (k === "logout") {
+      localStorage.clear();
+      supabase.auth.signOut();
+      location.reload();
+      return;
+    }
+    setSection(k);
   }
-  return h("div", { className: "morePage v15More" },
-    h("section", { className: "v15MoreLeft" },
-      h("div", { className: "v15MoreTabs" }, h("button", { className: "on" }, "홈"), h("button", null, "지갑")),
-      h("div", { className: "v15PayCard" }, h("b", null, "chat pay"), h("strong", null, "0원"), h("span", null, "송금"), h("span", null, "자산"), h("span", null, "결제")),
-      h("div", { className: "v15ShortcutGrid" },
-        ...shortcuts.map(([k, label], idx) => h("button", { key: k, onClick: () => shortcut(k), className: section === k ? "selected" : "" }, h("i", { className: `mi mi${idx}` }), h("span", null, label)))
-      ),
-      h("div", { className: "moreMenu" },
-        ...items.map(([k, label, desc, icon]) => h("button", { key: k, className: section === k ? "selected" : "", onClick: () => setSection(k) }, h("i", { className: `mi ${icon}` }), h("div", null, h("b", null, label), h("span", null, desc)), h("em", null, "›")))
+
+  const menu = [
+    ["profile", "프로필", "내 정보 관리"],
+    ["noti", "알림", "PC/모바일 알림"],
+    ["location", "위치공유", "승인한 친구 위치"],
+  ];
+
+  const readyLater = [
+    ["오픈채팅", "준비중"],
+    ["파일함", "준비중"],
+    ["일정 모아보기", "준비중"],
+    ["게임", "준비중"],
+  ];
+
+  return h("div", { className: "morePage v16More" },
+    h("div", { className: "v16MoreHeader" },
+      h("h2", null, "더보기"),
+      h("div", { className: "v16HeaderActions" },
+        h("button", { className: "v16SearchBtn", title: "검색", onClick: () => alert("검색은 다음 단계에서 추가할게요.") }),
+        h("button", { className: "v16SettingsBtn", title: "설정", onClick: () => setSection("settings") })
       )
     ),
-    h("section", { className: "moreDetail" },
-      section === "profile" ? h(ProfileSettings, { me, setMe }) :
-      section === "noti" ? h(NotificationSettings, { me }) :
-      section === "location" ? h(LocationSettings, { me }) :
-      h(AppSettings, { me, setMe })
+    h("div", { className: "v16MoreBody" },
+      h("section", { className: "v16MoreHome" },
+        h("button", { className: "v16ProfileSummary", onClick: () => setSection("profile") },
+          h(Avatar, { src: me.avatar_url, name: me.nickname, size: 58 }),
+          h("div", null,
+            h("b", null, me.nickname || "프로필"),
+            h("span", null, me.status_message || me.email || "상태메시지를 입력해보세요")
+          ),
+          h("em", null, "›")
+        ),
+        h("div", { className: "v16SimpleMenu" },
+          ...menu.map(([k, title, desc]) => h("button", { key: k, className: section === k ? "selected" : "", onClick: () => go(k) },
+            h("i", { className: `v16MenuIcon ${k}` }),
+            h("div", null, h("b", null, title), h("span", null, desc)),
+            h("em", null, "›")
+          ))
+        ),
+        h("div", { className: "v16LaterBox" },
+          h("div", { className: "v16LaterTitle" }, h("b", null, "추가 예정"), h("span", null, "필요한 기능부터 천천히 붙이기")),
+          h("div", { className: "v16LaterGrid" },
+            ...readyLater.map(([title, desc]) => h("button", { key: title, disabled: true }, h("b", null, title), h("span", null, desc)))
+          )
+        ),
+        h("div", { className: "v16DangerRow" },
+          h("button", { onClick: () => go("cache") }, "캐시 삭제"),
+          h("button", { onClick: () => go("logout") }, "로그아웃")
+        )
+      ),
+      h("section", { className: "moreDetail v16MoreDetail" },
+        section === "profile" ? h(ProfileSettings, { me, setMe }) :
+        section === "noti" ? h(NotificationSettings, { me }) :
+        section === "location" ? h(LocationSettings, { me }) :
+        h(AppSettings, { me, setMe })
+      )
     )
   );
 }
