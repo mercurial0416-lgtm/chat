@@ -219,3 +219,278 @@ body[data-font-size=large]{font-size:18px}
 .content{height:calc(100vh - 64px)}
 }
 
+
+/* === v11 layout fix: PC chat cut + mobile bottom overlap === */
+
+/* 공통: 채팅방은 항상 헤더/메시지/입력창 3단 flex */
+.room{
+  display:flex !important;
+  flex-direction:column !important;
+  min-height:0 !important;
+  overflow:hidden !important;
+}
+
+.roomHeader{
+  flex:0 0 auto !important;
+}
+
+.messages{
+  flex:1 1 auto !important;
+  min-height:0 !important;
+  overflow-y:auto !important;
+  overscroll-behavior:contain !important;
+}
+
+.composer{
+  flex:0 0 auto !important;
+}
+
+/* PC 전용 */
+@media (min-width: 768px){
+  html, body, #root{
+    width:100% !important;
+    height:100% !important;
+    overflow:hidden !important;
+  }
+
+  .appShell{
+    width:100vw !important;
+    height:100vh !important;
+    max-height:100vh !important;
+    overflow:hidden !important;
+    display:grid !important;
+    grid-template-columns:74px minmax(0,1fr) !important;
+  }
+
+  .pcRail{
+    width:74px !important;
+    min-width:74px !important;
+    max-width:74px !important;
+    height:100vh !important;
+    display:flex !important;
+  }
+
+  .mainPanel{
+    width:100% !important;
+    min-width:0 !important;
+    height:100vh !important;
+    max-height:100vh !important;
+    overflow:hidden !important;
+    display:flex !important;
+    flex-direction:column !important;
+  }
+
+  .top{
+    flex:0 0 56px !important;
+    height:56px !important;
+    min-height:56px !important;
+  }
+
+  .content{
+    flex:1 1 auto !important;
+    min-height:0 !important;
+    height:auto !important;
+    overflow:hidden !important;
+  }
+
+  .contentWithRoom{
+    display:grid !important;
+    grid-template-columns:360px minmax(0,1fr) !important;
+    width:100% !important;
+    height:100% !important;
+    min-height:0 !important;
+    overflow:hidden !important;
+  }
+
+  .contentWithRoom .leftContent,
+  .desktopList{
+    width:360px !important;
+    min-width:360px !important;
+    max-width:360px !important;
+    height:100% !important;
+    min-height:0 !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    background:#f7f7f7 !important;
+    border-right:1px solid rgba(0,0,0,.08) !important;
+  }
+
+  .rightRoom{
+    display:block !important;
+    width:100% !important;
+    height:100% !important;
+    min-width:0 !important;
+    min-height:0 !important;
+    overflow:hidden !important;
+    background:#b7c7d8 !important;
+  }
+
+  .rightRoom .room{
+    width:100% !important;
+    height:100% !important;
+    max-width:none !important;
+    min-height:0 !important;
+  }
+
+  .rightRoom .roomHeader{
+    min-height:56px !important;
+    height:56px !important;
+    padding-top:0 !important;
+  }
+
+  .rightRoom .messages{
+    padding:18px 22px 14px !important;
+  }
+
+  .rightRoom .composer{
+    min-height:58px !important;
+    padding:9px 12px !important;
+  }
+
+  .mobileRoom,
+  .mobileNav{
+    display:none !important;
+  }
+}
+
+/* 모바일 전용 */
+@media (max-width: 767px){
+  html, body, #root{
+    width:100% !important;
+    height:100% !important;
+    overflow:hidden !important;
+  }
+
+  .appShell{
+    width:100vw !important;
+    height:100dvh !important;
+    overflow:hidden !important;
+    display:block !important;
+  }
+
+  .pcRail{
+    display:none !important;
+  }
+
+  .mainPanel{
+    height:100dvh !important;
+    min-height:0 !important;
+    overflow:hidden !important;
+    display:flex !important;
+    flex-direction:column !important;
+  }
+
+  .top{
+    flex:0 0 calc(56px + env(safe-area-inset-top)) !important;
+    height:calc(56px + env(safe-area-inset-top)) !important;
+    min-height:calc(56px + env(safe-area-inset-top)) !important;
+    padding-top:env(safe-area-inset-top) !important;
+  }
+
+  .content{
+    flex:1 1 auto !important;
+    min-height:0 !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    padding-bottom:calc(76px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .page{
+    padding-bottom:calc(96px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .mobileNav{
+    display:grid !important;
+    position:fixed !important;
+    left:0 !important;
+    right:0 !important;
+    bottom:0 !important;
+    height:calc(66px + env(safe-area-inset-bottom)) !important;
+    padding-bottom:env(safe-area-inset-bottom) !important;
+    z-index:500 !important;
+    background:rgba(250,250,250,.98) !important;
+    border-top:1px solid rgba(0,0,0,.1) !important;
+  }
+
+  .rightRoom{
+    display:none !important;
+  }
+
+  .mobileRoom{
+    display:block !important;
+    position:fixed !important;
+    inset:0 !important;
+    width:100vw !important;
+    height:100dvh !important;
+    z-index:999 !important;
+    background:#b7c7d8 !important;
+    overflow:hidden !important;
+  }
+
+  .mobileRoom .room{
+    width:100vw !important;
+    height:100dvh !important;
+    max-width:none !important;
+    min-height:0 !important;
+  }
+
+  .mobileRoom .roomHeader{
+    flex:0 0 calc(54px + env(safe-area-inset-top)) !important;
+    height:calc(54px + env(safe-area-inset-top)) !important;
+    min-height:calc(54px + env(safe-area-inset-top)) !important;
+    padding-top:env(safe-area-inset-top) !important;
+  }
+
+  .mobileRoom .messages{
+    flex:1 1 auto !important;
+    min-height:0 !important;
+    padding:14px 12px 12px !important;
+    overflow-y:auto !important;
+  }
+
+  .mobileRoom .composer{
+    flex:0 0 auto !important;
+    min-height:calc(62px + env(safe-area-inset-bottom)) !important;
+    padding:9px 8px calc(9px + env(safe-area-inset-bottom)) !important;
+    background:#fff !important;
+  }
+
+  .composer input{
+    min-width:0 !important;
+  }
+
+  .msgStack{
+    max-width:82% !important;
+  }
+}
+
+/* 캘린더/더보기 모바일 하단바 겹침 보정 */
+@media (max-width: 767px){
+  .calendarPage,
+  .morePage,
+  .chatListPage{
+    padding-bottom:calc(104px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .selectedPanel,
+  .moreDetail{
+    margin-bottom:calc(24px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+/* 가독성 보정 */
+.bubble{
+  line-height:1.45 !important;
+  word-break:break-word !important;
+}
+
+.msgActions{
+  margin-top:2px !important;
+}
+
+.roomTitle b{
+  overflow:hidden !important;
+  text-overflow:ellipsis !important;
+  white-space:nowrap !important;
+}
+
