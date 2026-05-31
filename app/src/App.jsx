@@ -847,22 +847,38 @@ export default function App() {
     }
 
     async function boot() {
-      try {
-        const { data, error } = await withTimeout(supabase.auth.getSession(), 30000, "세션 확인");
+      // 모바일에서 Supabase 세션 확인이 늦어져도 로그인 화면은 바로 보여준다.
+      if (alive) setLoading(false);
 
-        if (error) throw error;
-        if (!alive) return;
+      supabase.auth
+        .getSession()
+        .then(async ({ data, error }) => {
+          if (!alive || error) return;
 
-        setSession(data?.session || null);
+          const next = data?.session || null;
+          setSession(next);
 
-        if (data?.session?.user) {
-          await loadMe(data.session.user);
-        }
-      } catch (err) {
-        setBootMsg(errorText(err));
-      } finally {
-        if (alive) setLoading(false);
-      }
+          if (next?.user) {
+            try {
+              await loadMe(next.user);
+            } catch (err) {
+              setBootMsg(errorText(err));
+              setMe({
+                id: next.user.id,
+                email: next.user.email,
+                nickname:
+                  next.user.user_metadata?.nickname ||
+                  next.user.email?.split("@")[0] ||
+                  "익명",
+                avatar_url: null,
+                status_message: "",
+              });
+            }
+          }
+        })
+        .catch(() => {
+          // 세션 확인 실패는 로그인 화면 사용을 막지 않는다.
+        });
     }
 
     boot();
