@@ -85,6 +85,32 @@ function getSavedSession() {
   }
 }
 
+async function callPushFunction(body) {
+  const res = await fetch("https://nwenbkthlpzlpfklgonb.functions.supabase.co/send-chat-push", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": SUPABASE_ANON_KEY
+    },
+    body: JSON.stringify(body)
+  });
+
+  const text = await res.text();
+  let data = null;
+
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = { raw: text };
+  }
+
+  if (!res.ok) {
+    throw new Error(data?.error || data?.message || text || "Edge Function 호출 실패");
+  }
+
+  return data;
+}
+
 function authToken() {
   return getSavedSession()?.access_token || null;
 }
@@ -401,10 +427,7 @@ function MoreTab({ me, setMe, startGroup }) {
   async function testPush() {
     try {
       const token = authToken();
-      const { data, error } = await supabase.functions.invoke("send-chat-push", {
-        body: { test: true, userId: me.id },
-      });
-      if (error) throw error;
+      const data = await callPushFunction({ test: true, userId: me.id });
       setMsg(`알림 테스트 요청됨: ${JSON.stringify(data)}`);
     } catch (err) { setMsg(errorText(err)); }
   }
@@ -545,10 +568,7 @@ function ChatRoom({ room, me, back }) {
 
   async function notifyPush(messageId) {
     try {
-      const { error } = await supabase.functions.invoke("send-chat-push", {
-        body: { messageId, userId: me.id },
-      });
-      if (error) throw error;
+      await callPushFunction({ messageId, userId: me.id });
     } catch (err) {
       setMsg("푸시 실패: " + errorText(err));
     }
