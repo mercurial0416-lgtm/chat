@@ -2534,3 +2534,114 @@ body.dark .notifyLogo{background:#163524}
 .toast{
   white-space:pre-line;
 }
+
+/* ===== v55 restore image + location chat ===== */
+
+.hiddenFile{
+  display:none !important;
+}
+
+.mediaComposer{
+  grid-template-columns:44px 44px minmax(0,1fr) 48px !important;
+}
+
+.mediaButton{
+  height:48px;
+  border-radius:18px;
+  background:var(--surface2);
+  color:var(--text);
+  border:1px solid var(--line);
+  font-size:12px;
+  font-weight:1000;
+}
+
+.mediaButton:disabled,
+.mediaComposer button:disabled,
+.mediaComposer input:disabled{
+  opacity:.55;
+}
+
+.imageBubble{
+  display:block;
+  max-width:min(260px,78vw);
+  border-radius:18px;
+  overflow:hidden;
+  border:1px solid var(--line);
+  background:var(--surface);
+  box-shadow:0 3px 12px rgba(0,0,0,.08);
+}
+
+.imageBubble img{
+  width:100%;
+  max-height:320px;
+  object-fit:cover;
+  display:block;
+}
+
+.locationBubble{
+  width:min(260px,78vw);
+  display:grid;
+  gap:6px;
+  padding:13px;
+  border-radius:18px;
+  text-decoration:none;
+  background:var(--surface);
+  color:var(--text);
+  border:1px solid var(--line);
+  box-shadow:0 3px 12px rgba(0,0,0,.08);
+}
+
+.mine .locationBubble{
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
+  color:#fff;
+  border-color:transparent;
+}
+
+.locationBubble b{
+  font-size:15px;
+  font-weight:1000;
+}
+
+.locationBubble span{
+  color:inherit;
+  opacity:.82;
+  font-size:12px;
+  font-weight:800;
+}
+
+.locationBubble em{
+  width:max-content;
+  min-height:26px;
+  padding:5px 10px;
+  border-radius:999px;
+  background:rgba(255,255,255,.18);
+  color:inherit;
+  font-size:12px;
+  font-style:normal;
+  font-weight:1000;
+}
+
+@media(max-width:767px){
+  .mediaComposer{
+    grid-template-columns:40px 40px minmax(0,1fr) 46px !important;
+    gap:6px !important;
+  }
+
+  .mediaButton{
+    height:46px !important;
+    border-radius:16px !important;
+    font-size:11px !important;
+  }
+
+  .imageBubble{
+    max-width:74vw;
+  }
+
+  .imageBubble img{
+    max-height:280px;
+  }
+
+  .locationBubble{
+    max-width:74vw;
+  }
+}

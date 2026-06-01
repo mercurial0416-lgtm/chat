@@ -828,7 +828,9 @@ function Room({ me, room, onBack }) {
   const [members, setMembers] = useState([]);
   const [text, setText] = useState("");
   const [msg, setMsg] = useState("");
+  const [uploading, setUploading] = useState(false);
   const bottom = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (!room?.id) return undefined;
@@ -868,7 +870,11 @@ function Room({ me, room, onBack }) {
   async function loadMembers() {
     if (!room?.id) return;
 
-    const { data } = await supabase.from("chat_room_members").select("user_id").eq("room_id", room.id);
+    const { data } = await supabase
+      .from("chat_room_members")
+      .select("user_id")
+      .eq("room_id", room.id);
+
     setMembers(data || []);
   }
 
@@ -883,10 +889,84 @@ function Room({ me, room, onBack }) {
         .order("created_at", { ascending: true });
 
       if (error) throw error;
+
       setMessages(data || []);
     } catch (err) {
       setMsg(safeError(err));
     }
+  }
+
+  function parseMessage(message) {
+    const raw = String(message?.content ?? message?.message ?? "").trim();
+
+    if (!raw) return { type: "empty", text: "" };
+
+    try {
+      const parsed = JSON.parse(raw);
+
+      if (parsed && typeof parsed === "object" && parsed.type) {
+        return parsed;
+      }
+    } catch {}
+
+    if (raw.startsWith("image::")) {
+      return { type: "image", url: raw.slice(7) };
+    }
+
+    if (raw.startsWith("location::")) {
+      const value = raw.slice(10);
+      const [lat, lng] = value.split(",").map(Number);
+
+      return {
+        type: "location",
+        lat,
+        lng,
+        url: `https://maps.google.com/?q=${lat},${lng}`,
+      };
+    }
+
+    return { type: "text", text: raw };
+  }
+
+  async function insertMessage(payload, pushText) {
+    const raw = typeof payload === "string" ? payload : JSON.stringify(payload);
+
+    const variants = [
+      { room_id: room.id, sender_id: me.id, content: raw, message: raw, created_at: nowIso() },
+      { room_id: room.id, sender_id: me.id, content: raw, created_at: nowIso() },
+      { room_id: room.id, sender_id: me.id, message: raw, created_at: nowIso() },
+    ];
+
+    let sent = false;
+    let lastError = null;
+
+    for (const row of variants) {
+      const { error } = await supabase.from("chat_messages").insert(row);
+
+      if (!error) {
+        sent = true;
+        break;
+      }
+
+      lastError = error;
+    }
+
+    if (!sent) throw lastError || new Error("메시지 저장 실패");
+
+    await supabase
+      .from("chat_rooms")
+      .update({ last_message: pushText, updated_at: nowIso() })
+      .eq("id", room.id);
+
+    await supabase.functions.invoke("send-chat-push", {
+      body: {
+        room_id: room.id,
+        content: pushText,
+        sender_name: me.nickname || me.email || "친구",
+      },
+    }).catch(() => {});
+
+    loadMessages();
   }
 
   async function send(event) {
@@ -898,48 +978,157 @@ function Room({ me, room, onBack }) {
     setText("");
 
     try {
-      const variants = [
-        { room_id: room.id, sender_id: me.id, content: value, message: value, created_at: nowIso() },
-        { room_id: room.id, sender_id: me.id, content: value, created_at: nowIso() },
-        { room_id: room.id, sender_id: me.id, message: value, created_at: nowIso() },
-      ];
-
-      let sent = false;
-      let lastError = null;
-
-      for (const row of variants) {
-        const { error } = await supabase.from("chat_messages").insert(row);
-
-        if (!error) {
-          sent = true;
-          break;
-        }
-
-        lastError = error;
-      }
-
-      if (!sent) throw lastError || new Error("메시지 저장 실패");
-
-      await supabase.from("chat_rooms").update({ last_message: value, updated_at: nowIso() }).eq("id", room.id);
-
-      await supabase.functions.invoke("send-chat-push", {
-        body: { room_id: room.id, content: value, sender_name: me.nickname || me.email || "친구" },
-      }).catch(() => {});
-
-      loadMessages();
+      await insertMessage(value, value);
     } catch (err) {
       setText(value);
       setMsg(safeError(err));
     }
   }
 
-  const visibleMessages = messages.filter((message) => String(message.content ?? message.message ?? "").trim());
+  async function sendImage(file) {
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setMsg("이미지 파일만 보낼 수 있음");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setMsg("사진은 10MB 이하만 가능");
+      return;
+    }
+
+    setUploading(true);
+    setMsg("");
+
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+      const path = `${me.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("chat-images")
+        .upload(path, file, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: file.type,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from("chat-images")
+        .getPublicUrl(path);
+
+      const url = data?.publicUrl;
+
+      if (!url) throw new Error("사진 URL 생성 실패");
+
+      await insertMessage(
+        {
+          type: "image",
+          url,
+          name: file.name,
+          size: file.size,
+        },
+        "사진을 보냈습니다"
+      );
+    } catch (err) {
+      setMsg(`사진 전송 실패: ${safeError(err)}`);
+    } finally {
+      setUploading(false);
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  }
+
+  function sendLocation() {
+    if (!navigator.geolocation) {
+      setMsg("이 브라우저는 위치 기능을 지원하지 않음");
+      return;
+    }
+
+    setUploading(true);
+    setMsg("위치 확인 중...");
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const lat = Number(position.coords.latitude.toFixed(6));
+          const lng = Number(position.coords.longitude.toFixed(6));
+          const url = `https://maps.google.com/?q=${lat},${lng}`;
+
+          await insertMessage(
+            {
+              type: "location",
+              lat,
+              lng,
+              url,
+            },
+            "위치를 보냈습니다"
+          );
+
+          setMsg("");
+        } catch (err) {
+          setMsg(`위치 전송 실패: ${safeError(err)}`);
+        } finally {
+          setUploading(false);
+        }
+      },
+      (error) => {
+        setUploading(false);
+
+        if (error.code === 1) {
+          setMsg("위치 권한이 거부됨");
+        } else {
+          setMsg("위치를 가져오지 못함");
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 30000,
+      }
+    );
+  }
+
+  function renderMessageBody(message) {
+    const parsed = parseMessage(message);
+
+    if (parsed.type === "image") {
+      return (
+        <a className="imageBubble" href={parsed.url} target="_blank" rel="noreferrer">
+          <img src={parsed.url} alt={parsed.name || "사진"} />
+        </a>
+      );
+    }
+
+    if (parsed.type === "location") {
+      return (
+        <a className="locationBubble" href={parsed.url || `https://maps.google.com/?q=${parsed.lat},${parsed.lng}`} target="_blank" rel="noreferrer">
+          <b>📍 위치 공유</b>
+          <span>{parsed.lat}, {parsed.lng}</span>
+          <em>지도 열기</em>
+        </a>
+      );
+    }
+
+    return <div className="bubble">{parsed.text}</div>;
+  }
+
+  const visibleMessages = messages.filter((message) => {
+    const parsed = parseMessage(message);
+    return parsed.type !== "empty";
+  });
 
   return (
     <div className="room">
       <header className="roomHeader">
         {onBack && <button className="iconButton" onClick={onBack}>‹</button>}
+
         <Avatar user={{ nickname: room.is_group ? "그" : room.displayName, avatar_url: room.avatar_url }} size={40} online={!room.is_group} />
+
         <div>
           <b>{room.displayName || "대화방"}</b>
           <p>{room.is_group ? `${members.length || room.member_count || 0}명` : `${visibleMessages.length}개의 메시지`}</p>
@@ -948,12 +1137,11 @@ function Room({ me, room, onBack }) {
 
       <div className="messages">
         {visibleMessages.map((message) => {
-          const body = String(message.content ?? message.message ?? "").trim();
           const mine = message.sender_id === me.id;
 
           return (
             <div key={message.id || message.created_at} className={`message ${mine ? "mine" : "other"}`}>
-              <div className="bubble">{body}</div>
+              {renderMessageBody(message)}
               <span>{timeOnly(message.created_at)}</span>
             </div>
           );
@@ -961,17 +1149,32 @@ function Room({ me, room, onBack }) {
         <div ref={bottom} />
       </div>
 
-      <form className="composer" onSubmit={send}>
-        <input value={text} onChange={(e) => setText(e.target.value)} placeholder="메시지 입력" />
-        <button>➤</button>
+      <form className="composer mediaComposer" onSubmit={send}>
+        <input
+          ref={fileInputRef}
+          className="hiddenFile"
+          type="file"
+          accept="image/*"
+          onChange={(event) => sendImage(event.target.files?.[0])}
+        />
+
+        <button type="button" className="mediaButton" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+          사진
+        </button>
+
+        <button type="button" className="mediaButton" onClick={sendLocation} disabled={uploading}>
+          위치
+        </button>
+
+        <input value={text} onChange={(e) => setText(e.target.value)} placeholder={uploading ? "전송 중..." : "메시지 입력"} disabled={uploading} />
+
+        <button disabled={uploading}>➤</button>
       </form>
 
       <Toast>{msg}</Toast>
     </div>
   );
 }
-
-
 
 function Calendar({ me }) {
   const [date, setDate] = useState(dateKey());
