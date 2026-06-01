@@ -1,13 +1,13 @@
 *{box-sizing:border-box}
 html,body,#root{margin:0;width:100%;height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,sans-serif}
-body{background:#f5f6f8;color:#17181c}
+body{background:#f4f6f8;color:#17181c}
 button,input,textarea,select{font:inherit}
 button{border:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
 input,textarea,select{font-size:16px;outline:0}
 img{display:block;max-width:100%}
 
 .loading{height:100dvh;display:grid;place-items:center;color:#69707d}
-.auth,.fatalShell{min-height:100dvh;display:grid;place-items:center;padding:18px;background:#f5f6f8}
+.auth,.fatalShell{min-height:100dvh;display:grid;place-items:center;padding:18px;background:#f4f6f8}
 .authCard,.fatalCard{width:min(420px,100%);background:#fff;border-radius:28px;padding:24px;box-shadow:0 18px 48px rgba(15,23,42,.1);display:grid;gap:11px}
 .authCard h1,.fatalCard h1{margin:0;font-size:36px;letter-spacing:-1px}
 .authCard p,.fatalCard p{margin:0 0 10px;color:#777f8c}
@@ -16,7 +16,7 @@ img{display:block;max-width:100%}
 .ghost{height:42px;background:transparent;color:#777f8c}
 .notice{position:fixed;left:12px;right:12px;bottom:82px;z-index:3000;background:#fff5bf;color:#3a3200;border:1px solid rgba(168,132,0,.2);border-radius:16px;padding:11px 13px;font-size:13px}
 
-.appShell{width:100vw;height:100vh;display:grid;grid-template-columns:76px minmax(0,1fr);background:#f5f6f8}
+.appShell{width:100vw;height:100vh;display:grid;grid-template-columns:76px minmax(0,1fr);background:#f4f6f8}
 .rail{height:100vh;background:#fff;border-right:1px solid #eceef2;display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px 8px}
 .rail>button{width:56px;min-height:56px;border-radius:18px;background:transparent;color:#818894;display:grid;place-items:center;gap:2px;font-weight:800}
 .rail>button.active{background:#fff2a1;color:#17181c}
@@ -43,11 +43,11 @@ img{display:block;max-width:100%}
 
 .myProfile,.row,.chatRow{width:100%;min-height:70px;padding:10px 2px;border-bottom:1px solid #eceef2;display:flex;align-items:center;gap:12px;background:transparent;color:inherit;text-align:left}
 .myProfile{background:#fff;border:0;border-radius:20px;padding:12px;margin-bottom:12px;box-shadow:0 4px 16px rgba(15,23,42,.04)}
-.row:hover,.chatRow:hover,.chatRow.active{background:rgba(254,229,0,.14)}
+.row:hover,.chatRow:hover,.chatRow.active{background:rgba(254,229,0,.08)}
 .meta{min-width:0;flex:1}
 .meta b,.chatRow b{display:block;font-size:17px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .meta span,.chatRow span{display:block;margin-top:5px;font-size:13px;color:#777f8c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.row button{height:34px;border-radius:18px;padding:0 14px;background:#fee500;color:#191919;font-weight:900}
+.row button{height:38px;border-radius:19px;padding:0 16px;background:#272b35;color:#fff;font-weight:900}
 .page h3{margin:14px 0 6px;font-size:14px;color:#777f8c}
 
 .chatRow{cursor:pointer;border-radius:0}
@@ -58,9 +58,9 @@ img{display:block;max-width:100%}
 
 .room{height:100%;display:flex;flex-direction:column;background:#e8eef7}
 .roomHeader{min-height:60px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 14px;background:rgba(255,255,255,.94);border-bottom:1px solid #e1e5ec}
-.roomHeader b{font-size:17px}
+.roomHeader b{font-size:18px}
 .roomHeader small{color:#777f8c}
-.roomHeader button{width:38px;height:38px;border-radius:50%;background:#fff;font-size:25px}
+.roomHeader button{width:42px;height:42px;border-radius:50%;background:#fff;font-size:27px}
 .messages{flex:1;min-height:0;overflow:auto;padding:18px}
 .msg{display:flex;flex-direction:column;align-items:flex-start;margin-bottom:10px}
 .msg.mine{align-items:flex-end}
@@ -68,9 +68,9 @@ img{display:block;max-width:100%}
 .mine .bubble{background:#fee500;color:#191919;border-top-right-radius:7px}
 .other .bubble{border-top-left-radius:7px}
 .msg small{font-size:11px;color:#777f8c;margin-top:3px}
-.composer{display:grid;grid-template-columns:minmax(0,1fr) 58px;gap:7px;min-height:66px;padding:10px;background:#fff;border-top:1px solid #e1e5ec}
-.composer input{height:44px;border-radius:23px;border:1px solid #e1e5ec;padding:0 14px;background:#f7f8fa}
-.composer button{height:44px;border-radius:23px;background:#fee500;color:#191919;font-weight:900}
+.composer{display:grid;grid-template-columns:minmax(0,1fr) 64px;gap:8px;min-height:70px;padding:10px;background:#fff;border-top:1px solid #e1e5ec}
+.composer input{height:48px;border-radius:24px;border:1px solid #e1e5ec;padding:0 16px;background:#f7f8fa}
+.composer button{height:48px;border-radius:24px;background:#fee500;color:#191919;font-weight:900}
 
 .calTop,.addBar{display:flex;gap:8px;margin-bottom:10px}
 .calTop input,.addBar input{flex:1}
@@ -98,21 +98,23 @@ img{display:block;max-width:100%}
 
 .mobileNav,.mobileRoom{display:none}
 
-body.dark{background:#15171d;color:#f3f4f7}
-body.dark .appShell,body.dark .main,body.dark .top,body.dark .page,body.dark .list,body.dark .content{background:#15171d;color:#f3f4f7}
-body.dark .rail,body.dark .moreMenu,body.dark .moreDetail,body.dark .authCard,body.dark .fatalCard,body.dark .event,body.dark .profileCard,body.dark .myProfile,body.dark .soon{background:#20232b;color:#f3f4f7;border-color:rgba(255,255,255,.08)}
-body.dark input,body.dark textarea,body.dark select,body.dark .search,body.dark .composer input,body.dark .row button,body.dark .mobileTop button,body.dark .form button,body.dark .moreMenu button{background:#252933;color:#f3f4f7;border-color:rgba(255,255,255,.09)}
+body.dark{background:#12151b;color:#f3f4f7}
+body.dark .appShell,body.dark .main,body.dark .top,body.dark .page,body.dark .list,body.dark .content{background:#12151b;color:#f3f4f7}
+body.dark .rail,body.dark .moreMenu,body.dark .moreDetail,body.dark .authCard,body.dark .fatalCard,body.dark .event,body.dark .profileCard,body.dark .myProfile,body.dark .soon{background:#1b2029;color:#f3f4f7;border-color:rgba(255,255,255,.08)}
+body.dark input,body.dark textarea,body.dark select,body.dark .search,body.dark .composer input,body.dark .row button,body.dark .mobileTop button,body.dark .form button,body.dark .moreMenu button{background:#242a35;color:#f3f4f7;border-color:rgba(255,255,255,.09)}
+body.dark .row button{background:#fee500;color:#191919}
 body.dark .rail>button{color:#a3a9b4}
-body.dark .rail>button.active{background:#31311f;color:#fee500}
+body.dark .rail>button.active{background:#30321f;color:#fee500}
 body.dark .meta span,body.dark .chatRow span,body.dark .chatRow small,body.dark .empty,body.dark .roomHeader small,body.dark .msg small,body.dark .form p,body.dark .profileCard span,body.dark .soon span{color:#a3a9b4}
-body.dark .detail,body.dark .room,body.dark .messages{background:#202a36}
-body.dark .roomHeader,body.dark .composer{background:#181b22;color:#f3f4f7;border-color:rgba(255,255,255,.08)}
-body.dark .bubble{background:#2b303a;color:#f3f4f7}
+body.dark .detail,body.dark .room,body.dark .messages{background:#202938}
+body.dark .roomHeader,body.dark .composer{background:#171b23;color:#f3f4f7;border-color:rgba(255,255,255,.08)}
+body.dark .bubble{background:#2a303b;color:#f3f4f7}
 body.dark .mine .bubble{background:#fee500;color:#191919}
-body.dark .avatar{background:#2b303a;color:#f3f4f7}
+body.dark .avatar{background:#2a303b;color:#f3f4f7}
+body.dark .empty b{color:#f3f4f7}
 
 @media(max-width:767px){
-  .appShell{display:block;height:100dvh;background:#f5f6f8}
+  .appShell{display:block;height:100dvh;background:#f4f6f8}
   .rail{display:none}
   .main{height:100dvh}
   .main>.top{display:none}
@@ -133,11 +135,11 @@ body.dark .avatar{background:#2b303a;color:#f3f4f7}
   .mobileNav small{font-size:10.5px}
   .mobileNav button.active{color:#17181c}
   .mobileNav button.active::after{content:"";width:5px;height:5px;border-radius:50%;background:#ff4b42;margin-top:-2px}
-  .mobileRoom{position:fixed;inset:0;z-index:999;display:block;background:#e8eef7}
+  .mobileRoom{position:fixed;inset:0;z-index:999;display:block;background:#202938}
   .mobileRoom .room{height:100dvh}
-  .mobileRoom .roomHeader{min-height:calc(56px + env(safe-area-inset-top));padding-top:env(safe-area-inset-top)}
+  .mobileRoom .roomHeader{min-height:calc(58px + env(safe-area-inset-top));padding-top:env(safe-area-inset-top)}
   .mobileRoom .messages{padding:14px 12px}
-  .mobileRoom .composer{min-height:calc(64px + env(safe-area-inset-bottom));padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+  .mobileRoom .composer{min-height:calc(70px + env(safe-area-inset-bottom));padding-bottom:calc(10px + env(safe-area-inset-bottom))}
   .bubble{max-width:84%}
   .morePage{display:block;height:auto;padding:0}
   .moreMenu{height:auto;padding:0;background:transparent!important;box-shadow:none;border:0}
@@ -146,7 +148,7 @@ body.dark .avatar{background:#2b303a;color:#f3f4f7}
   .settingsGear{top:0;right:0}
   .calTop,.addBar{gap:6px}
   .auth{padding:14px}
-  body.dark .mobileNav{background:rgba(24,27,34,.96);border-color:rgba(255,255,255,.08)}
+  body.dark .mobileNav{background:rgba(19,22,29,.96);border-color:rgba(255,255,255,.08)}
   body.dark .mobileNav button{color:#a3a9b4}
   body.dark .mobileNav button.active{color:#fee500}
 }
