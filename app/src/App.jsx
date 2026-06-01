@@ -463,6 +463,23 @@ export default function App() {
     document.body.dataset.fontSize = savedSize;
   }, []);
 
+  
+  useEffect(() => {
+    function handleOpenCalendarDate(event) {
+      const targetDate = event?.detail?.date || localStorage.getItem("rift_open_calendar_date") || dateKey();
+
+      localStorage.setItem("rift_open_calendar_date", targetDate);
+      setRoom(null);
+      setTab("calendar");
+    }
+
+    window.addEventListener("rift-open-calendar-date", handleOpenCalendarDate);
+
+    return () => {
+      window.removeEventListener("rift-open-calendar-date", handleOpenCalendarDate);
+    };
+  }, []);
+
   async function loadMe(user) {
     try {
       let { data, error } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
@@ -1034,6 +1051,14 @@ function Room({ me, room, onBack }) {
   const [msg, setMsg] = useState("");
   const [uploading, setUploading] = useState(false);
   const [showAttach, setShowAttach] = useState(false);
+  const [showScheduleSheet, setShowScheduleSheet] = useState(false);
+  const [scheduleMode, setScheduleMode] = useState("pick");
+  const [shareEvents, setShareEvents] = useState([]);
+  const [shareQuery, setShareQuery] = useState("");
+  const [shareTitle, setShareTitle] = useState("");
+  const [shareDate, setShareDate] = useState(dateKey());
+  const [shareTime, setShareTime] = useState("18:00");
+  const [shareNotify, setShareNotify] = useState("60");
 
   const bottom = useRef(null);
   const fileInputRef = useRef(null);
@@ -1305,23 +1330,218 @@ function Room({ me, room, onBack }) {
     );
   }
 
-  async function shareSchedule() {
+  
+  function scheduleDateOf(item) {
+    return String(item?.start_at || item?.date || dateKey()).slice(0, 10);
+  }
+
+  function scheduleTimeOf(item) {
+    const raw = item?.start_at || "";
+
+    if (raw.includes("T")) return raw.slice(11, 16);
+
+    return item?.time || "09:00";
+  }
+
+  function scheduleDateTimeLabel(item) {
+    return `${scheduleDateOf(item)} ${scheduleTimeOf(item)}`;
+  }
+
+  function notifyAtFor(startAt, minutes) {
+    const value = Number(minutes || 0);
+
+    if (!value) return null;
+
+    const d = new Date(startAt);
+    d.setMinutes(d.getMinutes() - value);
+
+    return d.toISOString();
+  }
+
+  function notifyText(minutes) {
+    const value = Number(minutes || 0);
+
+    if (!value) return "알림 없음";
+    if (value === 10) return "10분 전 알림";
+    if (value === 60) return "1시간 전 알림";
+    if (value === 1440) return "하루 전 알림";
+
+    return `${value}분 전 알림`;
+  }
+
+  function eventOwnerName(item) {
+    const id = item?.created_by || item?.user_id || item?.owner_id;
+
+    if (!id) return "등록자";
+    if (id === me.id) return "나";
+
+    const profile = memberProfiles[id];
+
+    return profile?.nickname || profile?.email || "친구";
+  }
+
+  function toSchedulePayload(item, source = "calendar") {
+    return {
+      type: "schedule",
+      source,
+      event_id: item.id || null,
+      title: item.title || "일정",
+      date: scheduleDateOf(item),
+      time: scheduleTimeOf(item),
+      start_at: item.start_at || `${scheduleDateOf(item)}T${scheduleTimeOf(item)}:00`,
+      end_at: item.end_at || null,
+      notify_minutes: Number(item.notify_minutes || 0),
+      owner: eventOwnerName(item),
+      owner_id: item.created_by || item.user_id || item.owner_id || "",
+      shared_by: me.nickname || me.email || "나",
+    };
+  }
+
+  async function openScheduleShareSheet() {
     setShowAttach(false);
+    setShowScheduleSheet(true);
+    setScheduleMode("pick");
+    setShareQuery("");
+    setMsg("");
 
-    const scheduleDate = window.prompt("공유할 날짜", dateKey());
-    if (!scheduleDate) return;
+    await loadShareEvents();
+  }
 
-    const scheduleTitle = window.prompt("공유할 일정 내용", "일정 공유");
-    if (!scheduleTitle) return;
+  async function loadShareEvents() {
+    try {
+      const start = `${dateKey()}T00:00:00`;
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + 90);
+      const end = `${dateKey(endDate)}T23:59:59`;
 
-    await insertMessage(
-      {
-        type: "schedule",
-        date: scheduleDate,
-        title: scheduleTitle,
-        owner: me.nickname || me.email || "나",
-      },
-      `일정 공유: ${scheduleTitle}`
+      const { data, error } = await supabase
+        .from("calendar_events")
+        .select("*")
+        .gte("start_at", start)
+        .lte("start_at", end)
+        .order("start_at", { ascending: true })
+        .limit(80);
+
+      if (error) throw error;
+
+      setShareEvents(data || []);
+    } catch (err) {
+      setMsg(`공유할 일정 불러오기 실패: ${safeError(err)}`);
+    }
+  }
+
+  async function shareExistingEvent(item) {
+    try {
+      const payload = toSchedulePayload(item, "calendar");
+
+      await insertMessage(payload, `일정 공유: ${payload.title}`);
+
+      setShowScheduleSheet(false);
+      setMsg("일정 공유됨");
+    } catch (err) {
+      setMsg(`일정 공유 실패: ${safeError(err)}`);
+    }
+  }
+
+  async function createAndShareSchedule(event) {
+    event.preventDefault();
+
+    const value = shareTitle.trim();
+
+    if (!value) {
+      setMsg("일정 제목을 입력해줘");
+      return;
+    }
+
+    setUploading(true);
+
+    try {
+      const startAt = `${shareDate}T${shareTime || "09:00"}:00`;
+      const end = new Date(startAt);
+      end.setHours(end.getHours() + 1);
+
+      const row = {
+        user_id: me.id,
+        owner_id: me.id,
+        created_by: me.id,
+        title: value,
+        start_at: startAt,
+        end_at: end.toISOString(),
+        calendar_type: "shared",
+        notify_minutes: Number(shareNotify || 0),
+        notify_at: notifyAtFor(startAt, shareNotify),
+        updated_at: nowIso(),
+      };
+
+      const { data, error } = await supabase
+        .from("calendar_events")
+        .insert(row)
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      const payload = toSchedulePayload(data || row, "new");
+
+      await insertMessage(payload, `일정 공유: ${payload.title}`);
+
+      setShareTitle("");
+      setShowScheduleSheet(false);
+      setMsg("새 일정 만들고 공유됨");
+
+      await supabase.functions.invoke("send-calendar-push", {
+        body: {
+          title: value,
+          date: shareDate,
+          calendar_type: "shared",
+          actor_name: me.nickname || me.email || "친구",
+        },
+      }).catch(() => {});
+    } catch (err) {
+      setMsg(`새 일정 공유 실패: ${safeError(err)}`);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function saveSharedSchedule(parsed) {
+    try {
+      const startAt = parsed.start_at || `${parsed.date || dateKey()}T${parsed.time || "09:00"}:00`;
+      const end = new Date(startAt);
+      end.setHours(end.getHours() + 1);
+
+      const row = {
+        user_id: me.id,
+        owner_id: me.id,
+        created_by: me.id,
+        title: parsed.title || "공유 일정",
+        start_at: startAt,
+        end_at: parsed.end_at || end.toISOString(),
+        calendar_type: "shared",
+        notify_minutes: Number(parsed.notify_minutes || 0),
+        notify_at: notifyAtFor(startAt, parsed.notify_minutes || 0),
+        updated_at: nowIso(),
+      };
+
+      const { error } = await supabase.from("calendar_events").insert(row);
+
+      if (error) throw error;
+
+      setMsg("내 일정에 저장됨");
+    } catch (err) {
+      setMsg(`일정 저장 실패: ${safeError(err)}`);
+    }
+  }
+
+  function openScheduleDate(parsed) {
+    const targetDate = parsed.date || scheduleDateOf(parsed);
+
+    localStorage.setItem("rift_open_calendar_date", targetDate);
+
+    window.dispatchEvent(
+      new CustomEvent("rift-open-calendar-date", {
+        detail: { date: targetDate },
+      })
     );
   }
 
@@ -1354,12 +1574,32 @@ function Room({ me, room, onBack }) {
     }
 
     if (parsed.type === "schedule") {
+      const mine = parsed.owner_id === me.id || parsed.shared_by === me.nickname || message.sender_id === me.id;
+
       return (
-        <div className="scheduleBubble">
-          <b>📅 일정 공유</b>
-          <strong>{parsed.title}</strong>
-          <span>{parsed.date} · {parsed.owner || "등록자"}</span>
-        </div>
+        <article className="richScheduleCard">
+          <div className="richScheduleTop">
+            <span>📅</span>
+            <div>
+              <b>일정 공유</b>
+              <small>{parsed.source === "new" ? "새 일정" : "캘린더 일정"}</small>
+            </div>
+          </div>
+
+          <strong>{parsed.title || "일정"}</strong>
+
+          <div className="richScheduleMeta">
+            <p><em>날짜</em>{parsed.date || scheduleDateOf(parsed)} {parsed.time || scheduleTimeOf(parsed)}</p>
+            <p><em>등록자</em>{parsed.owner || "등록자"}</p>
+            <p><em>공유자</em>{parsed.shared_by || "친구"}</p>
+            <p><em>알림</em>{notifyText(parsed.notify_minutes)}</p>
+          </div>
+
+          <div className="richScheduleActions">
+            <button type="button" onClick={() => openScheduleDate(parsed)}>캘린더 보기</button>
+            {!mine && <button type="button" onClick={() => saveSharedSchedule(parsed)}>내 일정에 저장</button>}
+          </div>
+        </article>
       );
     }
 
@@ -1424,11 +1664,102 @@ function Room({ me, room, onBack }) {
               <button onClick={() => cameraInputRef.current?.click()}><span className="attachIcon camera">📷</span><b>카메라</b><small>바로 촬영</small></button>
               <button onClick={() => fileInputRef.current?.click()}><span className="attachIcon photo">🖼️</span><b>사진</b><small>앨범 선택</small></button>
               <button onClick={sendLocation}><span className="attachIcon location">📍</span><b>친구위치</b><small>현재 위치 공유</small></button>
-              <button onClick={shareSchedule}><span className="attachIcon schedule">📅</span><b>일정공유</b><small>채팅방에 일정 보내기</small></button>
+              <button onClick={openScheduleShareSheet}><span className="attachIcon schedule">📅</span><b>일정공유</b><small>캘린더 연결</small></button>
             </div>
           </div>
         </section>
       )}
+
+      
+      {showScheduleSheet && (
+        <section className="scheduleShareSheet">
+          <div className="scheduleSharePanel">
+            <div className="attachHandle" />
+
+            <header className="scheduleShareHeader">
+              <div>
+                <b>일정 공유</b>
+                <p>캘린더 일정 선택하거나 새로 만들어서 채팅에 보내기</p>
+              </div>
+              <button onClick={() => setShowScheduleSheet(false)}>×</button>
+            </header>
+
+            <div className="scheduleModeTabs">
+              <button className={scheduleMode === "pick" ? "active" : ""} onClick={() => setScheduleMode("pick")}>기존 일정</button>
+              <button className={scheduleMode === "new" ? "active" : ""} onClick={() => setScheduleMode("new")}>새 일정</button>
+            </div>
+
+            {scheduleMode === "pick" ? (
+              <>
+                <div className="scheduleSearch">
+                  <span>⌕</span>
+                  <input value={shareQuery} onChange={(event) => setShareQuery(event.target.value)} placeholder="일정 검색" />
+                </div>
+
+                <div className="shareEventList">
+                  {shareEvents
+                    .filter((item) => {
+                      const q = shareQuery.trim().toLowerCase();
+                      if (!q) return true;
+                      return `${item.title || ""} ${scheduleDateTimeLabel(item)} ${eventOwnerName(item)}`.toLowerCase().includes(q);
+                    })
+                    .map((item) => (
+                      <article key={item.id} className="shareEventCard">
+                        <div>
+                          <b>{item.title}</b>
+                          <p>{scheduleDateTimeLabel(item)} · 등록자 {eventOwnerName(item)}</p>
+                          <small>{notifyText(item.notify_minutes)}</small>
+                        </div>
+                        <button onClick={() => shareExistingEvent(item)}>공유</button>
+                      </article>
+                    ))}
+
+                  {!shareEvents.length && (
+                    <div className="shareEmpty">
+                      <b>공유할 일정 없음</b>
+                      <p>새 일정 탭에서 바로 만들어서 보낼 수 있음.</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <form className="newShareForm" onSubmit={createAndShareSchedule}>
+                <label>
+                  일정 제목
+                  <input value={shareTitle} onChange={(event) => setShareTitle(event.target.value)} placeholder="예: 회식, 약속, 근무 변경" />
+                </label>
+
+                <div className="newShareGrid">
+                  <label>
+                    날짜
+                    <input type="date" value={shareDate} onChange={(event) => setShareDate(event.target.value)} />
+                  </label>
+
+                  <label>
+                    시간
+                    <input type="time" value={shareTime} onChange={(event) => setShareTime(event.target.value)} />
+                  </label>
+                </div>
+
+                <label>
+                  알림
+                  <select value={shareNotify} onChange={(event) => setShareNotify(event.target.value)}>
+                    <option value="0">알림 없음</option>
+                    <option value="10">10분 전</option>
+                    <option value="60">1시간 전</option>
+                    <option value="1440">하루 전</option>
+                  </select>
+                </label>
+
+                <button className="primaryButton" disabled={uploading}>
+                  {uploading ? "공유 중..." : "일정 만들고 공유"}
+                </button>
+              </form>
+            )}
+          </div>
+        </section>
+      )}
+
 
       <Toast>{msg}</Toast>
     </div>
@@ -1437,11 +1768,8 @@ function Room({ me, room, onBack }) {
 
 
 function Calendar({ me }) {
-  const [date, setDate] = useState(dateKey());
-  const [month, setMonth] = useState(() => {
-    const today = new Date();
-    return new Date(today.getFullYear(), today.getMonth(), 1);
-  });
+  const [date, setDate] = useState(() => localStorage.getItem("rift_open_calendar_date") || dateKey());
+  const [month, setMonth] = useState(() => { const saved = localStorage.getItem("rift_open_calendar_date"); const base = saved ? parseKeyGlobal(saved) : new Date(); return new Date(base.getFullYear(), base.getMonth(), 1); });
   const [mode, setMode] = useState(() => localStorage.getItem("rift_calendar_mode") || "shift");
   const [team, setTeam] = useState(() => localStorage.getItem("rift_shift_team") || me.shift_team || "1");
   const [showNotify, setShowNotify] = useState(false);

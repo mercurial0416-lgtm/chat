@@ -3439,3 +3439,343 @@ body.dark .notifyLogo{background:#163524}
   font-weight:850;
   line-height:1.35;
 }
+
+
+/* ===== v60.1 rich schedule share ===== */
+
+.scheduleShareSheet{
+  position:fixed;
+  inset:0;
+  z-index:7600;
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  background:rgba(0,0,0,.38);
+  backdrop-filter:blur(7px);
+}
+
+.scheduleSharePanel{
+  width:min(620px,100%);
+  max-height:88vh;
+  overflow:auto;
+  padding:10px 16px calc(20px + env(safe-area-inset-bottom));
+  border-radius:30px 30px 0 0;
+  background:var(--surface);
+  color:var(--text);
+  border:1px solid var(--line);
+  box-shadow:0 -20px 60px rgba(0,0,0,.32);
+}
+
+.scheduleShareHeader{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:14px;
+}
+
+.scheduleShareHeader b{
+  display:block;
+  color:var(--text);
+  font-size:22px;
+  font-weight:1000;
+  letter-spacing:-.5px;
+}
+
+.scheduleShareHeader p{
+  margin:4px 0 0;
+  color:var(--sub);
+  font-size:12px;
+  font-weight:850;
+  line-height:1.35;
+}
+
+.scheduleShareHeader button{
+  width:40px;
+  height:40px;
+  border-radius:18px;
+  background:var(--surface2);
+  color:var(--text);
+  font-size:24px;
+  font-weight:900;
+}
+
+.scheduleModeTabs{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin-bottom:12px;
+}
+
+.scheduleModeTabs button{
+  height:42px;
+  border-radius:17px;
+  background:var(--surface2);
+  color:var(--sub);
+  border:1px solid var(--line);
+  font-size:13px;
+  font-weight:1000;
+}
+
+.scheduleModeTabs button.active{
+  background:var(--primary);
+  color:#fff;
+  border-color:transparent;
+}
+
+.scheduleSearch{
+  height:44px;
+  display:grid;
+  grid-template-columns:28px 1fr;
+  align-items:center;
+  gap:4px;
+  margin-bottom:10px;
+  padding:0 12px;
+  border-radius:18px;
+  background:var(--surface2);
+  border:1px solid var(--line);
+}
+
+.scheduleSearch input{
+  width:100%;
+  border:0;
+  outline:0;
+  background:transparent;
+  color:var(--text);
+  font:inherit;
+  font-size:14px;
+  font-weight:850;
+}
+
+.shareEventList{
+  display:grid;
+  gap:8px;
+}
+
+.shareEventCard{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 58px;
+  gap:9px;
+  align-items:center;
+  padding:12px;
+  border-radius:20px;
+  background:var(--surface2);
+  border:1px solid var(--line);
+}
+
+.shareEventCard b{
+  display:block;
+  color:var(--text);
+  font-size:15px;
+  font-weight:1000;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.shareEventCard p{
+  margin:4px 0 0;
+  color:var(--sub);
+  font-size:12px;
+  font-weight:850;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.shareEventCard small{
+  display:block;
+  margin-top:3px;
+  color:var(--muted);
+  font-size:11px;
+  font-weight:850;
+}
+
+.shareEventCard button{
+  height:38px;
+  border-radius:15px;
+  background:var(--primary);
+  color:#fff;
+  font-size:12px;
+  font-weight:1000;
+}
+
+.shareEmpty{
+  padding:22px 12px;
+  text-align:center;
+  color:var(--sub);
+}
+
+.shareEmpty b{
+  display:block;
+  color:var(--text);
+  font-size:15px;
+  font-weight:1000;
+}
+
+.shareEmpty p{
+  margin:5px 0 0;
+  font-size:12px;
+  font-weight:850;
+}
+
+.newShareForm{
+  display:grid;
+  gap:10px;
+}
+
+.newShareForm label{
+  display:grid;
+  gap:6px;
+  color:var(--sub);
+  font-size:12px;
+  font-weight:1000;
+}
+
+.newShareForm input,
+.newShareForm select{
+  width:100%;
+  height:44px;
+  border:1px solid var(--line);
+  border-radius:17px;
+  background:var(--surface2);
+  color:var(--text);
+  padding:0 12px;
+  font:inherit;
+  font-size:14px;
+  font-weight:850;
+  outline:0;
+}
+
+.newShareGrid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+
+.richScheduleCard{
+  width:min(290px,78vw);
+  display:grid;
+  gap:10px;
+  padding:13px;
+  border-radius:21px;
+  background:var(--surface);
+  color:var(--text);
+  border:1px solid var(--line);
+  box-shadow:0 4px 14px rgba(0,0,0,.1);
+}
+
+.mine .richScheduleCard{
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
+  color:#fff;
+  border-color:transparent;
+}
+
+.richScheduleTop{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.richScheduleTop>span{
+  width:38px;
+  height:38px;
+  display:grid;
+  place-items:center;
+  border-radius:15px;
+  background:rgba(255,255,255,.18);
+  font-size:20px;
+}
+
+.richScheduleTop b{
+  display:block;
+  font-size:14px;
+  font-weight:1000;
+}
+
+.richScheduleTop small{
+  display:block;
+  margin-top:1px;
+  color:inherit;
+  opacity:.76;
+  font-size:10.5px;
+  font-weight:850;
+}
+
+.richScheduleCard strong{
+  font-size:17px;
+  font-weight:1000;
+  letter-spacing:-.2px;
+  line-height:1.25;
+}
+
+.richScheduleMeta{
+  display:grid;
+  gap:5px;
+}
+
+.richScheduleMeta p{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  margin:0;
+  color:inherit;
+  opacity:.86;
+  font-size:12px;
+  font-weight:850;
+}
+
+.richScheduleMeta em{
+  flex:0 0 auto;
+  font-style:normal;
+  opacity:.72;
+}
+
+.richScheduleActions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:7px;
+}
+
+.richScheduleActions button{
+  min-height:36px;
+  padding:0 8px;
+  border-radius:15px;
+  background:rgba(255,255,255,.18);
+  color:inherit;
+  border:1px solid rgba(255,255,255,.18);
+  font-size:12px;
+  font-weight:1000;
+}
+
+.other .richScheduleActions button{
+  background:var(--surface2);
+  color:var(--text);
+  border-color:var(--line);
+}
+
+@media(max-width:767px){
+  .scheduleSharePanel{
+    max-height:86vh;
+    border-radius:28px 28px 0 0;
+    padding:10px 14px calc(18px + env(safe-area-inset-bottom));
+  }
+
+  .scheduleShareHeader b{
+    font-size:20px;
+  }
+
+  .scheduleShareHeader p{
+    font-size:11.5px;
+  }
+
+  .shareEventCard{
+    grid-template-columns:minmax(0,1fr) 54px;
+    padding:11px;
+  }
+
+  .richScheduleCard{
+    width:76vw;
+    max-width:300px;
+  }
+}
