@@ -28,7 +28,6 @@ self.addEventListener("notificationclick", (event) => {
         if (client.navigate) client.navigate(event.notification.data?.url || "/");
         return;
       }
-
       return self.clients.openWindow(event.notification.data?.url || "/");
     })
   );

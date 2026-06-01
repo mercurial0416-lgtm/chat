@@ -3,33 +3,30 @@ import { supabase } from "./lib/supabase";
 import { registerWebPush } from "./push";
 
 const TABS = [
-  { key: "home", label: "홈", icon: "홈" },
-  { key: "chats", label: "채팅", icon: "톡" },
-  { key: "calendar", label: "캘린더", icon: "일" },
-  { key: "more", label: "더보기", icon: "더" },
+  { key: "home", label: "홈", icon: "home" },
+  { key: "chats", label: "채팅", icon: "chat" },
+  { key: "calendar", label: "일정", icon: "calendar" },
+  { key: "more", label: "설정", icon: "settings" },
 ];
 
 const safeError = (err) => err?.message || err?.error_description || err?.error || String(err || "오류");
 const nowIso = () => new Date().toISOString();
 
-function toDateKey(value = new Date()) {
+function dateKey(value = new Date()) {
   const d = new Date(value);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function timeText(value) {
+function timeOnly(value) {
   if (!value) return "";
   try {
-    return new Date(value).toLocaleTimeString("ko-KR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return new Date(value).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
   } catch {
     return "";
   }
 }
 
-function dayText(value) {
+function dateTime(value) {
   if (!value) return "";
   try {
     return new Date(value).toLocaleString("ko-KR", {
@@ -57,14 +54,111 @@ function displayName(user) {
   return user?.nickname || user?.displayName || user?.name || user?.title || user?.email || "상대방";
 }
 
-function initials(user) {
+function initial(user) {
   return displayName(user).trim().slice(0, 1).toUpperCase() || "?";
 }
 
-function Avatar({ user, size = 48, glow = false }) {
+function Icon({ name, size = 22 }) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2.2,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    "aria-hidden": true,
+  };
+
+  if (name === "home") {
+    return (
+      <svg {...common}>
+        <path d="M3 11.5 12 4l9 7.5" />
+        <path d="M5.5 10.5V20h13v-9.5" />
+        <path d="M9.5 20v-6h5v6" />
+      </svg>
+    );
+  }
+
+  if (name === "chat") {
+    return (
+      <svg {...common}>
+        <path d="M5 6.8C5 5.25 6.25 4 7.8 4h8.4C17.75 4 19 5.25 19 6.8v6.4c0 1.55-1.25 2.8-2.8 2.8H11l-4.5 3.2V16H7.8C6.25 16 5 14.75 5 13.2V6.8Z" />
+        <path d="M8.5 9h7" />
+        <path d="M8.5 12h4.5" />
+      </svg>
+    );
+  }
+
+  if (name === "calendar") {
+    return (
+      <svg {...common}>
+        <path d="M7 3.8v3" />
+        <path d="M17 3.8v3" />
+        <path d="M5.5 6h13A2.5 2.5 0 0 1 21 8.5v10A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5v-10A2.5 2.5 0 0 1 5.5 6Z" />
+        <path d="M3.5 10h17" />
+        <path d="M8 14h.01" />
+        <path d="M12 14h.01" />
+        <path d="M16 14h.01" />
+      </svg>
+    );
+  }
+
+  if (name === "settings") {
+    return (
+      <svg {...common}>
+        <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.36a1.7 1.7 0 0 0-1 .5 1.7 1.7 0 0 0-.5 1V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-.5-1 1.7 1.7 0 0 0-1-.5 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.64 15a1.7 1.7 0 0 0-.5-1 1.7 1.7 0 0 0-1-.5H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1-.5 1.7 1.7 0 0 0 .5-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.64a1.7 1.7 0 0 0 1-.5 1.7 1.7 0 0 0 .5-1V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 .5 1 1.7 1.7 0 0 0 1 .5 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.36 9c.2.36.38.75.5 1.16.12.4.44.73.84.84H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
+      </svg>
+    );
+  }
+
+  if (name === "search") {
+    return (
+      <svg {...common}>
+        <circle cx="10.5" cy="10.5" r="6.5" />
+        <path d="m16 16 4 4" />
+      </svg>
+    );
+  }
+
+  if (name === "send") {
+    return (
+      <svg {...common}>
+        <path d="M21 3 10 14" />
+        <path d="m21 3-7 18-4-7-7-4 18-7Z" />
+      </svg>
+    );
+  }
+
+  if (name === "back") {
+    return (
+      <svg {...common}>
+        <path d="M15 18 9 12l6-6" />
+      </svg>
+    );
+  }
+
+  if (name === "bell") {
+    return (
+      <svg {...common}>
+        <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z" />
+        <path d="M10 21h4" />
+      </svg>
+    );
+  }
+
+  return null;
+}
+
+function Avatar({ user, size = 48, online = false }) {
   return (
-    <div className={`avatar ${glow ? "avatarGlow" : ""}`} style={{ width: size, height: size }}>
-      {user?.avatar_url ? <img src={user.avatar_url} alt="" /> : <span>{initials(user)}</span>}
+    <div className="avatarWrap" style={{ width: size, height: size }}>
+      <div className="avatar">
+        {user?.avatar_url ? <img src={user.avatar_url} alt="" /> : <span>{initial(user)}</span>}
+      </div>
+      {online && <i />}
     </div>
   );
 }
@@ -76,20 +170,21 @@ function Toast({ children }) {
 
 function Empty({ title, text }) {
   return (
-    <div className="emptyState">
-      <div className="emptyOrb">·</div>
+    <div className="empty">
+      <div className="emptyIcon">+</div>
       <b>{title}</b>
       <p>{text}</p>
     </div>
   );
 }
 
-function TopBar({ title, subtitle, right }) {
+function Header({ eyebrow, title, text, right }) {
   return (
-    <header className="topBar">
+    <header className="header">
       <div>
+        {eyebrow && <span>{eyebrow}</span>}
         <h1>{title}</h1>
-        {subtitle && <p>{subtitle}</p>}
+        {text && <p>{text}</p>}
       </div>
       {right}
     </header>
@@ -110,8 +205,8 @@ function Auth() {
     setMsg("");
 
     try {
-      if (!email.trim()) throw new Error("이메일을 입력해줘.");
-      if (password.length < 6) throw new Error("비밀번호는 6자 이상.");
+      if (!email.trim()) throw new Error("이메일 입력 필요");
+      if (password.length < 6) throw new Error("비밀번호 6자 이상");
 
       if (mode === "signup") {
         const { error } = await supabase.auth.signUp({
@@ -119,7 +214,6 @@ function Auth() {
           password,
           options: { data: { nickname: nickname.trim() || email.split("@")[0] } },
         });
-
         if (error) throw error;
         setMode("login");
         setMsg("가입 완료. 로그인해줘.");
@@ -128,7 +222,6 @@ function Auth() {
           email: email.trim(),
           password,
         });
-
         if (error) throw error;
         location.reload();
       }
@@ -142,16 +235,20 @@ function Auth() {
   return (
     <main className="authPage">
       <form className="authCard" onSubmit={submit}>
-        <div className="authLogo">C</div>
-        <div>
-          <h1>Chatly</h1>
-          <p>친구, 일정, 대화를 깔끔하게.</p>
+        <div className="brand">
+          <div>R</div>
+          <span>Rift</span>
         </div>
+
+        <section>
+          <h1>{mode === "login" ? "다시 만나서 반가워요" : "새 계정 만들기"}</h1>
+          <p>친구, 채팅, 일정을 한 곳에서 관리해요.</p>
+        </section>
 
         {mode === "signup" && (
           <label className="field">
             <span>닉네임</span>
-            <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="형준" />
+            <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="닉네임" />
           </label>
         )}
 
@@ -165,19 +262,12 @@ function Auth() {
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="6자 이상" />
         </label>
 
-        <button className="primaryBtn" disabled={busy}>
+        <button className="primaryButton" disabled={busy}>
           {busy ? "처리중..." : mode === "login" ? "로그인" : "가입하기"}
         </button>
 
-        <button
-          type="button"
-          className="textBtn"
-          onClick={() => {
-            setMsg("");
-            setMode(mode === "login" ? "signup" : "login");
-          }}
-        >
-          {mode === "login" ? "새 계정 만들기" : "로그인으로 돌아가기"}
+        <button type="button" className="linkButton" onClick={() => setMode(mode === "login" ? "signup" : "login")}>
+          {mode === "login" ? "계정 만들기" : "로그인으로 돌아가기"}
         </button>
 
         <Toast>{msg}</Toast>
@@ -241,7 +331,6 @@ export default function App() {
           email: user.email,
           nickname: user.user_metadata?.nickname || user.email?.split("@")[0] || "사용자",
         };
-
         await supabase.from("profiles").upsert(row);
         data = row;
       }
@@ -263,73 +352,68 @@ export default function App() {
     setTab("more");
   }
 
-  function goTab(next) {
+  function switchTab(next) {
     setTab(next);
     setRoom(null);
   }
 
-  if (booting) return <div className="loadingPage">불러오는 중...</div>;
+  if (booting) return <main className="loading">불러오는 중...</main>;
   if (!session) return <Auth />;
-  if (!me) return <div className="loadingPage">프로필 불러오는 중...</div>;
+  if (!me) return <main className="loading">프로필 불러오는 중...</main>;
 
   return (
-    <div className="appShell">
-      <aside className="sideRail">
-        <button className="sideProfile" onClick={openProfile}>
-          <Avatar user={me} size={44} glow />
+    <div className="app">
+      <aside className="rail">
+        <button className="railProfile" onClick={openProfile}>
+          <Avatar user={me} size={44} online />
         </button>
 
         {TABS.map((item) => (
-          <button key={item.key} className={tab === item.key ? "active" : ""} onClick={() => goTab(item.key)}>
-            <b>{item.icon}</b>
-            <span>{item.label}</span>
+          <button key={item.key} className={tab === item.key ? "active" : ""} onClick={() => switchTab(item.key)}>
+            <Icon name={item.icon} size={22} />
+            <small>{item.label}</small>
           </button>
         ))}
       </aside>
 
-      <main className="phoneFrame">
-        <section className={tab === "chats" ? "screen chatScreen" : "screen"}>
-          {tab === "home" && (
-            <Home
-              me={me}
-              openProfile={openProfile}
-              openRoom={(nextRoom) => {
-                setRoom(nextRoom);
-                setTab("chats");
-              }}
-            />
-          )}
+      <main className={tab === "chats" ? "main split" : "main"}>
+        {tab === "home" && (
+          <Home
+            me={me}
+            openProfile={openProfile}
+            openRoom={(nextRoom) => {
+              setRoom(nextRoom);
+              setTab("chats");
+            }}
+          />
+        )}
 
-          {tab === "chats" && (
-            <>
-              <Chats me={me} activeRoom={room} setRoom={setRoom} />
-              <div className="desktopChatPane">
-                {room ? (
-                  <Room me={me} room={room} />
-                ) : (
-                  <Empty title="대화방을 선택해줘" text="친구 카드에서 채팅을 시작하거나 대화 목록을 열어줘." />
-                )}
-              </div>
-              {room && (
-                <div className="mobileChatPane">
-                  <Room me={me} room={room} onBack={() => setRoom(null)} />
-                </div>
-              )}
-            </>
-          )}
+        {tab === "chats" && (
+          <>
+            <Chats me={me} activeRoom={room} setRoom={setRoom} />
+            <section className="chatPane">
+              {room ? <Room me={me} room={room} /> : <Empty title="대화방 선택" text="홈에서 친구를 선택하거나 채팅 목록을 열어줘." />}
+            </section>
+            {room && (
+              <section className="mobileRoom">
+                <Room me={me} room={room} onBack={() => setRoom(null)} />
+              </section>
+            )}
+          </>
+        )}
 
-          {tab === "calendar" && <Calendar me={me} />}
-          {tab === "more" && (
-            <More
-              me={me}
-              section={moreSection}
-              setSection={setMoreSection}
-              reloadMe={() => loadMe(session.user)}
-            />
-          )}
-        </section>
+        {tab === "calendar" && <Calendar me={me} />}
 
-        <BottomNav tab={tab} setTab={goTab} />
+        {tab === "more" && (
+          <More
+            me={me}
+            section={moreSection}
+            setSection={setMoreSection}
+            reloadMe={() => loadMe(session.user)}
+          />
+        )}
+
+        <BottomNav tab={tab} setTab={switchTab} />
       </main>
 
       <Toast>{msg}</Toast>
@@ -342,7 +426,7 @@ function BottomNav({ tab, setTab }) {
     <nav className="bottomNav">
       {TABS.map((item) => (
         <button key={item.key} className={tab === item.key ? "active" : ""} onClick={() => setTab(item.key)}>
-          <b>{item.icon}</b>
+          <Icon name={item.icon} size={22} />
           <span>{item.label}</span>
         </button>
       ))}
@@ -384,43 +468,42 @@ function Home({ me, openProfile, openRoom }) {
   }, [users, query]);
 
   return (
-    <div className="page homePage">
-      <TopBar
-        title="홈"
-        subtitle="친구와 빠르게 연결"
+    <section className="page home">
+      <Header
+        eyebrow="Rift"
+        title="친구"
+        text="지금 대화할 사람을 골라요"
         right={
-          <button className="miniProfile" onClick={openProfile}>
-            <Avatar user={me} size={42} />
+          <button className="roundIcon" onClick={openProfile}>
+            <Avatar user={me} size={44} online />
           </button>
         }
       />
 
-      <button className="heroProfile" onClick={openProfile}>
-        <div className="heroLeft">
-          <Avatar user={me} size={62} glow />
-          <div>
-            <span>내 프로필</span>
-            <b>{me.nickname}</b>
-            <p>{me.status_message || "상태메시지를 설정해보세요"}</p>
-          </div>
+      <button className="profileHero" onClick={openProfile}>
+        <Avatar user={me} size={64} online />
+        <div>
+          <span>내 프로필</span>
+          <b>{me.nickname}</b>
+          <p>{me.status_message || "상태메시지를 설정해보세요"}</p>
         </div>
-        <em>수정</em>
+        <em>편집</em>
       </button>
 
-      <div className="searchBox">
-        <span>⌕</span>
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="친구 또는 이메일 검색" />
+      <div className="searchBar">
+        <Icon name="search" size={20} />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="친구, 이메일 검색" />
       </div>
 
-      <div className="sectionHead">
+      <div className="sectionTitle">
         <b>전체 사용자</b>
-        <span>{filtered.length}명</span>
+        <span>{filtered.length}</span>
       </div>
 
-      <div className="peopleList">
+      <div className="list">
         {filtered.map((user) => (
-          <article className="personItem" key={user.id}>
-            <Avatar user={user} size={54} />
+          <article className="personCard" key={user.id}>
+            <Avatar user={user} size={54} online />
             <div>
               <b>{displayName(user)}</b>
               <p>{user.status_message || user.email}</p>
@@ -432,7 +515,7 @@ function Home({ me, openProfile, openRoom }) {
 
       {!filtered.length && <Empty title="사용자 없음" text="가입한 사용자가 여기에 표시돼." />}
       <Toast>{msg}</Toast>
-    </div>
+    </section>
   );
 }
 
@@ -441,7 +524,6 @@ async function createDM(me, user) {
 
   try {
     const { data, error } = await supabase.rpc("get_or_create_dm", { other_user_id: user.id });
-
     if (!error && data) {
       const id = Array.isArray(data) ? data[0]?.id || data[0]?.room_id || data[0] : data;
       return { id, displayName: label, avatar_url: user.avatar_url, last_message: "", updated_at: nowIso() };
@@ -562,33 +644,34 @@ function Chats({ me, activeRoom, setRoom }) {
   }
 
   return (
-    <div className="page chatListPage">
-      <TopBar
+    <section className="page chats">
+      <Header
+        eyebrow="Messages"
         title="채팅"
-        subtitle="대화 목록"
-        right={<button className="refreshBtn" onClick={loadRooms}>새로고침</button>}
+        text="최근 대화"
+        right={<button className="pillButton" onClick={loadRooms}>새로고침</button>}
       />
 
-      <div className="chatCards">
+      <div className="list">
         {rooms.map((room) => (
           <button
             key={room.id}
-            className={`chatItem ${activeRoom?.id === room.id ? "active" : ""}`}
+            className={`chatCard ${activeRoom?.id === room.id ? "active" : ""}`}
             onClick={() => setRoom(room)}
           >
-            <Avatar user={{ nickname: room.displayName, avatar_url: room.avatar_url }} size={54} />
+            <Avatar user={{ nickname: room.displayName, avatar_url: room.avatar_url }} size={54} online />
             <div>
               <b>{room.displayName || "상대방"}</b>
-              <p>{room.last_message || "대화를 시작해보세요"}</p>
+              <p>{room.last_message || "아직 메시지가 없어요"}</p>
             </div>
-            <time>{dayText(room.updated_at || room.created_at)}</time>
+            <time>{dateTime(room.updated_at || room.created_at)}</time>
           </button>
         ))}
       </div>
 
       {!rooms.length && <Empty title="대화방 없음" text="홈에서 친구를 선택해 채팅을 시작해줘." />}
       <Toast>{msg}</Toast>
-    </div>
+    </section>
   );
 }
 
@@ -669,11 +752,17 @@ function Room({ me, room, onBack }) {
   return (
     <div className="room">
       <header className="roomHeader">
-        {onBack && <button className="backButton" onClick={onBack}>‹</button>}
-        <Avatar user={{ nickname: room.displayName, avatar_url: room.avatar_url }} size={42} />
+        {onBack && (
+          <button className="iconButton" onClick={onBack}>
+            <Icon name="back" size={24} />
+          </button>
+        )}
+
+        <Avatar user={{ nickname: room.displayName, avatar_url: room.avatar_url }} size={44} online />
+
         <div>
           <b>{room.displayName || "상대방"}</b>
-          <p>{visibleMessages.length}개 메시지</p>
+          <p>{visibleMessages.length}개의 메시지</p>
         </div>
       </header>
 
@@ -685,7 +774,7 @@ function Room({ me, room, onBack }) {
           return (
             <div key={message.id || message.created_at} className={`message ${mine ? "mine" : "other"}`}>
               <div className="bubble">{body}</div>
-              <span>{timeText(message.created_at)}</span>
+              <span>{timeOnly(message.created_at)}</span>
             </div>
           );
         })}
@@ -694,7 +783,9 @@ function Room({ me, room, onBack }) {
 
       <form className="composer" onSubmit={send}>
         <input value={text} onChange={(e) => setText(e.target.value)} placeholder="메시지 입력" />
-        <button>전송</button>
+        <button>
+          <Icon name="send" size={19} />
+        </button>
       </form>
 
       <Toast>{msg}</Toast>
@@ -703,7 +794,7 @@ function Room({ me, room, onBack }) {
 }
 
 function Calendar({ me }) {
-  const [date, setDate] = useState(toDateKey());
+  const [date, setDate] = useState(dateKey());
   const [ownerColumn, setOwnerColumn] = useState("user_id");
   const [events, setEvents] = useState([]);
   const [title, setTitle] = useState("");
@@ -778,32 +869,33 @@ function Calendar({ me }) {
   }
 
   return (
-    <div className="page calendarPage">
-      <TopBar
-        title="캘린더"
-        subtitle="내 일정 관리"
-        right={<button className="refreshBtn" onClick={() => setDate(toDateKey())}>오늘</button>}
+    <section className="page calendar">
+      <Header
+        eyebrow="Schedule"
+        title="일정"
+        text="오늘과 약속을 관리해요"
+        right={<button className="pillButton" onClick={() => setDate(dateKey())}>오늘</button>}
       />
 
-      <div className="calendarHero">
+      <section className="calendarHero">
         <span>선택 날짜</span>
         <b>{date}</b>
-      </div>
+      </section>
 
-      <input className="datePicker" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      <input className="dateInput" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
 
-      <form className="scheduleForm" onSubmit={addEvent}>
+      <form className="addForm" onSubmit={addEvent}>
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="일정 추가" />
         <button>추가</button>
       </form>
 
       <div className="eventList">
         {events.map((item) => (
-          <article className="eventItem" key={item.id}>
-            <div className="eventDot" />
+          <article className="eventCard" key={item.id}>
+            <i />
             <div>
               <b>{item.title}</b>
-              <p>{dayText(item.start_at)}</p>
+              <p>{dateTime(item.start_at)}</p>
             </div>
           </article>
         ))}
@@ -811,17 +903,17 @@ function Calendar({ me }) {
 
       {!events.length && <Empty title="일정 없음" text="날짜를 고르고 일정을 추가해줘." />}
       <Toast>{msg}</Toast>
-    </div>
+    </section>
   );
 }
 
 function More({ me, section, setSection, reloadMe }) {
   return (
-    <div className="page morePage">
-      <TopBar title="더보기" subtitle="프로필과 설정" />
+    <section className="page more">
+      <Header eyebrow="Account" title="설정" text="프로필과 앱 설정" />
 
-      <button className="moreProfile" onClick={() => setSection("profile")}>
-        <Avatar user={me} size={66} glow />
+      <button className="accountCard" onClick={() => setSection("profile")}>
+        <Avatar user={me} size={66} online />
         <div>
           <span>내 계정</span>
           <b>{me.nickname}</b>
@@ -839,22 +931,22 @@ function More({ me, section, setSection, reloadMe }) {
           <span>푸시 설정</span>
         </button>
         <button className={section === "location" ? "active" : ""} onClick={() => setSection("location")}>
-          <b>위치공유</b>
-          <span>친구 위치</span>
+          <b>위치</b>
+          <span>위치공유</span>
         </button>
         <button className={section === "settings" ? "active" : ""} onClick={() => setSection("settings")}>
-          <b>설정</b>
+          <b>환경설정</b>
           <span>테마 · 로그아웃</span>
         </button>
       </div>
 
-      <div className="panel">
+      <section className="panel">
         {section === "profile" && <Profile me={me} reloadMe={reloadMe} />}
         {section === "notify" && <Notify me={me} />}
         {section === "location" && <Location />}
         {section === "settings" && <Settings me={me} reloadMe={reloadMe} />}
-      </div>
-    </div>
+      </section>
+    </section>
   );
 }
 
@@ -892,7 +984,7 @@ function Profile({ me, reloadMe }) {
       <h2>프로필 수정</h2>
 
       <div className="profilePreview">
-        <Avatar user={{ ...me, nickname, avatar_url: avatar }} size={66} glow />
+        <Avatar user={{ ...me, nickname, avatar_url: avatar }} size={64} online />
         <div>
           <b>{nickname || me.email}</b>
           <p>{status || "상태메시지 없음"}</p>
@@ -914,7 +1006,7 @@ function Profile({ me, reloadMe }) {
         <input value={avatar} onChange={(e) => setAvatar(e.target.value)} placeholder="https://..." />
       </label>
 
-      <button className="primaryBtn" onClick={save}>저장</button>
+      <button className="primaryButton" onClick={save}>저장</button>
       <Toast>{msg}</Toast>
     </div>
   );
@@ -935,8 +1027,8 @@ function Notify({ me }) {
   return (
     <div className="formPanel">
       <h2>알림</h2>
-      <p>PC/모바일 기기마다 한 번씩 켜야 해.</p>
-      <button className="primaryBtn" onClick={enable}>백그라운드 알림 켜기</button>
+      <p>PC/모바일 기기마다 한 번씩 켜야 함.</p>
+      <button className="primaryButton" onClick={enable}>백그라운드 알림 켜기</button>
       <Toast>{msg}</Toast>
     </div>
   );
@@ -968,15 +1060,15 @@ function Settings({ me, reloadMe }) {
 
   return (
     <div className="formPanel">
-      <h2>설정</h2>
+      <h2>환경설정</h2>
 
       <label className="switchRow">
         <span>다크모드</span>
         <input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} />
       </label>
 
-      <button className="primaryBtn" onClick={save}>저장</button>
-      <button className="dangerBtn" onClick={() => supabase.auth.signOut().then(() => location.reload())}>로그아웃</button>
+      <button className="primaryButton" onClick={save}>저장</button>
+      <button className="dangerButton" onClick={() => supabase.auth.signOut().then(() => location.reload())}>로그아웃</button>
       <Toast>{msg}</Toast>
     </div>
   );
