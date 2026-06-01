@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== v45 real 6work 2off 4team shift calendar ==="
+echo "=== v46 normal work mode + remove shift anchor UI ==="
 
 python3 - <<'PY'
 from pathlib import Path
@@ -22,44 +22,55 @@ calendar = r'''function Calendar({ me }) {
     return new Date(today.getFullYear(), today.getMonth(), 1);
   });
 
+  const [mode, setMode] = useState(() => localStorage.getItem("rift_calendar_mode") || "shift");
+  const [team, setTeam] = useState(() => localStorage.getItem("rift_shift_team") || "1");
+
   const [ownerColumn, setOwnerColumn] = useState("user_id");
   const [events, setEvents] = useState([]);
   const [title, setTitle] = useState("");
   const [msg, setMsg] = useState("");
 
-  const [team, setTeam] = useState(() => localStorage.getItem("rift_shift_team") || "1");
-
-  const [anchors, setAnchors] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("rift_shift_anchors") || "") || {};
-    } catch {
-      return {};
-    }
-  });
-
-  const defaultAnchors = {
+  const teamAnchors = {
     "1": "2026-06-08",
     "2": "2026-06-02",
     "3": "2026-06-20",
     "4": "2026-06-14",
   };
 
-  const finalAnchors = {
-    "1": anchors["1"] || defaultAnchors["1"],
-    "2": anchors["2"] || defaultAnchors["2"],
-    "3": anchors["3"] || defaultAnchors["3"],
-    "4": anchors["4"] || defaultAnchors["4"],
+  const koreaHolidays = {
+    "2026-01-01": "신정",
+    "2026-02-16": "설날",
+    "2026-02-17": "설날",
+    "2026-02-18": "설날",
+    "2026-03-01": "삼일절",
+    "2026-03-02": "삼일절 대체공휴일",
+    "2026-05-01": "근로자의 날",
+    "2026-05-05": "어린이날",
+    "2026-05-24": "부처님오신날",
+    "2026-05-25": "부처님오신날 대체공휴일",
+    "2026-06-03": "지방선거일",
+    "2026-06-06": "현충일",
+    "2026-07-17": "제헌절",
+    "2026-08-15": "광복절",
+    "2026-08-17": "광복절 대체공휴일",
+    "2026-09-24": "추석",
+    "2026-09-25": "추석",
+    "2026-09-26": "추석",
+    "2026-10-03": "개천절",
+    "2026-10-05": "개천절 대체공휴일",
+    "2026-10-09": "한글날",
+    "2026-12-25": "성탄절",
   };
 
   const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
 
   useEffect(() => {
-    localStorage.setItem("rift_shift_team", team);
-  }, [team]);
+    localStorage.setItem("rift_calendar_mode", mode);
+  }, [mode]);
 
   useEffect(() => {
-    localStorage.setItem("rift_shift_anchors", JSON.stringify(finalAnchors));
-  }, [anchors]);
+    localStorage.setItem("rift_shift_team", team);
+  }, [team]);
 
   useEffect(() => {
     loadEvents();
@@ -83,7 +94,7 @@ calendar = r'''function Calendar({ me }) {
   }
 
   function cycleIndex(teamNo, key) {
-    const anchor = finalAnchors[String(teamNo)] || defaultAnchors[String(teamNo)];
+    const anchor = teamAnchors[String(teamNo)] || teamAnchors["1"];
     const diff = dayNumber(key) - dayNumber(anchor);
     return ((diff % 24) + 24) % 24;
   }
@@ -115,6 +126,50 @@ calendar = r'''function Calendar({ me }) {
     if (value === "B") return "shiftB";
     if (value === "C") return "shiftC";
     return "shiftOff";
+  }
+
+  function holidayName(key) {
+    return koreaHolidays[key] || "";
+  }
+
+  function normalWorkFor(key) {
+    const day = parseKey(key);
+    const dow = day.getDay();
+    const holiday = holidayName(key);
+
+    if (holiday) {
+      return {
+        label: "휴",
+        detail: holiday,
+        className: "normalHoliday",
+        dayClass: "holiday",
+      };
+    }
+
+    if (dow === 0) {
+      return {
+        label: "휴",
+        detail: "일요일",
+        className: "normalHoliday",
+        dayClass: "holiday",
+      };
+    }
+
+    if (dow === 6) {
+      return {
+        label: "휴",
+        detail: "토요일",
+        className: "normalSat",
+        dayClass: "saturday",
+      };
+    }
+
+    return {
+      label: "통상",
+      detail: "통상근무",
+      className: "normalWork",
+      dayClass: "weekday",
+    };
   }
 
   function monthTitle() {
@@ -221,16 +276,10 @@ calendar = r'''function Calendar({ me }) {
     setMonth(new Date(day.getFullYear(), day.getMonth(), 1));
   }
 
-  function updateAnchor(teamNo, value) {
-    setAnchors((prev) => ({
-      ...prev,
-      [teamNo]: value,
-    }));
-  }
-
   const monthDays = buildMonthDays();
   const selectedShift = shiftFor(team, date);
   const selectedShiftDay = shiftDayLabel(team, date);
+  const selectedNormal = normalWorkFor(date);
 
   const selectedEvents = events.filter((item) => String(item.start_at || "").slice(0, 10) === date);
 
@@ -249,48 +298,60 @@ calendar = r'''function Calendar({ me }) {
   return (
     <section className="page calendar calendarPro">
       <Header
-        eyebrow="6근무 2휴무"
+        eyebrow={mode === "shift" ? "6근무 2휴무" : "통상근무"}
         title="캘린더"
-        text="A 6일 · 휴 2일 · B 6일 · 휴 2일 · C 6일 · 휴 2일"
+        text={mode === "shift" ? "A 6일 · 휴 2일 · B 6일 · 휴 2일 · C 6일 · 휴 2일" : "대한민국 달력 기준 평일 통상 · 토일공휴일 휴무"}
         right={<button className="pillButton" onClick={goToday}>오늘</button>}
       />
 
-      <section className="shiftHero">
-        <div>
-          <span>선택 조</span>
-          <b>{team}조 · {selectedShift}</b>
-          <p>{date} · {selectedShiftDay}</p>
-        </div>
-
-        <div className={`bigShift ${shiftClass(selectedShift)}`}>
-          {selectedShift}
-        </div>
+      <section className="calendarMode">
+        <button className={mode === "shift" ? "active" : ""} onClick={() => setMode("shift")}>
+          4조 3교대
+        </button>
+        <button className={mode === "normal" ? "active" : ""} onClick={() => setMode("normal")}>
+          통상근무
+        </button>
       </section>
 
-      <section className="teamPicker">
-        {["1", "2", "3", "4"].map((teamNo) => (
-          <button
-            key={teamNo}
-            className={team === teamNo ? "active" : ""}
-            onClick={() => setTeam(teamNo)}
-          >
-            {teamNo}조
-          </button>
-        ))}
-      </section>
+      {mode === "shift" ? (
+        <>
+          <section className="shiftHero">
+            <div>
+              <span>선택 조</span>
+              <b>{team}조 · {selectedShift}</b>
+              <p>{date} · {selectedShiftDay}</p>
+            </div>
 
-      <section className="anchorGrid">
-        {["1", "2", "3", "4"].map((teamNo) => (
-          <label key={teamNo}>
-            <span>{teamNo}조 A 첫날</span>
-            <input
-              type="date"
-              value={finalAnchors[teamNo]}
-              onChange={(e) => updateAnchor(teamNo, e.target.value)}
-            />
-          </label>
-        ))}
-      </section>
+            <div className={`bigShift ${shiftClass(selectedShift)}`}>
+              {selectedShift}
+            </div>
+          </section>
+
+          <section className="teamPicker">
+            {["1", "2", "3", "4"].map((teamNo) => (
+              <button
+                key={teamNo}
+                className={team === teamNo ? "active" : ""}
+                onClick={() => setTeam(teamNo)}
+              >
+                {teamNo}조
+              </button>
+            ))}
+          </section>
+        </>
+      ) : (
+        <section className="normalHero">
+          <div>
+            <span>선택 날짜</span>
+            <b>{selectedNormal.detail}</b>
+            <p>{date}</p>
+          </div>
+
+          <div className={`bigNormal ${selectedNormal.className}`}>
+            {selectedNormal.label}
+          </div>
+        </section>
+      )}
 
       <section className="monthCard">
         <div className="monthTop">
@@ -311,8 +372,11 @@ calendar = r'''function Calendar({ me }) {
             const isOtherMonth = day.getMonth() !== month.getMonth();
             const isToday = key === dateKey();
             const isSelected = key === date;
-            const shift = shiftFor(team, key);
             const count = eventCountByDate[key] || 0;
+
+            const shift = shiftFor(team, key);
+            const normal = normalWorkFor(key);
+            const isShiftMode = mode === "shift";
 
             return (
               <button
@@ -322,11 +386,17 @@ calendar = r'''function Calendar({ me }) {
                   isOtherMonth ? "muted" : "",
                   isToday ? "today" : "",
                   isSelected ? "selected" : "",
+                  !isShiftMode ? normal.dayClass : "",
                 ].join(" ")}
                 onClick={() => selectDay(day)}
+                title={!isShiftMode && normal.detail ? normal.detail : ""}
               >
                 <span>{day.getDate()}</span>
-                <em className={shiftClass(shift)}>{shift}</em>
+                {isShiftMode ? (
+                  <em className={shiftClass(shift)}>{shift}</em>
+                ) : (
+                  <em className={normal.className}>{normal.label}</em>
+                )}
                 {count > 0 && <i>{count}</i>}
               </button>
             );
@@ -334,25 +404,39 @@ calendar = r'''function Calendar({ me }) {
         </div>
       </section>
 
-      <section className="selectedDayCard">
-        <div className="selectedDayTop">
-          <div>
-            <span>선택 날짜</span>
-            <b>{date}</b>
-          </div>
-          <em className={shiftClass(selectedShift)}>{team}조 {selectedShift}</em>
-        </div>
-
-        <div className="allTeamShift">
-          {allTeamShifts.map((item) => (
-            <div key={item.team} className={item.team === team ? "active" : ""}>
-              <span>{item.team}조</span>
-              <b className={shiftClass(item.shift)}>{item.shift}</b>
-              <small>{item.dayLabel}</small>
+      {mode === "shift" ? (
+        <section className="selectedDayCard">
+          <div className="selectedDayTop">
+            <div>
+              <span>선택 날짜</span>
+              <b>{date}</b>
             </div>
-          ))}
-        </div>
-      </section>
+            <em className={shiftClass(selectedShift)}>{team}조 {selectedShift}</em>
+          </div>
+
+          <div className="allTeamShift">
+            {allTeamShifts.map((item) => (
+              <div key={item.team} className={item.team === team ? "active" : ""}>
+                <span>{item.team}조</span>
+                <b className={shiftClass(item.shift)}>{item.shift}</b>
+                <small>{item.dayLabel}</small>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : (
+        <section className="selectedDayCard normalSelected">
+          <div className="selectedDayTop">
+            <div>
+              <span>선택 날짜</span>
+              <b>{date}</b>
+            </div>
+            <em className={selectedNormal.className}>{selectedNormal.label}</em>
+          </div>
+
+          <p>{selectedNormal.detail}</p>
+        </section>
+      )}
 
       <form className="addForm" onSubmit={addEvent}>
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`${date} 일정 추가`} />
@@ -384,72 +468,154 @@ PY
 
 cat >> app/src/styles.css <<'EOF'
 
-/* ===== v45: actual 6work 2off shift logic UI ===== */
+/* ===== v46: normal work calendar mode ===== */
 
-.anchorGrid{
+.calendarMode{
   display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
+  grid-template-columns:1fr 1fr;
   gap:8px;
   margin-bottom:12px;
 }
 
-.anchorGrid label{
-  display:grid;
-  gap:6px;
-}
-
-.anchorGrid span{
+.calendarMode button{
+  height:42px;
+  border-radius:18px;
+  background:var(--surface);
   color:var(--sub);
-  font-size:11px;
+  border:1px solid var(--line);
+  box-shadow:var(--shadow2);
   font-weight:1000;
 }
 
-.anchorGrid input{
-  width:100%;
-  height:42px;
-  border-radius:17px;
-  border:1px solid var(--line);
-  background:var(--surface);
-  color:var(--text);
-  padding:0 11px;
-  font:inherit;
-  font-size:13px;
-  outline:0;
+.calendarMode button.active{
+  background:var(--primary);
+  color:#fff;
+  border-color:transparent;
 }
 
-.allTeamShift small{
+.normalHero{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  padding:18px;
+  margin-bottom:12px;
+  border-radius:28px;
+  background:var(--surface);
+  border:1px solid var(--line);
+  box-shadow:var(--shadow);
+}
+
+.normalHero span{
+  display:block;
   color:var(--sub);
-  font-size:10px;
-  font-weight:900;
+  font-size:12px;
+  font-weight:1000;
+}
+
+.normalHero b{
+  display:block;
+  margin-top:4px;
+  color:var(--text);
+  font-size:24px;
+  line-height:1.1;
+  letter-spacing:-.8px;
+}
+
+.normalHero p{
+  margin:6px 0 0;
+  color:var(--sub);
+  font-size:13px;
+  font-weight:760;
+}
+
+.bigNormal{
+  min-width:68px;
+  height:68px;
+  padding:0 12px;
+  border-radius:24px;
+  display:grid;
+  place-items:center;
+  color:#fff;
+  font-size:17px;
+  font-weight:1000;
+  box-shadow:0 14px 30px rgba(0,0,0,.13);
+}
+
+.normalWork{
+  background:#3478f6 !important;
+  color:#fff !important;
+}
+
+.normalSat{
+  background:#2563eb !important;
+  color:#fff !important;
+}
+
+.normalHoliday{
+  background:#ef4444 !important;
+  color:#fff !important;
+}
+
+.dayCell.saturday span{
+  color:#2563eb;
+}
+
+.dayCell.holiday span{
+  color:#ef4444;
+}
+
+.normalSelected p{
+  margin:0;
+  color:var(--sub);
+  font-size:13px;
+  font-weight:800;
+}
+
+.anchorGrid,
+.shiftSettings{
+  display:none !important;
 }
 
 @media(max-width:767px){
-  .anchorGrid{
-    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  .calendarMode{
     gap:7px !important;
     margin-bottom:10px !important;
   }
 
-  .anchorGrid span{
-    font-size:10px !important;
+  .calendarMode button{
+    height:38px !important;
+    border-radius:16px !important;
+    font-size:13px !important;
   }
 
-  .anchorGrid input{
-    height:36px !important;
-    border-radius:14px !important;
-    padding:0 9px !important;
+  .normalHero{
+    padding:14px !important;
+    border-radius:24px !important;
+    margin-bottom:10px !important;
+    box-shadow:var(--shadow2) !important;
+  }
+
+  .normalHero b{
+    font-size:calc(20px * var(--font-scale, 1)) !important;
+  }
+
+  .normalHero p{
+    font-size:calc(12px * var(--font-scale, 1)) !important;
+  }
+
+  .bigNormal{
+    min-width:56px !important;
+    height:56px !important;
+    border-radius:20px !important;
+    font-size:14px !important;
+  }
+
+  .normalSelected p{
     font-size:12px !important;
-  }
-
-  .allTeamShift div{
-    min-height:52px !important;
-  }
-
-  .allTeamShift small{
-    font-size:9px !important;
   }
 }
 EOF
 
-echo "=== v45 real shift calendar done ==="
+echo "=== v46 normal work calendar done ==="
 git status --short
