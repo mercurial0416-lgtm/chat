@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== v60.1 robust schedule share patch ==="
+echo "=== v61 add all-day calendar events ==="
 
 python3 - <<'PY'
 from pathlib import Path
@@ -10,29 +10,6 @@ import re
 p = Path("app/src/App.jsx")
 s = p.read_text()
 
-# 1) 채팅 일정카드 -> 캘린더 날짜 이동 이벤트 추가
-if "rift-open-calendar-date" not in s:
-    insert = r'''
-  useEffect(() => {
-    function handleOpenCalendarDate(event) {
-      const targetDate = event?.detail?.date || localStorage.getItem("rift_open_calendar_date") || dateKey();
-
-      localStorage.setItem("rift_open_calendar_date", targetDate);
-      setRoom(null);
-      setTab("calendar");
-    }
-
-    window.addEventListener("rift-open-calendar-date", handleOpenCalendarDate);
-
-    return () => {
-      window.removeEventListener("rift-open-calendar-date", handleOpenCalendarDate);
-    };
-  }, []);
-
-  async function loadMe'''
-    s = s.replace("async function loadMe", insert, 1)
-
-# 2) Calendar가 채팅 카드에서 넘어온 날짜를 열도록 변경
 cal_start = s.find("function Calendar(")
 cal_end = s.find("function More(", cal_start)
 
@@ -41,383 +18,191 @@ if cal_start == -1 or cal_end == -1:
 
 calendar = s[cal_start:cal_end]
 
-calendar = calendar.replace(
-    'const [date, setDate] = useState(dateKey());',
-    'const [date, setDate] = useState(() => localStorage.getItem("rift_open_calendar_date") || dateKey());',
-    1
+# 1) 캘린더 일정 추가용 종일 상태 추가
+if "const [allDay, setAllDay]" not in calendar:
+    calendar = calendar.replace(
+        'const [notifyMinutes, setNotifyMinutes] = useState("0");',
+        'const [notifyMinutes, setNotifyMinutes] = useState("0");\n  const [allDay, setAllDay] = useState(false);',
+        1
+    )
+
+# 2) 일정 추가 시 종일이면 00:00 ~ 다음날 00:00으로 저장
+old_time_block = '''    const startAt = `${date}T09:00:00`;
+    const endAt = `${date}T10:00:00`;
+    const notifyAt = notifyAtFor(startAt, notifyMinutes);'''
+
+new_time_block = '''    const startAt = allDay ? `${date}T00:00:00` : `${date}T09:00:00`;
+
+    const endDate = new Date(startAt);
+    if (allDay) {
+      endDate.setDate(endDate.getDate() + 1);
+    } else {
+      endDate.setHours(endDate.getHours() + 1);
+    }
+
+    const endAt = endDate.toISOString();
+    const notifyBaseAt = allDay ? `${date}T09:00:00` : startAt;
+    const notifyAt = notifyAtFor(notifyBaseAt, notifyMinutes);'''
+
+if old_time_block in calendar:
+    calendar = calendar.replace(old_time_block, new_time_block, 1)
+
+# 3) insert row에 is_all_day 저장
+if "is_all_day: allDay" not in calendar:
+    calendar = calendar.replace(
+        'notify_at: notifyAt,',
+        'notify_at: notifyAt,\n      is_all_day: allDay,',
+        1
+    )
+
+# 4) 일정 추가 폼에 종일 체크 추가
+form_pattern = re.compile(
+    r'<form className="ttAddForm reminderForm" onSubmit=\{addEvent\}>.*?<button>추가</button>\s*</form>',
+    re.S
 )
 
-calendar = re.sub(
-    r'const \[month, setMonth\] = useState\(\(\) => \{\s*const today = new Date\(\);\s*return new Date\(today\.getFullYear\(\), today\.getMonth\(\), 1\);\s*\}\);',
-    'const [month, setMonth] = useState(() => { const saved = localStorage.getItem("rift_open_calendar_date"); const base = saved ? parseKeyGlobal(saved) : new Date(); return new Date(base.getFullYear(), base.getMonth(), 1); });',
-    calendar,
-    count=1,
-    flags=re.S
+new_form = '''<form className="ttAddForm reminderForm allDayForm" onSubmit={addEvent}>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`${date} 일정 추가`} />
+
+        <label className={`allDayToggle ${allDay ? "active" : ""}`}>
+          <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
+          <span>종일</span>
+        </label>
+
+        <select value={notifyMinutes} onChange={(e) => setNotifyMinutes(e.target.value)}>
+          <option value="0">알림 없음</option>
+          <option value="10">10분 전</option>
+          <option value="60">1시간 전</option>
+          <option value="1440">하루 전</option>
+        </select>
+
+        <button>추가</button>
+      </form>'''
+
+calendar, form_count = form_pattern.subn(new_form, calendar, count=1)
+
+if form_count != 1:
+    raise SystemExit("calendar add form not found")
+
+# 5) 일정 목록/상세에서 종일 표시
+calendar = calendar.replace(
+    '{dateTime(item.start_at)} · 등록자',
+    '{item.is_all_day ? "종일" : dateTime(item.start_at)} · 등록자'
+)
+
+calendar = calendar.replace(
+    '<p>{dateTime(editingEvent.start_at)}</p>',
+    '<p>{editingEvent.is_all_day ? "종일 일정" : dateTime(editingEvent.start_at)}</p>'
 )
 
 s = s[:cal_start] + calendar + s[cal_end:]
 
-# 3) Room 블록만 줄바꿈 상관없이 추출
+# 6) 채팅 일정공유 v60.1이 적용돼 있으면 새 일정에도 종일 옵션 추가
 room_start = s.find("function Room(")
 room_end = s.find("function Calendar(", room_start)
 
-if room_start == -1 or room_end == -1:
-    raise SystemExit("Room block not found")
+if room_start != -1 and room_end != -1:
+    room = s[room_start:room_end]
 
-room = s[room_start:room_end]
+    if "shareAllDay" not in room and "shareNotify" in room:
+        room = room.replace(
+            'const [shareNotify, setShareNotify] = useState("60");',
+            'const [shareNotify, setShareNotify] = useState("60");\n  const [shareAllDay, setShareAllDay] = useState(false);',
+            1
+        )
 
-# 4) 일정공유 시트 상태 추가
-if "showScheduleSheet" not in room:
-    room = room.replace(
-        'const [showAttach, setShowAttach] = useState(false);',
-        '''const [showAttach, setShowAttach] = useState(false);
-  const [showScheduleSheet, setShowScheduleSheet] = useState(false);
-  const [scheduleMode, setScheduleMode] = useState("pick");
-  const [shareEvents, setShareEvents] = useState([]);
-  const [shareQuery, setShareQuery] = useState("");
-  const [shareTitle, setShareTitle] = useState("");
-  const [shareDate, setShareDate] = useState(dateKey());
-  const [shareTime, setShareTime] = useState("18:00");
-  const [shareNotify, setShareNotify] = useState("60");''',
-        1
-    )
-
-# 5) 기존 prompt 방식 shareSchedule 제거 후 진짜 일정공유 기능 삽입
-new_schedule_functions = r'''
-  function scheduleDateOf(item) {
-    return String(item?.start_at || item?.date || dateKey()).slice(0, 10);
-  }
-
-  function scheduleTimeOf(item) {
+    if 'function scheduleTimeOf(item)' in room and 'item?.is_all_day' not in room:
+        room = room.replace(
+            '''  function scheduleTimeOf(item) {
     const raw = item?.start_at || "";
 
     if (raw.includes("T")) return raw.slice(11, 16);
 
     return item?.time || "09:00";
-  }
+  }''',
+            '''  function scheduleTimeOf(item) {
+    if (item?.is_all_day) return "종일";
 
-  function scheduleDateTimeLabel(item) {
+    const raw = item?.start_at || "";
+
+    if (raw.includes("T")) return raw.slice(11, 16);
+
+    return item?.time || "09:00";
+  }''',
+            1
+        )
+
+    if 'function scheduleDateTimeLabel(item)' in room and '종일`' not in room:
+        room = room.replace(
+            '''  function scheduleDateTimeLabel(item) {
     return `${scheduleDateOf(item)} ${scheduleTimeOf(item)}`;
-  }
+  }''',
+            '''  function scheduleDateTimeLabel(item) {
+    return item?.is_all_day ? `${scheduleDateOf(item)} 종일` : `${scheduleDateOf(item)} ${scheduleTimeOf(item)}`;
+  }''',
+            1
+        )
 
-  function notifyAtFor(startAt, minutes) {
-    const value = Number(minutes || 0);
+    if "is_all_day: !!item.is_all_day" not in room:
+        room = room.replace(
+            'notify_minutes: Number(item.notify_minutes || 0),',
+            'notify_minutes: Number(item.notify_minutes || 0),\n      is_all_day: !!item.is_all_day,',
+            1
+        )
 
-    if (!value) return null;
-
-    const d = new Date(startAt);
-    d.setMinutes(d.getMinutes() - value);
-
-    return d.toISOString();
-  }
-
-  function notifyText(minutes) {
-    const value = Number(minutes || 0);
-
-    if (!value) return "알림 없음";
-    if (value === 10) return "10분 전 알림";
-    if (value === 60) return "1시간 전 알림";
-    if (value === 1440) return "하루 전 알림";
-
-    return `${value}분 전 알림`;
-  }
-
-  function eventOwnerName(item) {
-    const id = item?.created_by || item?.user_id || item?.owner_id;
-
-    if (!id) return "등록자";
-    if (id === me.id) return "나";
-
-    const profile = memberProfiles[id];
-
-    return profile?.nickname || profile?.email || "친구";
-  }
-
-  function toSchedulePayload(item, source = "calendar") {
-    return {
-      type: "schedule",
-      source,
-      event_id: item.id || null,
-      title: item.title || "일정",
-      date: scheduleDateOf(item),
-      time: scheduleTimeOf(item),
-      start_at: item.start_at || `${scheduleDateOf(item)}T${scheduleTimeOf(item)}:00`,
-      end_at: item.end_at || null,
-      notify_minutes: Number(item.notify_minutes || 0),
-      owner: eventOwnerName(item),
-      owner_id: item.created_by || item.user_id || item.owner_id || "",
-      shared_by: me.nickname || me.email || "나",
-    };
-  }
-
-  async function openScheduleShareSheet() {
-    setShowAttach(false);
-    setShowScheduleSheet(true);
-    setScheduleMode("pick");
-    setShareQuery("");
-    setMsg("");
-
-    await loadShareEvents();
-  }
-
-  async function loadShareEvents() {
-    try {
-      const start = `${dateKey()}T00:00:00`;
-      const endDate = new Date();
-      endDate.setDate(endDate.getDate() + 90);
-      const end = `${dateKey(endDate)}T23:59:59`;
-
-      const { data, error } = await supabase
-        .from("calendar_events")
-        .select("*")
-        .gte("start_at", start)
-        .lte("start_at", end)
-        .order("start_at", { ascending: true })
-        .limit(80);
-
-      if (error) throw error;
-
-      setShareEvents(data || []);
-    } catch (err) {
-      setMsg(`공유할 일정 불러오기 실패: ${safeError(err)}`);
-    }
-  }
-
-  async function shareExistingEvent(item) {
-    try {
-      const payload = toSchedulePayload(item, "calendar");
-
-      await insertMessage(payload, `일정 공유: ${payload.title}`);
-
-      setShowScheduleSheet(false);
-      setMsg("일정 공유됨");
-    } catch (err) {
-      setMsg(`일정 공유 실패: ${safeError(err)}`);
-    }
-  }
-
-  async function createAndShareSchedule(event) {
-    event.preventDefault();
-
-    const value = shareTitle.trim();
-
-    if (!value) {
-      setMsg("일정 제목을 입력해줘");
-      return;
-    }
-
-    setUploading(true);
-
-    try {
-      const startAt = `${shareDate}T${shareTime || "09:00"}:00`;
+    old_share_time = '''      const startAt = `${shareDate}T${shareTime || "09:00"}:00`;
       const end = new Date(startAt);
-      end.setHours(end.getHours() + 1);
+      end.setHours(end.getHours() + 1);'''
 
-      const row = {
-        user_id: me.id,
-        owner_id: me.id,
-        created_by: me.id,
-        title: value,
-        start_at: startAt,
-        end_at: end.toISOString(),
-        calendar_type: "shared",
-        notify_minutes: Number(shareNotify || 0),
-        notify_at: notifyAtFor(startAt, shareNotify),
-        updated_at: nowIso(),
-      };
-
-      const { data, error } = await supabase
-        .from("calendar_events")
-        .insert(row)
-        .select("*")
-        .single();
-
-      if (error) throw error;
-
-      const payload = toSchedulePayload(data || row, "new");
-
-      await insertMessage(payload, `일정 공유: ${payload.title}`);
-
-      setShareTitle("");
-      setShowScheduleSheet(false);
-      setMsg("새 일정 만들고 공유됨");
-
-      await supabase.functions.invoke("send-calendar-push", {
-        body: {
-          title: value,
-          date: shareDate,
-          calendar_type: "shared",
-          actor_name: me.nickname || me.email || "친구",
-        },
-      }).catch(() => {});
-    } catch (err) {
-      setMsg(`새 일정 공유 실패: ${safeError(err)}`);
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  async function saveSharedSchedule(parsed) {
-    try {
-      const startAt = parsed.start_at || `${parsed.date || dateKey()}T${parsed.time || "09:00"}:00`;
+    new_share_time = '''      const startAt = shareAllDay ? `${shareDate}T00:00:00` : `${shareDate}T${shareTime || "09:00"}:00`;
       const end = new Date(startAt);
-      end.setHours(end.getHours() + 1);
 
-      const row = {
-        user_id: me.id,
-        owner_id: me.id,
-        created_by: me.id,
-        title: parsed.title || "공유 일정",
-        start_at: startAt,
-        end_at: parsed.end_at || end.toISOString(),
-        calendar_type: "shared",
-        notify_minutes: Number(parsed.notify_minutes || 0),
-        notify_at: notifyAtFor(startAt, parsed.notify_minutes || 0),
-        updated_at: nowIso(),
-      };
+      if (shareAllDay) {
+        end.setDate(end.getDate() + 1);
+      } else {
+        end.setHours(end.getHours() + 1);
+      }'''
 
-      const { error } = await supabase.from("calendar_events").insert(row);
+    if old_share_time in room:
+        room = room.replace(old_share_time, new_share_time, 1)
 
-      if (error) throw error;
+    if "is_all_day: shareAllDay" not in room:
+        room = room.replace(
+            'notify_at: notifyAtFor(startAt, shareNotify),',
+            'notify_at: notifyAtFor(shareAllDay ? `${shareDate}T09:00:00` : startAt, shareNotify),\n        is_all_day: shareAllDay,',
+            1
+        )
 
-      setMsg("내 일정에 저장됨");
-    } catch (err) {
-      setMsg(`일정 저장 실패: ${safeError(err)}`);
-    }
-  }
+    old_shared_save_time = '''      const startAt = parsed.start_at || `${parsed.date || dateKey()}T${parsed.time || "09:00"}:00`;
+      const end = new Date(startAt);
+      end.setHours(end.getHours() + 1);'''
 
-  function openScheduleDate(parsed) {
-    const targetDate = parsed.date || scheduleDateOf(parsed);
+    new_shared_save_time = '''      const startAt = parsed.is_all_day
+        ? `${parsed.date || dateKey()}T00:00:00`
+        : parsed.start_at || `${parsed.date || dateKey()}T${parsed.time || "09:00"}:00`;
 
-    localStorage.setItem("rift_open_calendar_date", targetDate);
+      const end = new Date(startAt);
 
-    window.dispatchEvent(
-      new CustomEvent("rift-open-calendar-date", {
-        detail: { date: targetDate },
-      })
-    );
-  }
+      if (parsed.is_all_day) {
+        end.setDate(end.getDate() + 1);
+      } else {
+        end.setHours(end.getHours() + 1);
+      }'''
 
-  function readLabel'''
+    if old_shared_save_time in room:
+        room = room.replace(old_shared_save_time, new_shared_save_time, 1)
 
-room, count = re.subn(
-    r'async function shareSchedule\(\)\s*\{.*?\}\s*function readLabel',
-    new_schedule_functions,
-    room,
-    count=1,
-    flags=re.S
-)
+    # saveSharedSchedule row에도 is_all_day 저장
+    room = room.replace(
+        'notify_at: notifyAtFor(startAt, parsed.notify_minutes || 0),',
+        'notify_at: notifyAtFor(parsed.is_all_day ? `${parsed.date || dateKey()}T09:00:00` : startAt, parsed.notify_minutes || 0),\n        is_all_day: !!parsed.is_all_day,',
+        1
+    )
 
-if count != 1:
-    raise SystemExit("shareSchedule block not found")
-
-# 6) 일정공유 버튼 연결
-room = room.replace("onClick={shareSchedule}", "onClick={openScheduleShareSheet}")
-room = room.replace("채팅방에 일정 보내기", "캘린더 연결")
-
-# 7) 채팅 일정 카드 UI 교체
-new_schedule_card = r'''if (parsed.type === "schedule") {
-      const mine = parsed.owner_id === me.id || parsed.shared_by === me.nickname || message.sender_id === me.id;
-
-      return (
-        <article className="richScheduleCard">
-          <div className="richScheduleTop">
-            <span>📅</span>
-            <div>
-              <b>일정 공유</b>
-              <small>{parsed.source === "new" ? "새 일정" : "캘린더 일정"}</small>
-            </div>
-          </div>
-
-          <strong>{parsed.title || "일정"}</strong>
-
-          <div className="richScheduleMeta">
-            <p><em>날짜</em>{parsed.date || scheduleDateOf(parsed)} {parsed.time || scheduleTimeOf(parsed)}</p>
-            <p><em>등록자</em>{parsed.owner || "등록자"}</p>
-            <p><em>공유자</em>{parsed.shared_by || "친구"}</p>
-            <p><em>알림</em>{notifyText(parsed.notify_minutes)}</p>
-          </div>
-
-          <div className="richScheduleActions">
-            <button type="button" onClick={() => openScheduleDate(parsed)}>캘린더 보기</button>
-            {!mine && <button type="button" onClick={() => saveSharedSchedule(parsed)}>내 일정에 저장</button>}
-          </div>
-        </article>
-      );
-    }'''
-
-room, count = re.subn(
-    r'if\s*\(parsed\.type === "schedule"\)\s*\{\s*return\s*\(.*?</div>\s*\);\s*\}',
-    new_schedule_card,
-    room,
-    count=1,
-    flags=re.S
-)
-
-if count != 1:
-    raise SystemExit("schedule card block not found")
-
-# 8) 일정공유 하단 시트 삽입
-schedule_sheet = r'''
-      {showScheduleSheet && (
-        <section className="scheduleShareSheet">
-          <div className="scheduleSharePanel">
-            <div className="attachHandle" />
-
-            <header className="scheduleShareHeader">
-              <div>
-                <b>일정 공유</b>
-                <p>캘린더 일정 선택하거나 새로 만들어서 채팅에 보내기</p>
-              </div>
-              <button onClick={() => setShowScheduleSheet(false)}>×</button>
-            </header>
-
-            <div className="scheduleModeTabs">
-              <button className={scheduleMode === "pick" ? "active" : ""} onClick={() => setScheduleMode("pick")}>기존 일정</button>
-              <button className={scheduleMode === "new" ? "active" : ""} onClick={() => setScheduleMode("new")}>새 일정</button>
-            </div>
-
-            {scheduleMode === "pick" ? (
-              <>
-                <div className="scheduleSearch">
-                  <span>⌕</span>
-                  <input value={shareQuery} onChange={(event) => setShareQuery(event.target.value)} placeholder="일정 검색" />
-                </div>
-
-                <div className="shareEventList">
-                  {shareEvents
-                    .filter((item) => {
-                      const q = shareQuery.trim().toLowerCase();
-                      if (!q) return true;
-                      return `${item.title || ""} ${scheduleDateTimeLabel(item)} ${eventOwnerName(item)}`.toLowerCase().includes(q);
-                    })
-                    .map((item) => (
-                      <article key={item.id} className="shareEventCard">
-                        <div>
-                          <b>{item.title}</b>
-                          <p>{scheduleDateTimeLabel(item)} · 등록자 {eventOwnerName(item)}</p>
-                          <small>{notifyText(item.notify_minutes)}</small>
-                        </div>
-                        <button onClick={() => shareExistingEvent(item)}>공유</button>
-                      </article>
-                    ))}
-
-                  {!shareEvents.length && (
-                    <div className="shareEmpty">
-                      <b>공유할 일정 없음</b>
-                      <p>새 일정 탭에서 바로 만들어서 보낼 수 있음.</p>
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              <form className="newShareForm" onSubmit={createAndShareSchedule}>
-                <label>
-                  일정 제목
-                  <input value={shareTitle} onChange={(event) => setShareTitle(event.target.value)} placeholder="예: 회식, 약속, 근무 변경" />
-                </label>
-
-                <div className="newShareGrid">
+    # 새 일정 공유 폼에 종일 옵션 추가
+    if 'shareAllDay' in room and 'newShareAllDay' not in room:
+        room = room.replace(
+            '''                <div className="newShareGrid">
                   <label>
                     날짜
                     <input type="date" value={shareDate} onChange={(event) => setShareDate(event.target.value)} />
@@ -427,381 +212,105 @@ schedule_sheet = r'''
                     시간
                     <input type="time" value={shareTime} onChange={(event) => setShareTime(event.target.value)} />
                   </label>
-                </div>
-
-                <label>
-                  알림
-                  <select value={shareNotify} onChange={(event) => setShareNotify(event.target.value)}>
-                    <option value="0">알림 없음</option>
-                    <option value="10">10분 전</option>
-                    <option value="60">1시간 전</option>
-                    <option value="1440">하루 전</option>
-                  </select>
+                </div>''',
+            '''                <label className={`newShareAllDay ${shareAllDay ? "active" : ""}`}>
+                  <input type="checkbox" checked={shareAllDay} onChange={(event) => setShareAllDay(event.target.checked)} />
+                  <span>종일 일정</span>
                 </label>
 
-                <button className="primaryButton" disabled={uploading}>
-                  {uploading ? "공유 중..." : "일정 만들고 공유"}
-                </button>
-              </form>
-            )}
-          </div>
-        </section>
-      )}
-'''
+                <div className="newShareGrid">
+                  <label>
+                    날짜
+                    <input type="date" value={shareDate} onChange={(event) => setShareDate(event.target.value)} />
+                  </label>
 
-if "scheduleShareSheet" not in room:
-    room = room.replace("<Toast>{msg}</Toast>", schedule_sheet + "\n\n      <Toast>{msg}</Toast>", 1)
+                  {!shareAllDay && (
+                    <label>
+                      시간
+                      <input type="time" value={shareTime} onChange={(event) => setShareTime(event.target.value)} />
+                    </label>
+                  )}
+                </div>''',
+            1
+        )
 
-s = s[:room_start] + room + s[room_end:]
+    room = room.replace(
+        '{parsed.date || scheduleDateOf(parsed)} {parsed.time || scheduleTimeOf(parsed)}',
+        '{parsed.date || scheduleDateOf(parsed)} {parsed.is_all_day ? "종일" : parsed.time || scheduleTimeOf(parsed)}'
+    )
+
+    s = s[:room_start] + room + s[room_end:]
 
 p.write_text(s)
 
 cssp = Path("app/src/styles.css")
 css = cssp.read_text()
 
-if "v60.1 rich schedule share" not in css:
+if "v61 all-day events" not in css:
     cssp.write_text(css + r'''
 
-/* ===== v60.1 rich schedule share ===== */
+/* ===== v61 all-day events ===== */
 
-.scheduleShareSheet{
-  position:fixed;
-  inset:0;
-  z-index:7600;
+.allDayForm{
+  grid-template-columns:minmax(0,1fr) 58px 92px 58px!important;
+}
+
+.allDayToggle,
+.newShareAllDay{
+  min-height:40px;
   display:flex;
-  align-items:flex-end;
+  align-items:center;
   justify-content:center;
-  background:rgba(0,0,0,.38);
-  backdrop-filter:blur(7px);
-}
-
-.scheduleSharePanel{
-  width:min(620px,100%);
-  max-height:88vh;
-  overflow:auto;
-  padding:10px 16px calc(20px + env(safe-area-inset-bottom));
-  border-radius:30px 30px 0 0;
-  background:var(--surface);
-  color:var(--text);
-  border:1px solid var(--line);
-  box-shadow:0 -20px 60px rgba(0,0,0,.32);
-}
-
-.scheduleShareHeader{
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:12px;
-  margin-bottom:14px;
-}
-
-.scheduleShareHeader b{
-  display:block;
-  color:var(--text);
-  font-size:22px;
-  font-weight:1000;
-  letter-spacing:-.5px;
-}
-
-.scheduleShareHeader p{
-  margin:4px 0 0;
-  color:var(--sub);
-  font-size:12px;
-  font-weight:850;
-  line-height:1.35;
-}
-
-.scheduleShareHeader button{
-  width:40px;
-  height:40px;
-  border-radius:18px;
-  background:var(--surface2);
-  color:var(--text);
-  font-size:24px;
-  font-weight:900;
-}
-
-.scheduleModeTabs{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:8px;
-  margin-bottom:12px;
-}
-
-.scheduleModeTabs button{
-  height:42px;
-  border-radius:17px;
-  background:var(--surface2);
-  color:var(--sub);
-  border:1px solid var(--line);
-  font-size:13px;
-  font-weight:1000;
-}
-
-.scheduleModeTabs button.active{
-  background:var(--primary);
-  color:#fff;
-  border-color:transparent;
-}
-
-.scheduleSearch{
-  height:44px;
-  display:grid;
-  grid-template-columns:28px 1fr;
-  align-items:center;
-  gap:4px;
-  margin-bottom:10px;
-  padding:0 12px;
-  border-radius:18px;
-  background:var(--surface2);
-  border:1px solid var(--line);
-}
-
-.scheduleSearch input{
-  width:100%;
-  border:0;
-  outline:0;
-  background:transparent;
-  color:var(--text);
-  font:inherit;
-  font-size:14px;
-  font-weight:850;
-}
-
-.shareEventList{
-  display:grid;
-  gap:8px;
-}
-
-.shareEventCard{
-  display:grid;
-  grid-template-columns:minmax(0,1fr) 58px;
-  gap:9px;
-  align-items:center;
-  padding:12px;
-  border-radius:20px;
-  background:var(--surface2);
-  border:1px solid var(--line);
-}
-
-.shareEventCard b{
-  display:block;
-  color:var(--text);
-  font-size:15px;
-  font-weight:1000;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
-
-.shareEventCard p{
-  margin:4px 0 0;
-  color:var(--sub);
-  font-size:12px;
-  font-weight:850;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
-
-.shareEventCard small{
-  display:block;
-  margin-top:3px;
-  color:var(--muted);
-  font-size:11px;
-  font-weight:850;
-}
-
-.shareEventCard button{
-  height:38px;
-  border-radius:15px;
-  background:var(--primary);
-  color:#fff;
-  font-size:12px;
-  font-weight:1000;
-}
-
-.shareEmpty{
-  padding:22px 12px;
-  text-align:center;
-  color:var(--sub);
-}
-
-.shareEmpty b{
-  display:block;
-  color:var(--text);
-  font-size:15px;
-  font-weight:1000;
-}
-
-.shareEmpty p{
-  margin:5px 0 0;
-  font-size:12px;
-  font-weight:850;
-}
-
-.newShareForm{
-  display:grid;
-  gap:10px;
-}
-
-.newShareForm label{
-  display:grid;
   gap:6px;
+  padding:0 10px;
+  border-radius:16px;
+  background:var(--surface);
   color:var(--sub);
+  border:1px solid var(--line);
   font-size:12px;
   font-weight:1000;
+  box-shadow:var(--shadow2);
+  user-select:none;
 }
 
-.newShareForm input,
-.newShareForm select{
-  width:100%;
-  height:44px;
-  border:1px solid var(--line);
-  border-radius:17px;
-  background:var(--surface2);
-  color:var(--text);
-  padding:0 12px;
-  font:inherit;
-  font-size:14px;
-  font-weight:850;
-  outline:0;
+.allDayToggle input,
+.newShareAllDay input{
+  display:none;
 }
 
-.newShareGrid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:8px;
-}
-
-.richScheduleCard{
-  width:min(290px,78vw);
-  display:grid;
-  gap:10px;
-  padding:13px;
-  border-radius:21px;
-  background:var(--surface);
-  color:var(--text);
-  border:1px solid var(--line);
-  box-shadow:0 4px 14px rgba(0,0,0,.1);
-}
-
-.mine .richScheduleCard{
-  background:linear-gradient(135deg,var(--primary),var(--primary2));
+.allDayToggle.active,
+.newShareAllDay.active{
+  background:var(--primary);
   color:#fff;
   border-color:transparent;
 }
 
-.richScheduleTop{
-  display:flex;
-  align-items:center;
-  gap:8px;
-}
-
-.richScheduleTop>span{
-  width:38px;
-  height:38px;
-  display:grid;
-  place-items:center;
-  border-radius:15px;
-  background:rgba(255,255,255,.18);
-  font-size:20px;
-}
-
-.richScheduleTop b{
-  display:block;
-  font-size:14px;
-  font-weight:1000;
-}
-
-.richScheduleTop small{
-  display:block;
-  margin-top:1px;
-  color:inherit;
-  opacity:.76;
-  font-size:10.5px;
-  font-weight:850;
-}
-
-.richScheduleCard strong{
-  font-size:17px;
-  font-weight:1000;
-  letter-spacing:-.2px;
-  line-height:1.25;
-}
-
-.richScheduleMeta{
-  display:grid;
-  gap:5px;
-}
-
-.richScheduleMeta p{
-  display:flex;
-  justify-content:space-between;
-  gap:12px;
-  margin:0;
-  color:inherit;
-  opacity:.86;
-  font-size:12px;
-  font-weight:850;
-}
-
-.richScheduleMeta em{
-  flex:0 0 auto;
-  font-style:normal;
-  opacity:.72;
-}
-
-.richScheduleActions{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:7px;
-}
-
-.richScheduleActions button{
-  min-height:36px;
-  padding:0 8px;
-  border-radius:15px;
-  background:rgba(255,255,255,.18);
-  color:inherit;
-  border:1px solid rgba(255,255,255,.18);
-  font-size:12px;
-  font-weight:1000;
-}
-
-.other .richScheduleActions button{
+.newShareAllDay{
+  justify-content:flex-start;
+  height:44px;
   background:var(--surface2);
-  color:var(--text);
-  border-color:var(--line);
+  box-shadow:none;
+}
+
+.newShareGrid:has(label:only-child){
+  grid-template-columns:1fr;
 }
 
 @media(max-width:767px){
-  .scheduleSharePanel{
-    max-height:86vh;
-    border-radius:28px 28px 0 0;
-    padding:10px 14px calc(18px + env(safe-area-inset-bottom));
+  .allDayForm{
+    grid-template-columns:minmax(0,1fr) 52px 80px 52px!important;
+    gap:6px!important;
   }
 
-  .scheduleShareHeader b{
-    font-size:20px;
-  }
-
-  .scheduleShareHeader p{
-    font-size:11.5px;
-  }
-
-  .shareEventCard{
-    grid-template-columns:minmax(0,1fr) 54px;
-    padding:11px;
-  }
-
-  .richScheduleCard{
-    width:76vw;
-    max-width:300px;
+  .allDayToggle{
+    min-height:40px;
+    padding:0 8px;
+    border-radius:15px;
+    font-size:11px;
   }
 }
 ''')
 PY
 
-echo "=== v60.1 done ==="
+echo "=== v61 done ==="
 git status --short
