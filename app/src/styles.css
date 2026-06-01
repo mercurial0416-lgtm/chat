@@ -2979,3 +2979,436 @@ body.dark .notifyLogo{background:#163524}
     font-size:13px;
   }
 }
+
+/* ===== v58 calendar/chat/work bundle ===== */
+
+.friendSub{
+  display:block;
+  margin-top:2px;
+  color:var(--muted);
+  font-size:10.5px;
+  font-weight:750;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.ownerFilter{
+  display:flex;
+  gap:7px;
+  overflow:auto;
+  margin:0 0 8px;
+  padding-bottom:4px;
+}
+
+.ownerFilter button{
+  flex:0 0 auto;
+  height:31px;
+  padding:0 11px;
+  border-radius:999px;
+  background:var(--surface);
+  color:var(--sub);
+  border:1px solid var(--line);
+  font-size:12px;
+  font-weight:1000;
+}
+
+.ownerFilter button.active{
+  background:var(--primary);
+  color:#fff;
+  border-color:transparent;
+}
+
+.ownerColor0{background:#22c55e!important;color:#fff!important}
+.ownerColor1{background:#3b82f6!important;color:#fff!important}
+.ownerColor2{background:#8b5cf6!important;color:#fff!important}
+.ownerColor3{background:#f97316!important;color:#fff!important}
+.ownerColor4{background:#ec4899!important;color:#fff!important}
+.ownerColor5{background:#06b6d4!important;color:#fff!important}
+
+.reminderForm{
+  grid-template-columns:minmax(0,1fr) 92px 58px!important;
+}
+
+.reminderForm select{
+  height:40px;
+  border-radius:16px;
+  border:1px solid var(--line);
+  background:var(--surface);
+  color:var(--text);
+  padding:0 8px;
+  font:inherit;
+  font-size:12px;
+  font-weight:900;
+  outline:0;
+  box-shadow:var(--shadow2);
+}
+
+.ttEvent{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+
+.ttEvent>div:first-child{
+  min-width:0;
+  flex:1;
+}
+
+.eventActions{
+  display:flex;
+  gap:5px;
+}
+
+.eventActions button{
+  height:28px;
+  padding:0 8px;
+  border-radius:999px;
+  background:rgba(255,255,255,.2);
+  color:#fff;
+  font-size:11px;
+  font-weight:1000;
+}
+
+.editEventPanel{
+  display:grid;
+  gap:10px;
+}
+
+.eventDetailBox{
+  display:grid;
+  gap:5px;
+  padding:13px;
+  border-radius:18px;
+  background:var(--surface2);
+  color:var(--text);
+}
+
+.eventDetailBox b{
+  font-size:17px;
+}
+
+.eventDetailBox p{
+  margin:0;
+  color:var(--sub);
+  font-size:13px;
+  font-weight:850;
+}
+
+.hiddenFile{
+  display:none!important;
+}
+
+.plusComposer{
+  grid-template-columns:46px minmax(0,1fr) 50px!important;
+}
+
+.plusButton{
+  height:48px;
+  border-radius:18px;
+  display:grid;
+  place-items:center;
+  background:var(--surface2);
+  color:var(--text);
+  border:1px solid var(--line);
+  font-size:28px;
+  font-weight:650;
+  line-height:1;
+  transition:transform .16s ease, background .16s ease;
+}
+
+.plusButton.active{
+  transform:rotate(45deg);
+  background:var(--primary);
+  color:#fff;
+  border-color:transparent;
+}
+
+.imageBubble{
+  display:block;
+  max-width:min(260px,78vw);
+  border-radius:18px;
+  overflow:hidden;
+  border:1px solid var(--line);
+  background:var(--surface);
+  box-shadow:0 3px 12px rgba(0,0,0,.08);
+}
+
+.imageBubble img{
+  width:100%;
+  max-height:320px;
+  object-fit:cover;
+  display:block;
+}
+
+.locationBubble,
+.scheduleBubble{
+  width:min(260px,78vw);
+  display:grid;
+  gap:6px;
+  padding:13px;
+  border-radius:18px;
+  text-decoration:none;
+  background:var(--surface);
+  color:var(--text);
+  border:1px solid var(--line);
+  box-shadow:0 3px 12px rgba(0,0,0,.08);
+}
+
+.mine .locationBubble,
+.mine .scheduleBubble{
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
+  color:#fff;
+  border-color:transparent;
+}
+
+.locationBubble b,
+.scheduleBubble b{
+  font-size:15px;
+  font-weight:1000;
+}
+
+.scheduleBubble strong{
+  font-size:15px;
+  font-weight:1000;
+}
+
+.locationBubble span,
+.scheduleBubble span{
+  color:inherit;
+  opacity:.82;
+  font-size:12px;
+  font-weight:800;
+}
+
+.locationBubble em{
+  width:max-content;
+  min-height:26px;
+  padding:5px 10px;
+  border-radius:999px;
+  background:rgba(255,255,255,.18);
+  color:inherit;
+  font-size:12px;
+  font-style:normal;
+  font-weight:1000;
+}
+
+.attachSheet{
+  position:fixed;
+  inset:0;
+  z-index:7200;
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  background:rgba(0,0,0,.32);
+  backdrop-filter:blur(6px);
+}
+
+.attachPanel{
+  width:min(560px,100%);
+  padding:10px 18px calc(22px + env(safe-area-inset-bottom));
+  border-radius:30px 30px 0 0;
+  background:var(--surface);
+  border:1px solid var(--line);
+  box-shadow:0 -20px 54px rgba(0,0,0,.28);
+}
+
+.attachHandle{
+  width:48px;
+  height:5px;
+  margin:6px auto 18px;
+  border-radius:999px;
+  background:var(--line);
+}
+
+.attachTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:16px;
+}
+
+.attachTop b{
+  color:var(--text);
+  font-size:22px;
+  font-weight:1000;
+  letter-spacing:-.5px;
+}
+
+.attachTop button{
+  width:40px;
+  height:40px;
+  border-radius:18px;
+  background:var(--surface2);
+  color:var(--text);
+  font-size:24px;
+  font-weight:800;
+}
+
+.attachGrid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:10px;
+}
+
+.attachGrid button{
+  min-height:106px;
+  display:grid;
+  place-items:center;
+  align-content:center;
+  gap:7px;
+  padding:12px 6px;
+  border-radius:22px;
+  background:var(--surface2);
+  color:var(--text);
+  border:1px solid var(--line);
+}
+
+.attachGrid b{
+  font-size:14px;
+  font-weight:1000;
+}
+
+.attachGrid small{
+  color:var(--sub);
+  font-size:10px;
+  font-weight:850;
+}
+
+.attachIcon{
+  width:44px;
+  height:44px;
+  display:grid;
+  place-items:center;
+  border-radius:16px;
+  color:#fff;
+  font-size:22px;
+}
+
+.attachIcon.camera{background:#94a3b8}
+.attachIcon.photo{background:#22c55e}
+.attachIcon.location{background:#3b82f6}
+.attachIcon.schedule{background:#f59e0b}
+
+.workSettingBox{
+  display:grid;
+  gap:12px;
+  padding:12px;
+  border-radius:18px;
+  background:var(--surface2);
+  border:1px solid var(--line);
+}
+
+.workSettingBox b{
+  color:var(--text);
+  font-size:15px;
+  font-weight:1000;
+}
+
+.workSettingBox p{
+  margin:4px 0 0;
+  color:var(--sub);
+  font-size:12px;
+  font-weight:850;
+}
+
+.workModeButtons,
+.shiftTeamButtons{
+  display:grid;
+  gap:7px;
+}
+
+.workModeButtons{
+  grid-template-columns:1fr 1fr;
+}
+
+.shiftTeamButtons{
+  grid-template-columns:repeat(4,1fr);
+}
+
+.workModeButtons button,
+.shiftTeamButtons button{
+  height:38px;
+  border-radius:15px;
+  background:var(--surface);
+  color:var(--sub);
+  border:1px solid var(--line);
+  font-size:12px;
+  font-weight:1000;
+}
+
+.workModeButtons button.active,
+.shiftTeamButtons button.active{
+  background:var(--primary);
+  color:#fff;
+  border-color:transparent;
+}
+
+@media(max-width:767px){
+  .reminderForm{
+    grid-template-columns:minmax(0,1fr) 82px 54px!important;
+    gap:6px!important;
+  }
+
+  .reminderForm select{
+    height:40px;
+    border-radius:15px;
+    font-size:11px;
+  }
+
+  .plusComposer{
+    grid-template-columns:44px minmax(0,1fr) 48px!important;
+    gap:7px!important;
+  }
+
+  .plusButton{
+    height:46px!important;
+    border-radius:17px!important;
+    font-size:27px!important;
+  }
+
+  .attachPanel{
+    border-radius:28px 28px 0 0;
+    padding:10px 16px calc(20px + env(safe-area-inset-bottom));
+  }
+
+  .attachGrid{
+    grid-template-columns:repeat(4,1fr);
+    gap:7px;
+  }
+
+  .attachGrid button{
+    min-height:96px;
+    border-radius:20px;
+    padding:9px 4px;
+  }
+
+  .attachGrid b{
+    font-size:12px;
+  }
+
+  .attachGrid small{
+    font-size:9px;
+  }
+
+  .attachIcon{
+    width:40px;
+    height:40px;
+    border-radius:15px;
+    font-size:20px;
+  }
+
+  .imageBubble{
+    max-width:74vw;
+  }
+
+  .imageBubble img{
+    max-height:280px;
+  }
+
+  .locationBubble,
+  .scheduleBubble{
+    max-width:74vw;
+  }
+}
