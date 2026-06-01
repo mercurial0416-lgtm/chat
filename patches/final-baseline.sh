@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== v61 add all-day calendar events ==="
+echo "=== v62 instant realtime chat ==="
 
 python3 - <<'PY'
 from pathlib import Path
@@ -10,307 +10,409 @@ import re
 p = Path("app/src/App.jsx")
 s = p.read_text()
 
-cal_start = s.find("function Calendar(")
-cal_end = s.find("function More(", cal_start)
-
-if cal_start == -1 or cal_end == -1:
-    raise SystemExit("Calendar block not found")
-
-calendar = s[cal_start:cal_end]
-
-# 1) 캘린더 일정 추가용 종일 상태 추가
-if "const [allDay, setAllDay]" not in calendar:
-    calendar = calendar.replace(
-        'const [notifyMinutes, setNotifyMinutes] = useState("0");',
-        'const [notifyMinutes, setNotifyMinutes] = useState("0");\n  const [allDay, setAllDay] = useState(false);',
-        1
-    )
-
-# 2) 일정 추가 시 종일이면 00:00 ~ 다음날 00:00으로 저장
-old_time_block = '''    const startAt = `${date}T09:00:00`;
-    const endAt = `${date}T10:00:00`;
-    const notifyAt = notifyAtFor(startAt, notifyMinutes);'''
-
-new_time_block = '''    const startAt = allDay ? `${date}T00:00:00` : `${date}T09:00:00`;
-
-    const endDate = new Date(startAt);
-    if (allDay) {
-      endDate.setDate(endDate.getDate() + 1);
-    } else {
-      endDate.setHours(endDate.getHours() + 1);
-    }
-
-    const endAt = endDate.toISOString();
-    const notifyBaseAt = allDay ? `${date}T09:00:00` : startAt;
-    const notifyAt = notifyAtFor(notifyBaseAt, notifyMinutes);'''
-
-if old_time_block in calendar:
-    calendar = calendar.replace(old_time_block, new_time_block, 1)
-
-# 3) insert row에 is_all_day 저장
-if "is_all_day: allDay" not in calendar:
-    calendar = calendar.replace(
-        'notify_at: notifyAt,',
-        'notify_at: notifyAt,\n      is_all_day: allDay,',
-        1
-    )
-
-# 4) 일정 추가 폼에 종일 체크 추가
-form_pattern = re.compile(
-    r'<form className="ttAddForm reminderForm" onSubmit=\{addEvent\}>.*?<button>추가</button>\s*</form>',
-    re.S
+# useRef 보강
+s = re.sub(
+    r'import React, \{([^}]*)\} from "react";',
+    lambda m: (
+        'import React, {' +
+        ', '.join(sorted(set([x.strip() for x in m.group(1).split(',') if x.strip()] + ['useRef']))) +
+        '} from "react";'
+    ),
+    s,
+    count=1
 )
 
-new_form = '''<form className="ttAddForm reminderForm allDayForm" onSubmit={addEvent}>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`${date} 일정 추가`} />
-
-        <label className={`allDayToggle ${allDay ? "active" : ""}`}>
-          <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
-          <span>종일</span>
-        </label>
-
-        <select value={notifyMinutes} onChange={(e) => setNotifyMinutes(e.target.value)}>
-          <option value="0">알림 없음</option>
-          <option value="10">10분 전</option>
-          <option value="60">1시간 전</option>
-          <option value="1440">하루 전</option>
-        </select>
-
-        <button>추가</button>
-      </form>'''
-
-calendar, form_count = form_pattern.subn(new_form, calendar, count=1)
-
-if form_count != 1:
-    raise SystemExit("calendar add form not found")
-
-# 5) 일정 목록/상세에서 종일 표시
-calendar = calendar.replace(
-    '{dateTime(item.start_at)} · 등록자',
-    '{item.is_all_day ? "종일" : dateTime(item.start_at)} · 등록자'
-)
-
-calendar = calendar.replace(
-    '<p>{dateTime(editingEvent.start_at)}</p>',
-    '<p>{editingEvent.is_all_day ? "종일 일정" : dateTime(editingEvent.start_at)}</p>'
-)
-
-s = s[:cal_start] + calendar + s[cal_end:]
-
-# 6) 채팅 일정공유 v60.1이 적용돼 있으면 새 일정에도 종일 옵션 추가
 room_start = s.find("function Room(")
 room_end = s.find("function Calendar(", room_start)
 
-if room_start != -1 and room_end != -1:
-    room = s[room_start:room_end]
+if room_start == -1 or room_end == -1:
+    raise SystemExit("Room block not found")
 
-    if "shareAllDay" not in room and "shareNotify" in room:
-        room = room.replace(
-            'const [shareNotify, setShareNotify] = useState("60");',
-            'const [shareNotify, setShareNotify] = useState("60");\n  const [shareAllDay, setShareAllDay] = useState(false);',
-            1
-        )
+room = s[room_start:room_end]
 
-    if 'function scheduleTimeOf(item)' in room and 'item?.is_all_day' not in room:
-        room = room.replace(
-            '''  function scheduleTimeOf(item) {
-    const raw = item?.start_at || "";
-
-    if (raw.includes("T")) return raw.slice(11, 16);
-
-    return item?.time || "09:00";
-  }''',
-            '''  function scheduleTimeOf(item) {
-    if (item?.is_all_day) return "종일";
-
-    const raw = item?.start_at || "";
-
-    if (raw.includes("T")) return raw.slice(11, 16);
-
-    return item?.time || "09:00";
-  }''',
-            1
-        )
-
-    if 'function scheduleDateTimeLabel(item)' in room and '종일`' not in room:
-        room = room.replace(
-            '''  function scheduleDateTimeLabel(item) {
-    return `${scheduleDateOf(item)} ${scheduleTimeOf(item)}`;
-  }''',
-            '''  function scheduleDateTimeLabel(item) {
-    return item?.is_all_day ? `${scheduleDateOf(item)} 종일` : `${scheduleDateOf(item)} ${scheduleTimeOf(item)}`;
-  }''',
-            1
-        )
-
-    if "is_all_day: !!item.is_all_day" not in room:
-        room = room.replace(
-            'notify_minutes: Number(item.notify_minutes || 0),',
-            'notify_minutes: Number(item.notify_minutes || 0),\n      is_all_day: !!item.is_all_day,',
-            1
-        )
-
-    old_share_time = '''      const startAt = `${shareDate}T${shareTime || "09:00"}:00`;
-      const end = new Date(startAt);
-      end.setHours(end.getHours() + 1);'''
-
-    new_share_time = '''      const startAt = shareAllDay ? `${shareDate}T00:00:00` : `${shareDate}T${shareTime || "09:00"}:00`;
-      const end = new Date(startAt);
-
-      if (shareAllDay) {
-        end.setDate(end.getDate() + 1);
-      } else {
-        end.setHours(end.getHours() + 1);
-      }'''
-
-    if old_share_time in room:
-        room = room.replace(old_share_time, new_share_time, 1)
-
-    if "is_all_day: shareAllDay" not in room:
-        room = room.replace(
-            'notify_at: notifyAtFor(startAt, shareNotify),',
-            'notify_at: notifyAtFor(shareAllDay ? `${shareDate}T09:00:00` : startAt, shareNotify),\n        is_all_day: shareAllDay,',
-            1
-        )
-
-    old_shared_save_time = '''      const startAt = parsed.start_at || `${parsed.date || dateKey()}T${parsed.time || "09:00"}:00`;
-      const end = new Date(startAt);
-      end.setHours(end.getHours() + 1);'''
-
-    new_shared_save_time = '''      const startAt = parsed.is_all_day
-        ? `${parsed.date || dateKey()}T00:00:00`
-        : parsed.start_at || `${parsed.date || dateKey()}T${parsed.time || "09:00"}:00`;
-
-      const end = new Date(startAt);
-
-      if (parsed.is_all_day) {
-        end.setDate(end.getDate() + 1);
-      } else {
-        end.setHours(end.getHours() + 1);
-      }'''
-
-    if old_shared_save_time in room:
-        room = room.replace(old_shared_save_time, new_shared_save_time, 1)
-
-    # saveSharedSchedule row에도 is_all_day 저장
+# messagesRef 추가
+if "messagesRef" not in room:
     room = room.replace(
-        'notify_at: notifyAtFor(startAt, parsed.notify_minutes || 0),',
-        'notify_at: notifyAtFor(parsed.is_all_day ? `${parsed.date || dateKey()}T09:00:00` : startAt, parsed.notify_minutes || 0),\n        is_all_day: !!parsed.is_all_day,',
+        "const cameraInputRef = useRef(null);",
+        "const cameraInputRef = useRef(null);\n  const messagesRef = useRef([]);",
         1
     )
 
-    # 새 일정 공유 폼에 종일 옵션 추가
-    if 'shareAllDay' in room and 'newShareAllDay' not in room:
-        room = room.replace(
-            '''                <div className="newShareGrid">
-                  <label>
-                    날짜
-                    <input type="date" value={shareDate} onChange={(event) => setShareDate(event.target.value)} />
-                  </label>
+# 첫 번째 room realtime useEffect 교체
+effect_start = room.find("useEffect(() => { if (!room?.id) return undefined;")
+effect_end = room.find("}, [room?.id]);", effect_start)
 
-                  <label>
-                    시간
-                    <input type="time" value={shareTime} onChange={(event) => setShareTime(event.target.value)} />
-                  </label>
-                </div>''',
-            '''                <label className={`newShareAllDay ${shareAllDay ? "active" : ""}`}>
-                  <input type="checkbox" checked={shareAllDay} onChange={(event) => setShareAllDay(event.target.checked)} />
-                  <span>종일 일정</span>
-                </label>
+if effect_start == -1 or effect_end == -1:
+    raise SystemExit("Room realtime effect not found")
 
-                <div className="newShareGrid">
-                  <label>
-                    날짜
-                    <input type="date" value={shareDate} onChange={(event) => setShareDate(event.target.value)} />
-                  </label>
+effect_end += len("}, [room?.id]);")
 
-                  {!shareAllDay && (
-                    <label>
-                      시간
-                      <input type="time" value={shareTime} onChange={(event) => setShareTime(event.target.value)} />
-                    </label>
-                  )}
-                </div>''',
-            1
-        )
+new_effect = r'''useEffect(() => {
+    if (!room?.id) return undefined;
 
-    room = room.replace(
-        '{parsed.date || scheduleDateOf(parsed)} {parsed.time || scheduleTimeOf(parsed)}',
-        '{parsed.date || scheduleDateOf(parsed)} {parsed.is_all_day ? "종일" : parsed.time || scheduleTimeOf(parsed)}'
-    )
+    let alive = true;
 
-    s = s[:room_start] + room + s[room_end:]
+    loadMembers();
+    loadMessages();
 
+    const topic = `room-live-${room.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const channel = supabase
+      .channel(topic)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "chat_messages",
+          filter: `room_id=eq.${room.id}`,
+        },
+        (payload) => {
+          if (!alive || !payload?.new) return;
+          appendRealtimeMessage(payload.new);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "chat_messages",
+          filter: `room_id=eq.${room.id}`,
+        },
+        (payload) => {
+          if (!alive || !payload?.new) return;
+          replaceRealtimeMessage(payload.new);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "chat_messages",
+          filter: `room_id=eq.${room.id}`,
+        },
+        (payload) => {
+          if (!alive || !payload?.old?.id) return;
+          setSortedMessages((prev) => prev.filter((item) => item.id !== payload.old.id));
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "chat_message_reads",
+        },
+        () => {
+          if (!alive) return;
+          loadReadReceipts(messagesRef.current);
+        }
+      )
+      .subscribe((status) => {
+        if (!alive) return;
+
+        if (status === "SUBSCRIBED") {
+          setMsg("");
+        }
+
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          setMsg("실시간 연결 재시도 중...");
+        }
+      });
+
+    const backupTimer = setInterval(() => {
+      if (!alive) return;
+      if (document.visibilityState !== "visible") return;
+      loadMessages();
+    }, 15000);
+
+    return () => {
+      alive = false;
+      clearInterval(backupTimer);
+
+      try {
+        supabase.removeChannel(channel);
+      } catch {}
+    };
+  }, [room?.id]);'''
+
+room = room[:effect_start] + new_effect + room[effect_end:]
+
+# 헬퍼 함수 삽입
+if "function setSortedMessages(" not in room:
+    marker = "async function loadMembers()"
+    helpers = r'''
+  function makeClientUuid() {
+    if (crypto?.randomUUID) return crypto.randomUUID();
+
+    return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) =>
+      (
+        Number(c) ^
+        (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (Number(c) / 4)))
+      ).toString(16)
+    );
+  }
+
+  function messageKey(message) {
+    return message?.id || `${message?.sender_id || "unknown"}-${message?.created_at || ""}-${message?.content || message?.message || ""}`;
+  }
+
+  function sortMessages(rows) {
+    return [...(rows || [])].sort((a, b) => {
+      const at = new Date(a.created_at || 0).getTime();
+      const bt = new Date(b.created_at || 0).getTime();
+
+      return at - bt;
+    });
+  }
+
+  function compactMessages(rows) {
+    const map = new Map();
+
+    for (const item of rows || []) {
+      if (!item) continue;
+
+      const key = messageKey(item);
+      if (!key) continue;
+
+      const prev = map.get(key);
+
+      if (!prev || prev._pending) {
+        map.set(key, item);
+      }
+    }
+
+    return sortMessages([...map.values()]);
+  }
+
+  function setSortedMessages(next) {
+    const rows = typeof next === "function" ? next(messagesRef.current) : next;
+    const sorted = compactMessages(rows);
+
+    messagesRef.current = sorted;
+    setMessages(sorted);
+  }
+
+  function appendRealtimeMessage(message) {
+    if (!message || message.room_id !== room.id) return;
+
+    setSortedMessages((prev) => {
+      const withoutSame = prev.filter((item) => item.id !== message.id);
+      return [...withoutSame, message];
+    });
+  }
+
+  function replaceRealtimeMessage(message) {
+    if (!message || message.room_id !== room.id) return;
+
+    setSortedMessages((prev) => {
+      const withoutSame = prev.filter((item) => item.id !== message.id);
+      return [...withoutSame, message];
+    });
+  }
+
+'''
+    if marker not in room:
+        raise SystemExit("loadMembers marker not found")
+    room = room.replace(marker, helpers + marker, 1)
+
+# loadMessages 교체
+lm_start = room.find("async function loadMessages()")
+lm_end = room.find("function parseMessage", lm_start)
+
+if lm_start == -1 or lm_end == -1:
+    raise SystemExit("loadMessages block not found")
+
+new_load = r'''async function loadMessages() {
+    if (!room?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("chat_messages")
+        .select("*")
+        .eq("room_id", room.id)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+
+      const rows = compactMessages(data || []);
+
+      setSortedMessages(rows);
+      markRead(rows);
+      loadReadReceipts(rows);
+    } catch (err) {
+      setMsg(safeError(err));
+    }
+  }
+
+  '''
+
+room = room[:lm_start] + new_load + room[lm_end:]
+
+# insertMessage 교체: optimistic + direct insert + no reload
+im_start = room.find("async function insertMessage")
+im_end = room.find("async function send", im_start)
+
+if im_start == -1 or im_end == -1:
+    raise SystemExit("insertMessage block not found")
+
+new_insert = r'''async function insertMessage(payload, pushText) {
+    const raw = typeof payload === "string" ? payload : JSON.stringify(payload);
+    const clientId = makeClientUuid();
+    const createdAt = nowIso();
+    const tempId = `tmp-${clientId}`;
+
+    const optimistic = {
+      id: tempId,
+      room_id: room.id,
+      sender_id: me.id,
+      content: raw,
+      message: raw,
+      created_at: createdAt,
+      _pending: true,
+    };
+
+    appendRealtimeMessage(optimistic);
+
+    const variants = [
+      {
+        id: clientId,
+        room_id: room.id,
+        sender_id: me.id,
+        content: raw,
+        message: raw,
+        created_at: createdAt,
+      },
+      {
+        id: clientId,
+        room_id: room.id,
+        sender_id: me.id,
+        content: raw,
+        created_at: createdAt,
+      },
+      {
+        id: clientId,
+        room_id: room.id,
+        sender_id: me.id,
+        message: raw,
+        created_at: createdAt,
+      },
+      {
+        room_id: room.id,
+        sender_id: me.id,
+        content: raw,
+        created_at: createdAt,
+      },
+      {
+        room_id: room.id,
+        sender_id: me.id,
+        message: raw,
+        created_at: createdAt,
+      },
+    ];
+
+    let saved = null;
+    let lastError = null;
+
+    for (const row of variants) {
+      const { error } = await supabase.from("chat_messages").insert(row);
+
+      if (!error) {
+        saved = {
+          ...optimistic,
+          ...row,
+          id: row.id || clientId,
+          _pending: false,
+        };
+        break;
+      }
+
+      lastError = error;
+    }
+
+    if (!saved) {
+      setSortedMessages((prev) => prev.filter((item) => item.id !== tempId));
+      throw lastError || new Error("메시지 저장 실패");
+    }
+
+    setSortedMessages((prev) => {
+      const withoutTempAndSaved = prev.filter((item) => item.id !== tempId && item.id !== saved.id);
+      return [...withoutTempAndSaved, saved];
+    });
+
+    Promise.allSettled([
+      supabase
+        .from("chat_rooms")
+        .update({
+          last_message: pushText,
+          updated_at: nowIso(),
+        })
+        .eq("id", room.id),
+
+      supabase.functions.invoke("send-chat-push", {
+        body: {
+          room_id: room.id,
+          content: pushText,
+          sender_name: me.nickname || me.email || "친구",
+        },
+      }),
+    ]);
+  }
+
+  '''
+
+room = room[:im_start] + new_insert + room[im_end:]
+
+# markRead의 thenable 방식 정리
+room = room.replace(
+    '''await supabase
+      .from("chat_message_reads")
+      .upsert(rows, { onConflict: "message_id,user_id" })
+      .then(() => {});''',
+    '''try {
+      await supabase
+        .from("chat_message_reads")
+        .upsert(rows, { onConflict: "message_id,user_id" });
+    } catch {}'''
+)
+
+# 메시지 pending 표시용 class 추가
+room = room.replace(
+    'className={`message ${mine ? "mine" : "other"}`}',
+    'className={`message ${mine ? "mine" : "other"} ${message._pending ? "pending" : ""}`}'
+)
+
+s = s[:room_start] + room + s[room_end:]
 p.write_text(s)
 
 cssp = Path("app/src/styles.css")
 css = cssp.read_text()
 
-if "v61 all-day events" not in css:
+if "v62 instant realtime chat" not in css:
     cssp.write_text(css + r'''
 
-/* ===== v61 all-day events ===== */
+/* ===== v62 instant realtime chat ===== */
 
-.allDayForm{
-  grid-template-columns:minmax(0,1fr) 58px 92px 58px!important;
+.message.pending{
+  opacity:.58;
 }
 
-.allDayToggle,
-.newShareAllDay{
-  min-height:40px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:6px;
-  padding:0 10px;
-  border-radius:16px;
-  background:var(--surface);
-  color:var(--sub);
-  border:1px solid var(--line);
-  font-size:12px;
-  font-weight:1000;
-  box-shadow:var(--shadow2);
-  user-select:none;
+.message.pending .bubble,
+.message.pending .imageBubble,
+.message.pending .locationBubble,
+.message.pending .scheduleBubble,
+.message.pending .richScheduleCard{
+  filter:saturate(.75);
 }
 
-.allDayToggle input,
-.newShareAllDay input{
-  display:none;
-}
-
-.allDayToggle.active,
-.newShareAllDay.active{
-  background:var(--primary);
-  color:#fff;
-  border-color:transparent;
-}
-
-.newShareAllDay{
-  justify-content:flex-start;
-  height:44px;
-  background:var(--surface2);
-  box-shadow:none;
-}
-
-.newShareGrid:has(label:only-child){
-  grid-template-columns:1fr;
-}
-
-@media(max-width:767px){
-  .allDayForm{
-    grid-template-columns:minmax(0,1fr) 52px 80px 52px!important;
-    gap:6px!important;
-  }
-
-  .allDayToggle{
-    min-height:40px;
-    padding:0 8px;
-    border-radius:15px;
-    font-size:11px;
-  }
+.message.pending span::after{
+  content:" · 전송중";
+  opacity:.8;
 }
 ''')
 PY
 
-echo "=== v61 done ==="
+echo "=== v62 done ==="
 git status --short
