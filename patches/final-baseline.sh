@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== v46 normal work mode + remove shift anchor UI ==="
+echo "=== v47 timetree calendar ui + notification center ==="
 
 python3 - <<'PY'
 from pathlib import Path
@@ -10,7 +10,7 @@ p = Path("app/src/App.jsx")
 s = p.read_text()
 
 start = s.find("function Calendar({ me }) {")
-end = s.find("\nfunction More", start)
+end = s.find("\\nfunction More", start)
 
 if start == -1 or end == -1:
     raise SystemExit("Calendar component not found")
@@ -24,11 +24,21 @@ calendar = r'''function Calendar({ me }) {
 
   const [mode, setMode] = useState(() => localStorage.getItem("rift_calendar_mode") || "shift");
   const [team, setTeam] = useState(() => localStorage.getItem("rift_shift_team") || "1");
+  const [calendarTab, setCalendarTab] = useState(() => localStorage.getItem("rift_calendar_tab") || "family");
+  const [showNotify, setShowNotify] = useState(false);
 
   const [ownerColumn, setOwnerColumn] = useState("user_id");
   const [events, setEvents] = useState([]);
   const [title, setTitle] = useState("");
   const [msg, setMsg] = useState("");
+
+  const [notifications, setNotifications] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("rift_notifications") || "[]");
+    } catch {
+      return [];
+    }
+  });
 
   const teamAnchors = {
     "1": "2026-06-08",
@@ -62,6 +72,12 @@ calendar = r'''function Calendar({ me }) {
     "2026-12-25": "성탄절",
   };
 
+  const calendarTabs = [
+    { key: "family", label: "가족", color: "green" },
+    { key: "work", label: "업무 일정", color: "blue" },
+    { key: "personal", label: "개인", color: "purple" },
+  ];
+
   const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
 
   useEffect(() => {
@@ -71,6 +87,14 @@ calendar = r'''function Calendar({ me }) {
   useEffect(() => {
     localStorage.setItem("rift_shift_team", team);
   }, [team]);
+
+  useEffect(() => {
+    localStorage.setItem("rift_calendar_tab", calendarTab);
+  }, [calendarTab]);
+
+  useEffect(() => {
+    localStorage.setItem("rift_notifications", JSON.stringify(notifications.slice(0, 80)));
+  }, [notifications]);
 
   useEffect(() => {
     loadEvents();
@@ -138,38 +162,18 @@ calendar = r'''function Calendar({ me }) {
     const holiday = holidayName(key);
 
     if (holiday) {
-      return {
-        label: "휴",
-        detail: holiday,
-        className: "normalHoliday",
-        dayClass: "holiday",
-      };
+      return { label: "휴", detail: holiday, className: "normalHoliday", dayClass: "holiday" };
     }
 
     if (dow === 0) {
-      return {
-        label: "휴",
-        detail: "일요일",
-        className: "normalHoliday",
-        dayClass: "holiday",
-      };
+      return { label: "휴", detail: "일요일", className: "normalHoliday", dayClass: "holiday" };
     }
 
     if (dow === 6) {
-      return {
-        label: "휴",
-        detail: "토요일",
-        className: "normalSat",
-        dayClass: "saturday",
-      };
+      return { label: "휴", detail: "토요일", className: "normalSat", dayClass: "saturday" };
     }
 
-    return {
-      label: "통상",
-      detail: "통상근무",
-      className: "normalWork",
-      dayClass: "weekday",
-    };
+    return { label: "통상", detail: "통상근무", className: "normalWork", dayClass: "weekday" };
   }
 
   function monthTitle() {
@@ -191,6 +195,18 @@ calendar = r'''function Calendar({ me }) {
       d.setDate(startDay.getDate() + i);
       return d;
     });
+  }
+
+  function currentTab() {
+    return calendarTabs.find((item) => item.key === calendarTab) || calendarTabs[0];
+  }
+
+  function eventColorClass(index = 0) {
+    const tab = currentTab();
+    if (tab.key === "family") return "eventGreen";
+    if (tab.key === "work") return "eventBlue";
+    if (tab.key === "personal") return "eventPurple";
+    return ["eventGreen", "eventBlue", "eventPurple", "eventRed"][index % 4];
   }
 
   async function queryBy(column) {
@@ -224,6 +240,50 @@ calendar = r'''function Calendar({ me }) {
     setMsg(safeError(lastError));
   }
 
+  function pushNotification(body, targetDate) {
+    const tab = currentTab();
+    const item = {
+      id: `${Date.now()}-${Math.random()}`,
+      title: `${me.nickname || "사용자"}님이 일정을 등록했습니다`,
+      body: `${tab.label} 캘린더 · ${body} · ${targetDate}`,
+      created_at: new Date().toISOString(),
+      read: false,
+      tab: tab.key,
+    };
+
+    setNotifications((prev) => [item, ...prev].slice(0, 80));
+
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification(item.title, {
+        body: item.body,
+        icon: "/icon.svg",
+      });
+    }
+  }
+
+  async function requestNotifyPermission() {
+    try {
+      if (!("Notification" in window)) {
+        setMsg("이 브라우저는 알림을 지원하지 않음");
+        return;
+      }
+
+      const permission = await Notification.requestPermission();
+
+      if (permission === "granted") {
+        setMsg("알림 허용 완료");
+        new Notification("Rift 알림 설정 완료", {
+          body: "일정 등록 알림을 받을 수 있어요.",
+          icon: "/icon.svg",
+        });
+      } else {
+        setMsg("알림 권한이 허용되지 않음");
+      }
+    } catch (err) {
+      setMsg(safeError(err));
+    }
+  }
+
   async function addEvent(event) {
     event.preventDefault();
 
@@ -248,6 +308,7 @@ calendar = r'''function Calendar({ me }) {
         if (!error) {
           setOwnerColumn(column);
           setTitle("");
+          pushNotification(value, date);
           loadEvents();
           return;
         }
@@ -276,16 +337,33 @@ calendar = r'''function Calendar({ me }) {
     setMonth(new Date(day.getFullYear(), day.getMonth(), 1));
   }
 
+  function markAllRead() {
+    setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
+  }
+
+  function clearNotifications() {
+    setNotifications([]);
+  }
+
   const monthDays = buildMonthDays();
   const selectedShift = shiftFor(team, date);
   const selectedShiftDay = shiftDayLabel(team, date);
   const selectedNormal = normalWorkFor(date);
+  const unreadCount = notifications.filter((item) => !item.read).length;
 
   const selectedEvents = events.filter((item) => String(item.start_at || "").slice(0, 10) === date);
 
   const eventCountByDate = events.reduce((acc, item) => {
     const key = String(item.start_at || "").slice(0, 10);
     if (key) acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+
+  const eventMap = events.reduce((acc, item) => {
+    const key = String(item.start_at || "").slice(0, 10);
+    if (!key) return acc;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(item);
     return acc;
   }, {});
 
@@ -296,73 +374,64 @@ calendar = r'''function Calendar({ me }) {
   }));
 
   return (
-    <section className="page calendar calendarPro">
-      <Header
-        eyebrow={mode === "shift" ? "6근무 2휴무" : "통상근무"}
-        title="캘린더"
-        text={mode === "shift" ? "A 6일 · 휴 2일 · B 6일 · 휴 2일 · C 6일 · 휴 2일" : "대한민국 달력 기준 평일 통상 · 토일공휴일 휴무"}
-        right={<button className="pillButton" onClick={goToday}>오늘</button>}
-      />
+    <section className="page calendar timetreeCalendar">
+      <header className="ttHeader">
+        <div>
+          <button className="monthSelect" onClick={goToday}>
+            {monthTitle()} <span>⌄</span>
+          </button>
+          <p>{mode === "shift" ? "4조 3교대 공유 캘린더" : "통상근무 공유 캘린더"}</p>
+        </div>
 
-      <section className="calendarMode">
-        <button className={mode === "shift" ? "active" : ""} onClick={() => setMode("shift")}>
-          4조 3교대
-        </button>
-        <button className={mode === "normal" ? "active" : ""} onClick={() => setMode("normal")}>
-          통상근무
-        </button>
+        <div className="ttActions">
+          <button className="ttIconButton" onClick={() => setShowNotify(true)}>
+            ☆
+            {unreadCount > 0 && <i>{unreadCount}</i>}
+          </button>
+          <button className="ttIconButton" onClick={requestNotifyPermission}>
+            ≡
+          </button>
+        </div>
+      </header>
+
+      <section className="calendarTabs">
+        {calendarTabs.map((item) => (
+          <button
+            key={item.key}
+            className={`${calendarTab === item.key ? "active" : ""} ${item.color}`}
+            onClick={() => setCalendarTab(item.key)}
+          >
+            <span>{item.label.slice(0, 1)}</span>
+            {item.label}
+          </button>
+        ))}
       </section>
 
-      {mode === "shift" ? (
-        <>
-          <section className="shiftHero">
-            <div>
-              <span>선택 조</span>
-              <b>{team}조 · {selectedShift}</b>
-              <p>{date} · {selectedShiftDay}</p>
-            </div>
+      <section className="calendarMode slim">
+        <button className={mode === "shift" ? "active" : ""} onClick={() => setMode("shift")}>4조 3교대</button>
+        <button className={mode === "normal" ? "active" : ""} onClick={() => setMode("normal")}>통상근무</button>
+      </section>
 
-            <div className={`bigShift ${shiftClass(selectedShift)}`}>
-              {selectedShift}
-            </div>
-          </section>
-
-          <section className="teamPicker">
-            {["1", "2", "3", "4"].map((teamNo) => (
-              <button
-                key={teamNo}
-                className={team === teamNo ? "active" : ""}
-                onClick={() => setTeam(teamNo)}
-              >
-                {teamNo}조
-              </button>
-            ))}
-          </section>
-        </>
-      ) : (
-        <section className="normalHero">
-          <div>
-            <span>선택 날짜</span>
-            <b>{selectedNormal.detail}</b>
-            <p>{date}</p>
-          </div>
-
-          <div className={`bigNormal ${selectedNormal.className}`}>
-            {selectedNormal.label}
-          </div>
+      {mode === "shift" && (
+        <section className="teamPicker slimTeam">
+          {["1", "2", "3", "4"].map((teamNo) => (
+            <button key={teamNo} className={team === teamNo ? "active" : ""} onClick={() => setTeam(teamNo)}>
+              {teamNo}조
+            </button>
+          ))}
         </section>
       )}
 
-      <section className="monthCard">
-        <div className="monthTop">
+      <section className="ttMonthCard">
+        <div className="ttMonthNav">
           <button onClick={() => changeMonth(-1)}>‹</button>
           <b>{monthTitle()}</b>
           <button onClick={() => changeMonth(1)}>›</button>
         </div>
 
-        <div className="monthGrid">
+        <div className="ttMonthGrid">
           {weekdays.map((day) => (
-            <div key={day} className={`weekCell ${day === "일" ? "sun" : day === "토" ? "sat" : ""}`}>
+            <div key={day} className={`ttWeek ${day === "일" ? "sun" : day === "토" ? "sat" : ""}`}>
               {day}
             </div>
           ))}
@@ -372,8 +441,7 @@ calendar = r'''function Calendar({ me }) {
             const isOtherMonth = day.getMonth() !== month.getMonth();
             const isToday = key === dateKey();
             const isSelected = key === date;
-            const count = eventCountByDate[key] || 0;
-
+            const dayEvents = eventMap[key] || [];
             const shift = shiftFor(team, key);
             const normal = normalWorkFor(key);
             const isShiftMode = mode === "shift";
@@ -382,39 +450,52 @@ calendar = r'''function Calendar({ me }) {
               <button
                 key={key}
                 className={[
-                  "dayCell",
+                  "ttDay",
                   isOtherMonth ? "muted" : "",
                   isToday ? "today" : "",
                   isSelected ? "selected" : "",
                   !isShiftMode ? normal.dayClass : "",
                 ].join(" ")}
                 onClick={() => selectDay(day)}
-                title={!isShiftMode && normal.detail ? normal.detail : ""}
               >
-                <span>{day.getDate()}</span>
+                <strong>{day.getDate()}</strong>
+
                 {isShiftMode ? (
                   <em className={shiftClass(shift)}>{shift}</em>
                 ) : (
                   <em className={normal.className}>{normal.label}</em>
                 )}
-                {count > 0 && <i>{count}</i>}
+
+                <div className="ttBars">
+                  {dayEvents.slice(0, 2).map((item, index) => (
+                    <span key={item.id || index} className={eventColorClass(index)}>
+                      {item.title}
+                    </span>
+                  ))}
+                  {dayEvents.length > 2 && <small>+{dayEvents.length - 2}</small>}
+                </div>
               </button>
             );
           })}
         </div>
       </section>
 
-      {mode === "shift" ? (
-        <section className="selectedDayCard">
-          <div className="selectedDayTop">
-            <div>
-              <span>선택 날짜</span>
-              <b>{date}</b>
-            </div>
-            <em className={shiftClass(selectedShift)}>{team}조 {selectedShift}</em>
+      <section className="ttSelected">
+        <div className="ttSelectedTop">
+          <div>
+            <span>선택 날짜</span>
+            <b>{date}</b>
           </div>
 
-          <div className="allTeamShift">
+          {mode === "shift" ? (
+            <em className={shiftClass(selectedShift)}>{team}조 {selectedShift}</em>
+          ) : (
+            <em className={selectedNormal.className}>{selectedNormal.label}</em>
+          )}
+        </div>
+
+        {mode === "shift" ? (
+          <div className="allTeamShift compact">
             {allTeamShifts.map((item) => (
               <div key={item.team} className={item.team === team ? "active" : ""}>
                 <span>{item.team}조</span>
@@ -423,39 +504,69 @@ calendar = r'''function Calendar({ me }) {
               </div>
             ))}
           </div>
-        </section>
-      ) : (
-        <section className="selectedDayCard normalSelected">
-          <div className="selectedDayTop">
-            <div>
-              <span>선택 날짜</span>
-              <b>{date}</b>
-            </div>
-            <em className={selectedNormal.className}>{selectedNormal.label}</em>
-          </div>
-
+        ) : (
           <p>{selectedNormal.detail}</p>
-        </section>
-      )}
+        )}
+      </section>
 
-      <form className="addForm" onSubmit={addEvent}>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`${date} 일정 추가`} />
+      <form className="ttAddForm" onSubmit={addEvent}>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`${currentTab().label} 캘린더에 일정 추가`} />
         <button>추가</button>
       </form>
 
-      <div className="eventList">
-        {selectedEvents.map((item) => (
-          <article className="eventCard" key={item.id}>
-            <i />
+      <section className="ttEventList">
+        {selectedEvents.map((item, index) => (
+          <article className={`ttEvent ${eventColorClass(index)}`} key={item.id}>
             <div>
               <b>{item.title}</b>
               <p>{dateTime(item.start_at)}</p>
             </div>
           </article>
         ))}
-      </div>
+      </section>
 
       {!selectedEvents.length && <Empty title="선택 날짜 일정 없음" text="날짜를 누르고 일정을 추가해줘." />}
+
+      {showNotify && (
+        <section className="notifyOverlay">
+          <div className="notifyPanel">
+            <header>
+              <div>
+                <b>알림</b>
+                <p>일정 등록 및 캘린더 알림</p>
+              </div>
+              <button onClick={() => setShowNotify(false)}>×</button>
+            </header>
+
+            <div className="notifyTools">
+              <button onClick={requestNotifyPermission}>브라우저 알림 켜기</button>
+              <button onClick={markAllRead}>모두 읽음</button>
+              <button onClick={clearNotifications}>비우기</button>
+            </div>
+
+            <div className="notifyList">
+              {notifications.map((item) => (
+                <article key={item.id} className={item.read ? "read" : ""}>
+                  <div className="notifyLogo">✣</div>
+                  <div>
+                    <b>{item.title}</b>
+                    <p>{item.body}</p>
+                    <span>{dateTime(item.created_at)}</span>
+                  </div>
+                </article>
+              ))}
+
+              {!notifications.length && (
+                <div className="notifyEmpty">
+                  <b>알림 없음</b>
+                  <p>일정을 추가하면 여기에 기록돼.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
       <Toast>{msg}</Toast>
     </section>
   );
@@ -468,154 +579,685 @@ PY
 
 cat >> app/src/styles.css <<'EOF'
 
-/* ===== v46: normal work calendar mode ===== */
+/* ===== v47: TimeTree-like shared calendar UI + notifications ===== */
 
-.calendarMode{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:8px;
+.timetreeCalendar{
+  max-width:980px !important;
+}
+
+.ttHeader{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
   margin-bottom:12px;
 }
 
-.calendarMode button{
+.monthSelect{
   height:42px;
-  border-radius:18px;
-  background:var(--surface);
+  padding:0;
+  background:transparent;
+  color:var(--text);
+  font-size:22px;
+  font-weight:1000;
+  letter-spacing:-.8px;
+}
+
+.monthSelect span{
+  color:var(--muted);
+  font-size:15px;
+}
+
+.ttHeader p{
+  margin:2px 0 0;
   color:var(--sub);
+  font-size:13px;
+  font-weight:750;
+}
+
+.ttActions{
+  display:flex;
+  gap:8px;
+}
+
+.ttIconButton{
+  position:relative;
+  width:38px;
+  height:38px;
+  display:grid;
+  place-items:center;
+  border-radius:16px;
+  background:var(--surface);
+  color:var(--text);
   border:1px solid var(--line);
   box-shadow:var(--shadow2);
+  font-size:18px;
   font-weight:1000;
 }
 
-.calendarMode button.active{
-  background:var(--primary);
+.ttIconButton i{
+  position:absolute;
+  right:-3px;
+  top:-3px;
+  min-width:17px;
+  height:17px;
+  padding:0 4px;
+  display:grid;
+  place-items:center;
+  border-radius:999px;
+  background:#ef4444;
   color:#fff;
-  border-color:transparent;
+  font-size:9px;
+  font-style:normal;
+  font-weight:1000;
 }
 
-.normalHero{
+.calendarTabs{
+  display:flex;
+  gap:8px;
+  overflow:auto;
+  padding-bottom:6px;
+  margin-bottom:8px;
+}
+
+.calendarTabs button{
+  flex:0 0 auto;
+  height:36px;
   display:flex;
   align-items:center;
-  justify-content:space-between;
-  gap:14px;
-  padding:18px;
-  margin-bottom:12px;
+  gap:7px;
+  padding:0 12px;
+  border-radius:15px;
+  background:var(--surface);
+  color:var(--text);
+  border:1px solid var(--line);
+  box-shadow:var(--shadow2);
+  font-size:13px;
+  font-weight:950;
+}
+
+.calendarTabs span{
+  width:22px;
+  height:22px;
+  display:grid;
+  place-items:center;
+  border-radius:8px;
+  color:#fff;
+  font-size:11px;
+  font-weight:1000;
+}
+
+.calendarTabs .green span{
+  background:#22c55e;
+}
+
+.calendarTabs .blue span{
+  background:#3478f6;
+}
+
+.calendarTabs .purple span{
+  background:#8b5cf6;
+}
+
+.calendarTabs button.active{
+  border-color:var(--primary);
+  box-shadow:0 0 0 2px rgba(52,120,246,.12);
+}
+
+.calendarMode.slim{
+  height:auto;
+  margin-bottom:8px;
+}
+
+.calendarMode.slim button{
+  height:34px !important;
+  border-radius:14px !important;
+  font-size:12px !important;
+  box-shadow:none !important;
+}
+
+.slimTeam{
+  margin-bottom:8px !important;
+}
+
+.slimTeam button{
+  height:32px !important;
+  border-radius:13px !important;
+  font-size:12px !important;
+  box-shadow:none !important;
+}
+
+.ttMonthCard{
+  padding:12px;
+  margin-bottom:10px;
   border-radius:28px;
   background:var(--surface);
   border:1px solid var(--line);
   box-shadow:var(--shadow);
 }
 
-.normalHero span{
-  display:block;
-  color:var(--sub);
-  font-size:12px;
+.ttMonthNav{
+  height:36px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:6px;
+}
+
+.ttMonthNav b{
+  color:var(--text);
+  font-size:16px;
   font-weight:1000;
 }
 
-.normalHero b{
-  display:block;
-  margin-top:4px;
+.ttMonthNav button{
+  width:34px;
+  height:34px;
+  border-radius:14px;
+  background:var(--surface2);
   color:var(--text);
-  font-size:24px;
-  line-height:1.1;
-  letter-spacing:-.8px;
+  font-size:21px;
+  font-weight:800;
 }
 
-.normalHero p{
-  margin:6px 0 0;
-  color:var(--sub);
-  font-size:13px;
-  font-weight:760;
+.ttMonthGrid{
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:5px;
 }
 
-.bigNormal{
-  min-width:68px;
-  height:68px;
-  padding:0 12px;
-  border-radius:24px;
+.ttWeek{
+  height:23px;
   display:grid;
   place-items:center;
-  color:#fff;
-  font-size:17px;
+  color:var(--muted);
+  font-size:10px;
   font-weight:1000;
-  box-shadow:0 14px 30px rgba(0,0,0,.13);
 }
 
-.normalWork{
+.ttWeek.sun{
+  color:#ef4444;
+}
+
+.ttWeek.sat{
+  color:#3478f6;
+}
+
+.ttDay{
+  position:relative;
+  min-width:0;
+  height:74px;
+  padding:5px;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:3px;
+  border-radius:14px;
+  background:var(--surface2);
+  color:var(--text);
+  border:1px solid transparent;
+  overflow:hidden;
+  text-align:left;
+}
+
+.ttDay strong{
+  font-size:11px;
+  font-weight:1000;
+  line-height:1;
+}
+
+.ttDay em{
+  min-width:25px;
+  height:16px;
+  padding:0 5px;
+  display:grid;
+  place-items:center;
+  border-radius:999px;
+  font-style:normal;
+  font-size:9px;
+  font-weight:1000;
+  flex:0 0 auto;
+}
+
+.ttDay.muted{
+  opacity:.36;
+}
+
+.ttDay.today{
+  border-color:rgba(52,120,246,.5);
+}
+
+.ttDay.selected{
+  background:rgba(52,120,246,.1);
+  border-color:var(--primary);
+}
+
+.ttDay.saturday strong{
+  color:#2563eb;
+}
+
+.ttDay.holiday strong{
+  color:#ef4444;
+}
+
+.ttBars{
+  width:100%;
+  display:grid;
+  gap:2px;
+  margin-top:auto;
+}
+
+.ttBars span,
+.ttBars small{
+  min-width:0;
+  height:13px;
+  padding:0 4px;
+  display:block;
+  border-radius:4px;
+  color:#fff;
+  font-size:8px;
+  font-weight:900;
+  line-height:13px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.ttBars small{
+  background:rgba(15,23,42,.2);
+}
+
+.eventGreen{
+  background:#22c55e !important;
+  color:#fff !important;
+}
+
+.eventBlue{
   background:#3478f6 !important;
   color:#fff !important;
 }
 
-.normalSat{
-  background:#2563eb !important;
+.eventPurple{
+  background:#8b5cf6 !important;
   color:#fff !important;
 }
 
-.normalHoliday{
+.eventRed{
   background:#ef4444 !important;
   color:#fff !important;
 }
 
-.dayCell.saturday span{
-  color:#2563eb;
+.ttSelected{
+  padding:13px;
+  margin-bottom:9px;
+  border-radius:22px;
+  background:var(--surface);
+  border:1px solid var(--line);
+  box-shadow:var(--shadow2);
 }
 
-.dayCell.holiday span{
-  color:#ef4444;
+.ttSelectedTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
 }
 
-.normalSelected p{
-  margin:0;
+.ttSelectedTop span{
   color:var(--sub);
+  font-size:11px;
+  font-weight:1000;
+}
+
+.ttSelectedTop b{
+  display:block;
+  margin-top:2px;
+  color:var(--text);
+  font-size:15px;
+  font-weight:1000;
+}
+
+.ttSelectedTop em{
+  min-width:62px;
+  height:30px;
+  padding:0 11px;
+  display:grid;
+  place-items:center;
+  border-radius:15px;
+  font-style:normal;
+  font-size:12px;
+  font-weight:1000;
+}
+
+.allTeamShift.compact{
+  gap:6px;
+}
+
+.allTeamShift.compact div{
+  min-height:46px !important;
+  border-radius:15px !important;
+}
+
+.allTeamShift.compact small{
+  font-size:9px !important;
+}
+
+.ttAddForm{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 58px;
+  gap:7px;
+  margin-bottom:10px;
+}
+
+.ttAddForm input{
+  height:42px;
+  border-radius:17px;
+  border:1px solid var(--line);
+  background:var(--surface);
+  color:var(--text);
+  padding:0 13px;
+  font:inherit;
+  font-size:14px;
+  outline:0;
+  box-shadow:var(--shadow2);
+}
+
+.ttAddForm button{
+  height:42px;
+  border-radius:17px;
+  background:var(--primary);
+  color:#fff;
   font-size:13px;
+  font-weight:1000;
+}
+
+.ttEventList{
+  display:grid;
+  gap:7px;
+}
+
+.ttEvent{
+  min-height:46px;
+  padding:10px 12px;
+  border-radius:17px;
+  box-shadow:var(--shadow2);
+}
+
+.ttEvent b{
+  display:block;
+  color:#fff;
+  font-size:14px;
+  font-weight:1000;
+}
+
+.ttEvent p{
+  margin:3px 0 0;
+  color:rgba(255,255,255,.85);
+  font-size:11px;
   font-weight:800;
 }
 
-.anchorGrid,
-.shiftSettings{
-  display:none !important;
+.notifyOverlay{
+  position:fixed;
+  inset:0;
+  z-index:6000;
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  background:rgba(0,0,0,.42);
+  backdrop-filter:blur(8px);
+}
+
+.notifyPanel{
+  width:min(520px,100%);
+  max-height:82dvh;
+  display:flex;
+  flex-direction:column;
+  border-radius:28px 28px 0 0;
+  background:var(--surface);
+  border:1px solid var(--line);
+  box-shadow:0 -18px 44px rgba(0,0,0,.25);
+  overflow:hidden;
+}
+
+.notifyPanel header{
+  min-height:68px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:16px;
+  border-bottom:1px solid var(--line);
+}
+
+.notifyPanel header b{
+  display:block;
+  color:var(--text);
+  font-size:21px;
+  font-weight:1000;
+}
+
+.notifyPanel header p{
+  margin:4px 0 0;
+  color:var(--sub);
+  font-size:12px;
+  font-weight:800;
+}
+
+.notifyPanel header button{
+  width:38px;
+  height:38px;
+  border-radius:16px;
+  background:var(--surface2);
+  color:var(--text);
+  font-size:24px;
+  font-weight:700;
+}
+
+.notifyTools{
+  display:grid;
+  grid-template-columns:1.4fr 1fr 1fr;
+  gap:7px;
+  padding:10px 16px;
+  border-bottom:1px solid var(--line);
+}
+
+.notifyTools button{
+  height:34px;
+  border-radius:14px;
+  background:var(--surface2);
+  color:var(--text);
+  font-size:12px;
+  font-weight:1000;
+}
+
+.notifyTools button:first-child{
+  background:var(--primary);
+  color:#fff;
+}
+
+.notifyList{
+  overflow:auto;
+  padding:10px 16px 18px;
+}
+
+.notifyList article{
+  min-height:72px;
+  display:flex;
+  gap:12px;
+  padding:12px 0;
+  border-bottom:1px solid var(--line);
+}
+
+.notifyList article.read{
+  opacity:.55;
+}
+
+.notifyLogo{
+  width:42px;
+  height:42px;
+  flex:0 0 42px;
+  display:grid;
+  place-items:center;
+  border-radius:14px;
+  background:#e8fff2;
+  color:#22c55e;
+  font-size:20px;
+  font-weight:1000;
+}
+
+body.dark .notifyLogo{
+  background:#163524;
+}
+
+.notifyList b{
+  display:block;
+  color:var(--text);
+  font-size:14px;
+  font-weight:1000;
+}
+
+.notifyList p{
+  margin:4px 0 0;
+  color:var(--sub);
+  font-size:13px;
+  line-height:1.35;
+  font-weight:750;
+}
+
+.notifyList span{
+  display:block;
+  margin-top:5px;
+  color:var(--muted);
+  font-size:11px;
+  font-weight:800;
+}
+
+.notifyEmpty{
+  min-height:160px;
+  display:grid;
+  place-items:center;
+  text-align:center;
+  color:var(--sub);
+}
+
+.notifyEmpty b{
+  color:var(--text);
 }
 
 @media(max-width:767px){
-  .calendarMode{
-    gap:7px !important;
+  .timetreeCalendar{
+    max-width:none !important;
+  }
+
+  .ttHeader{
     margin-bottom:10px !important;
   }
 
-  .calendarMode button{
-    height:38px !important;
-    border-radius:16px !important;
-    font-size:13px !important;
+  .monthSelect{
+    height:36px !important;
+    font-size:19px !important;
   }
 
-  .normalHero{
-    padding:14px !important;
-    border-radius:24px !important;
-    margin-bottom:10px !important;
+  .ttHeader p{
+    font-size:12px !important;
+  }
+
+  .ttIconButton{
+    width:36px !important;
+    height:36px !important;
+    border-radius:15px !important;
+  }
+
+  .calendarTabs{
+    margin-bottom:7px !important;
+  }
+
+  .calendarTabs button{
+    height:34px !important;
+    border-radius:14px !important;
+    padding:0 10px !important;
+    font-size:12px !important;
+  }
+
+  .calendarTabs span{
+    width:20px !important;
+    height:20px !important;
+    border-radius:7px !important;
+  }
+
+  .ttMonthCard{
+    padding:9px !important;
+    border-radius:23px !important;
+    margin-bottom:9px !important;
     box-shadow:var(--shadow2) !important;
   }
 
-  .normalHero b{
-    font-size:calc(20px * var(--font-scale, 1)) !important;
+  .ttMonthNav{
+    height:32px !important;
+    margin-bottom:5px !important;
   }
 
-  .normalHero p{
-    font-size:calc(12px * var(--font-scale, 1)) !important;
+  .ttMonthNav b{
+    font-size:15px !important;
   }
 
-  .bigNormal{
-    min-width:56px !important;
-    height:56px !important;
+  .ttMonthNav button{
+    width:30px !important;
+    height:30px !important;
+    border-radius:12px !important;
+    font-size:19px !important;
+  }
+
+  .ttMonthGrid{
+    gap:4px !important;
+  }
+
+  .ttWeek{
+    height:20px !important;
+    font-size:9.5px !important;
+  }
+
+  .ttDay{
+    height:63px !important;
+    padding:4px !important;
+    border-radius:12px !important;
+  }
+
+  .ttDay strong{
+    font-size:10px !important;
+  }
+
+  .ttDay em{
+    min-width:22px !important;
+    height:15px !important;
+    font-size:8px !important;
+  }
+
+  .ttBars span,
+  .ttBars small{
+    height:11px !important;
+    line-height:11px !important;
+    font-size:7px !important;
+    border-radius:3px !important;
+  }
+
+  .ttSelected{
+    padding:11px !important;
     border-radius:20px !important;
-    font-size:14px !important;
   }
 
-  .normalSelected p{
-    font-size:12px !important;
+  .ttAddForm input,
+  .ttAddForm button{
+    height:40px !important;
+    border-radius:16px !important;
+  }
+
+  .notifyPanel{
+    border-radius:26px 26px 0 0 !important;
   }
 }
 EOF
 
-echo "=== v46 normal work calendar done ==="
+echo "=== v47 timetree ui notification done ==="
 git status --short
