@@ -800,22 +800,99 @@ function Room({ me, room, onBack }) {
 
 function Calendar({ me }) {
   const [date, setDate] = useState(dateKey());
+  const [month, setMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
   const [ownerColumn, setOwnerColumn] = useState("user_id");
   const [events, setEvents] = useState([]);
   const [title, setTitle] = useState("");
   const [msg, setMsg] = useState("");
 
+  const [team, setTeam] = useState(() => localStorage.getItem("rift_shift_team") || "1");
+  const [anchorDate, setAnchorDate] = useState(() => localStorage.getItem("rift_shift_anchor") || "2026-06-01");
+  const [anchorShift, setAnchorShift] = useState(() => localStorage.getItem("rift_shift_anchor_shift") || "A");
+
+  const shifts = ["A", "B", "C", "휴"];
+  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+
+  useEffect(() => {
+    localStorage.setItem("rift_shift_team", team);
+  }, [team]);
+
+  useEffect(() => {
+    localStorage.setItem("rift_shift_anchor", anchorDate);
+  }, [anchorDate]);
+
+  useEffect(() => {
+    localStorage.setItem("rift_shift_anchor_shift", anchorShift);
+  }, [anchorShift]);
+
   useEffect(() => {
     loadEvents();
-  }, [date]);
+  }, [month]);
+
+  function keyOf(day) {
+    const y = day.getFullYear();
+    const m = String(day.getMonth() + 1).padStart(2, "0");
+    const d = String(day.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  function parseKey(key) {
+    const [y, m, d] = String(key).split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  function dayNumber(key) {
+    const d = parseKey(key);
+    return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
+  }
+
+  function shiftFor(teamNo, key) {
+    const baseIndex = Math.max(0, shifts.indexOf(anchorShift));
+    const delta = dayNumber(key) - dayNumber(anchorDate || "2026-06-01");
+    const offset = Number(teamNo || 1) - 1;
+    const index = ((baseIndex + delta + offset) % 4 + 4) % 4;
+    return shifts[index];
+  }
+
+  function shiftClass(value) {
+    if (value === "A") return "shiftA";
+    if (value === "B") return "shiftB";
+    if (value === "C") return "shiftC";
+    return "shiftOff";
+  }
+
+  function monthTitle() {
+    return `${month.getFullYear()}년 ${month.getMonth() + 1}월`;
+  }
+
+  function monthRange() {
+    const start = new Date(month.getFullYear(), month.getMonth(), 1);
+    const end = new Date(month.getFullYear(), month.getMonth() + 1, 1);
+    return { start: keyOf(start), end: keyOf(end) };
+  }
+
+  function buildMonthDays() {
+    const first = new Date(month.getFullYear(), month.getMonth(), 1);
+    const startDay = new Date(month.getFullYear(), month.getMonth(), 1 - first.getDay());
+    return Array.from({ length: 42 }, (_, i) => {
+      const d = new Date(startDay);
+      d.setDate(startDay.getDate() + i);
+      return d;
+    });
+  }
 
   async function queryBy(column) {
+    const range = monthRange();
+
     return supabase
       .from("calendar_events")
       .select("*")
       .eq(column, me.id)
-      .gte("start_at", `${date}T00:00:00`)
-      .lt("start_at", `${date}T23:59:59`)
+      .gte("start_at", `${range.start}T00:00:00`)
+      .lt("start_at", `${range.end}T00:00:00`)
       .order("start_at", { ascending: true });
   }
 
@@ -873,29 +950,153 @@ function Calendar({ me }) {
     setMsg(safeError(lastError));
   }
 
+  function changeMonth(diff) {
+    setMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + diff, 1));
+  }
+
+  function goToday() {
+    const today = new Date();
+    const key = keyOf(today);
+    setDate(key);
+    setMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+  }
+
+  function selectDay(day) {
+    const key = keyOf(day);
+    setDate(key);
+    setMonth(new Date(day.getFullYear(), day.getMonth(), 1));
+  }
+
+  const monthDays = buildMonthDays();
+  const selectedShift = shiftFor(team, date);
+  const selectedEvents = events.filter((item) => String(item.start_at || "").slice(0, 10) === date);
+  const eventCountByDate = events.reduce((acc, item) => {
+    const key = String(item.start_at || "").slice(0, 10);
+    if (key) acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const allTeamShifts = ["1", "2", "3", "4"].map((teamNo) => ({
+    team: teamNo,
+    shift: shiftFor(teamNo, date),
+  }));
+
   return (
-    <section className="page calendar">
+    <section className="page calendar calendarPro">
       <Header
-        eyebrow="Schedule"
+        eyebrow="4조 3교대"
         title="캘린더"
-        text="오늘 일정과 약속을 관리해요"
-        right={<button className="pillButton" onClick={() => setDate(dateKey())}>오늘</button>}
+        text="월간 근무표와 개인 일정을 같이 관리"
+        right={<button className="pillButton" onClick={goToday}>오늘</button>}
       />
 
-      <section className="calendarHero">
-        <span>선택 날짜</span>
-        <b>{date}</b>
+      <section className="shiftHero">
+        <div>
+          <span>선택 조</span>
+          <b>{team}조 · {selectedShift}</b>
+          <p>{date} 기준 근무</p>
+        </div>
+
+        <div className={`bigShift ${shiftClass(selectedShift)}`}>
+          {selectedShift}
+        </div>
       </section>
 
-      <input className="dateInput" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      <section className="teamPicker">
+        {["1", "2", "3", "4"].map((teamNo) => (
+          <button
+            key={teamNo}
+            className={team === teamNo ? "active" : ""}
+            onClick={() => setTeam(teamNo)}
+          >
+            {teamNo}조
+          </button>
+        ))}
+      </section>
+
+      <section className="shiftSettings">
+        <label>
+          <span>기준일</span>
+          <input type="date" value={anchorDate} onChange={(e) => setAnchorDate(e.target.value)} />
+        </label>
+
+        <label>
+          <span>기준 근무</span>
+          <select value={anchorShift} onChange={(e) => setAnchorShift(e.target.value)}>
+            {shifts.map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+        </label>
+      </section>
+
+      <section className="monthCard">
+        <div className="monthTop">
+          <button onClick={() => changeMonth(-1)}>‹</button>
+          <b>{monthTitle()}</b>
+          <button onClick={() => changeMonth(1)}>›</button>
+        </div>
+
+        <div className="monthGrid">
+          {weekdays.map((day) => (
+            <div key={day} className={`weekCell ${day === "일" ? "sun" : day === "토" ? "sat" : ""}`}>
+              {day}
+            </div>
+          ))}
+
+          {monthDays.map((day) => {
+            const key = keyOf(day);
+            const isOtherMonth = day.getMonth() !== month.getMonth();
+            const isToday = key === dateKey();
+            const isSelected = key === date;
+            const shift = shiftFor(team, key);
+            const count = eventCountByDate[key] || 0;
+
+            return (
+              <button
+                key={key}
+                className={[
+                  "dayCell",
+                  isOtherMonth ? "muted" : "",
+                  isToday ? "today" : "",
+                  isSelected ? "selected" : "",
+                ].join(" ")}
+                onClick={() => selectDay(day)}
+              >
+                <span>{day.getDate()}</span>
+                <em className={shiftClass(shift)}>{shift}</em>
+                {count > 0 && <i>{count}</i>}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="selectedDayCard">
+        <div className="selectedDayTop">
+          <div>
+            <span>선택 날짜</span>
+            <b>{date}</b>
+          </div>
+          <em className={shiftClass(selectedShift)}>{team}조 {selectedShift}</em>
+        </div>
+
+        <div className="allTeamShift">
+          {allTeamShifts.map((item) => (
+            <div key={item.team} className={item.team === team ? "active" : ""}>
+              <span>{item.team}조</span>
+              <b className={shiftClass(item.shift)}>{item.shift}</b>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <form className="addForm" onSubmit={addEvent}>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="일정 추가" />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`${date} 일정 추가`} />
         <button>추가</button>
       </form>
 
       <div className="eventList">
-        {events.map((item) => (
+        {selectedEvents.map((item) => (
           <article className="eventCard" key={item.id}>
             <i />
             <div>
@@ -906,7 +1107,7 @@ function Calendar({ me }) {
         ))}
       </div>
 
-      {!events.length && <Empty title="일정 없음" text="날짜를 고르고 일정을 추가해줘." />}
+      {!selectedEvents.length && <Empty title="선택 날짜 일정 없음" text="날짜를 누르고 일정을 추가해줘." />}
       <Toast>{msg}</Toast>
     </section>
   );
