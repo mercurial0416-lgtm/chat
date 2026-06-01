@@ -1,7 +1,222 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== v47 timetree calendar ui + notification center ==="
+echo "=== v48 calendar background push stable patch ==="
+
+mkdir -p app/src app/src/lib app/public supabase/functions/send-calendar-push
+
+cat > app/src/push.js <<'EOF'
+import { supabase } from "./lib/supabase";
+import { VAPID_PUBLIC_KEY } from "./pushConfig";
+
+function keyToBytes(key) {
+  const padding = "=".repeat((4 - (key.length % 4)) % 4);
+  const base64 = (key + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map((char) => char.charCodeAt(0)));
+}
+
+export async function registerWebPush(userId) {
+  if (!userId) throw new Error("로그인 정보 없음");
+  if (!("Notification" in window)) throw new Error("브라우저 알림 미지원");
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) throw new Error("Web Push 미지원");
+  if (!VAPID_PUBLIC_KEY) throw new Error("VAPID 공개키가 비어있음");
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") throw new Error("알림 권한 허용 필요");
+
+  const registration = await navigator.serviceWorker.register("/sw.js", {
+    scope: "/",
+    updateViaCache: "none",
+  });
+
+  await navigator.serviceWorker.ready;
+
+  const old = await registration.pushManager.getSubscription();
+  if (old) await old.unsubscribe().catch(() => {});
+
+  const subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: keyToBytes(VAPID_PUBLIC_KEY),
+  });
+
+  const { error } = await supabase.from("push_subscriptions").upsert(
+    {
+      user_id: userId,
+      endpoint: subscription.endpoint,
+      subscription: subscription.toJSON(),
+      user_agent: navigator.userAgent,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "endpoint" }
+  );
+
+  if (error) throw error;
+  return subscription;
+}
+EOF
+
+if [ ! -f app/src/pushConfig.js ]; then
+cat > app/src/pushConfig.js <<'EOF'
+export const VAPID_PUBLIC_KEY = "";
+EOF
+fi
+
+cat > app/public/sw.js <<'EOF'
+self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {}
+
+  event.waitUntil(
+    self.registration.showNotification(data.title || "새 알림", {
+      body: data.body || "새 메시지가 도착했습니다.",
+      icon: "/icon.svg",
+      badge: "/icon.svg",
+      tag: data.kind || "rift",
+      data: { url: data.url || "/" },
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        client.focus();
+        if (client.navigate) client.navigate(event.notification.data?.url || "/");
+        return;
+      }
+      return self.clients.openWindow(event.notification.data?.url || "/");
+    })
+  );
+});
+EOF
+
+cat > supabase/functions/send-calendar-push/index.ts <<'EOF'
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import webpush from "npm:web-push@3.6.7";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  try {
+    if (req.method !== "POST") {
+      return json({ error: "method_not_allowed" }, 405);
+    }
+
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const VAPID_PUBLIC_KEY = Deno.env.get("VAPID_PUBLIC_KEY")!;
+    const VAPID_PRIVATE_KEY = Deno.env.get("VAPID_PRIVATE_KEY")!;
+    const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") || "mailto:admin@example.com";
+
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !SERVICE_ROLE_KEY || !VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+      return json({ error: "missing_env" }, 500);
+    }
+
+    const authHeader = req.headers.get("Authorization") || "";
+
+    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false },
+    });
+
+    const {
+      data: { user },
+      error: userError,
+    } = await userClient.auth.getUser();
+
+    if (userError || !user) {
+      return json({ error: "unauthorized" }, 401);
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const title = String(body.title || "새 일정");
+    const date = String(body.date || "");
+    const calendarType = String(body.calendar_type || "family");
+    const actorName = String(body.actor_name || user.email || "친구");
+
+    const payload = JSON.stringify({
+      title: `${actorName}님이 일정을 등록했습니다`,
+      body: `${calendarTypeLabel(calendarType)} · ${title}${date ? " · " + date : ""}`,
+      url: "/",
+      kind: "calendar_event",
+      date,
+      calendarType,
+    });
+
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+
+    const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    });
+
+    const { data: subs, error: subError } = await admin
+      .from("push_subscriptions")
+      .select("id,user_id,subscription")
+      .neq("user_id", user.id);
+
+    if (subError) {
+      return json({ error: subError.message }, 500);
+    }
+
+    let sent = 0;
+    let failed = 0;
+    const staleIds: string[] = [];
+
+    for (const sub of subs || []) {
+      try {
+        await webpush.sendNotification(sub.subscription, payload);
+        sent += 1;
+      } catch (err) {
+        failed += 1;
+        const statusCode = Number((err as any)?.statusCode || 0);
+        if (statusCode === 404 || statusCode === 410) {
+          staleIds.push(sub.id);
+        }
+      }
+    }
+
+    if (staleIds.length) {
+      await admin.from("push_subscriptions").delete().in("id", staleIds);
+    }
+
+    return json({ ok: true, subscriptions: subs?.length || 0, sent, failed, stale: staleIds.length });
+  } catch (err) {
+    return json({ error: String((err as Error)?.message || err) }, 500);
+  }
+});
+
+function calendarTypeLabel(type: string) {
+  if (type === "work") return "업무 일정";
+  if (type === "personal") return "개인 캘린더";
+  return "가족 캘린더";
+}
+
+function json(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+EOF
 
 python3 - <<'PY'
 from pathlib import Path
@@ -9,8 +224,11 @@ from pathlib import Path
 p = Path("app/src/App.jsx")
 s = p.read_text()
 
+if 'import { registerWebPush } from "./push";' not in s:
+    s = s.replace('import { supabase } from "./lib/supabase";', 'import { supabase } from "./lib/supabase";\nimport { registerWebPush } from "./push";')
+
 start = s.find("function Calendar({ me }) {")
-end = s.find("\\nfunction More", start)
+end = s.find("\nfunction More", start)
 
 if start == -1 or end == -1:
     raise SystemExit("Calendar component not found")
@@ -21,17 +239,13 @@ calendar = r'''function Calendar({ me }) {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), 1);
   });
-
   const [mode, setMode] = useState(() => localStorage.getItem("rift_calendar_mode") || "shift");
   const [team, setTeam] = useState(() => localStorage.getItem("rift_shift_team") || "1");
   const [calendarTab, setCalendarTab] = useState(() => localStorage.getItem("rift_calendar_tab") || "family");
   const [showNotify, setShowNotify] = useState(false);
-
-  const [ownerColumn, setOwnerColumn] = useState("user_id");
   const [events, setEvents] = useState([]);
   const [title, setTitle] = useState("");
   const [msg, setMsg] = useState("");
-
   const [notifications, setNotifications] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("rift_notifications") || "[]");
@@ -100,6 +314,31 @@ calendar = r'''function Calendar({ me }) {
     loadEvents();
   }, [month]);
 
+  useEffect(() => {
+    const channel = supabase
+      .channel("calendar-events-watch")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "calendar_events" }, (payload) => {
+        const row = payload.new || {};
+        const actor = row.created_by || row.user_id || row.owner_id;
+
+        if (actor === me.id) return;
+
+        addNotification(
+          row.title || "새 일정",
+          String(row.start_at || "").slice(0, 10),
+          row.calendar_type || "family",
+          "친구"
+        );
+
+        loadEvents();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [me.id]);
+
   function keyOf(day) {
     const y = day.getFullYear();
     const m = String(day.getMonth() + 1).padStart(2, "0");
@@ -125,18 +364,16 @@ calendar = r'''function Calendar({ me }) {
 
   function shiftFor(teamNo, key) {
     const i = cycleIndex(teamNo, key);
-
-    if (i >= 0 && i <= 5) return "A";
-    if (i >= 6 && i <= 7) return "휴";
-    if (i >= 8 && i <= 13) return "B";
-    if (i >= 14 && i <= 15) return "휴";
-    if (i >= 16 && i <= 21) return "C";
+    if (i <= 5) return "A";
+    if (i <= 7) return "휴";
+    if (i <= 13) return "B";
+    if (i <= 15) return "휴";
+    if (i <= 21) return "C";
     return "휴";
   }
 
   function shiftDayLabel(teamNo, key) {
     const i = cycleIndex(teamNo, key);
-
     if (i <= 5) return `${i + 1}일차`;
     if (i <= 7) return `휴${i - 5}`;
     if (i <= 13) return `${i - 7}일차`;
@@ -152,26 +389,13 @@ calendar = r'''function Calendar({ me }) {
     return "shiftOff";
   }
 
-  function holidayName(key) {
-    return koreaHolidays[key] || "";
-  }
-
   function normalWorkFor(key) {
-    const day = parseKey(key);
-    const dow = day.getDay();
-    const holiday = holidayName(key);
+    const d = parseKey(key);
+    const holiday = koreaHolidays[key];
 
-    if (holiday) {
-      return { label: "휴", detail: holiday, className: "normalHoliday", dayClass: "holiday" };
-    }
-
-    if (dow === 0) {
-      return { label: "휴", detail: "일요일", className: "normalHoliday", dayClass: "holiday" };
-    }
-
-    if (dow === 6) {
-      return { label: "휴", detail: "토요일", className: "normalSat", dayClass: "saturday" };
-    }
+    if (holiday) return { label: "휴", detail: holiday, className: "normalHoliday", dayClass: "holiday" };
+    if (d.getDay() === 0) return { label: "휴", detail: "일요일", className: "normalHoliday", dayClass: "holiday" };
+    if (d.getDay() === 6) return { label: "휴", detail: "토요일", className: "normalSat", dayClass: "saturday" };
 
     return { label: "통상", detail: "통상근무", className: "normalWork", dayClass: "weekday" };
   }
@@ -201,54 +425,59 @@ calendar = r'''function Calendar({ me }) {
     return calendarTabs.find((item) => item.key === calendarTab) || calendarTabs[0];
   }
 
-  function eventColorClass(index = 0) {
-    const tab = currentTab();
-    if (tab.key === "family") return "eventGreen";
-    if (tab.key === "work") return "eventBlue";
-    if (tab.key === "personal") return "eventPurple";
+  function eventColorClass(index = 0, type = calendarTab) {
+    if (type === "family") return "eventGreen";
+    if (type === "work") return "eventBlue";
+    if (type === "personal") return "eventPurple";
     return ["eventGreen", "eventBlue", "eventPurple", "eventRed"][index % 4];
   }
 
-  async function queryBy(column) {
-    const range = monthRange();
-
-    return supabase
-      .from("calendar_events")
-      .select("*")
-      .eq(column, me.id)
-      .gte("start_at", `${range.start}T00:00:00`)
-      .lt("start_at", `${range.end}T00:00:00`)
-      .order("start_at", { ascending: true });
-  }
-
   async function loadEvents() {
-    let lastError = null;
+    try {
+      const range = monthRange();
 
-    for (const column of ["user_id", "owner_id"]) {
-      const { data, error } = await queryBy(column);
+      const { data, error } = await supabase
+        .from("calendar_events")
+        .select("*")
+        .gte("start_at", `${range.start}T00:00:00`)
+        .lt("start_at", `${range.end}T00:00:00`)
+        .order("start_at", { ascending: true });
 
-      if (!error) {
-        setOwnerColumn(column);
-        setEvents(data || []);
-        setMsg("");
-        return;
-      }
+      if (error) throw error;
 
-      lastError = error;
+      setEvents(data || []);
+      setMsg("");
+    } catch (err) {
+      setMsg(safeError(err));
     }
-
-    setMsg(safeError(lastError));
   }
 
-  function pushNotification(body, targetDate) {
-    const tab = currentTab();
+  async function requestNotifyPermission() {
+    try {
+      await registerWebPush(me.id);
+      setMsg("백그라운드 알림 등록 완료");
+
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification("Rift 알림 설정 완료", {
+          body: "친구가 일정을 등록하면 백그라운드 알림이 와요.",
+          icon: "/icon.svg",
+        });
+      }
+    } catch (err) {
+      setMsg(safeError(err));
+    }
+  }
+
+  function addNotification(body, targetDate, type = calendarTab, actor = me.nickname || "사용자") {
+    const tabLabel = calendarTabs.find((item) => item.key === type)?.label || "공유";
+
     const item = {
       id: `${Date.now()}-${Math.random()}`,
-      title: `${me.nickname || "사용자"}님이 일정을 등록했습니다`,
-      body: `${tab.label} 캘린더 · ${body} · ${targetDate}`,
+      title: `${actor}님이 일정을 등록했습니다`,
+      body: `${tabLabel} 캘린더 · ${body} · ${targetDate}`,
       created_at: new Date().toISOString(),
       read: false,
-      tab: tab.key,
+      tab: type,
     };
 
     setNotifications((prev) => [item, ...prev].slice(0, 80));
@@ -261,27 +490,15 @@ calendar = r'''function Calendar({ me }) {
     }
   }
 
-  async function requestNotifyPermission() {
-    try {
-      if (!("Notification" in window)) {
-        setMsg("이 브라우저는 알림을 지원하지 않음");
-        return;
-      }
-
-      const permission = await Notification.requestPermission();
-
-      if (permission === "granted") {
-        setMsg("알림 허용 완료");
-        new Notification("Rift 알림 설정 완료", {
-          body: "일정 등록 알림을 받을 수 있어요.",
-          icon: "/icon.svg",
-        });
-      } else {
-        setMsg("알림 권한이 허용되지 않음");
-      }
-    } catch (err) {
-      setMsg(safeError(err));
-    }
+  async function sendBackgroundPush(value, targetDate) {
+    await supabase.functions.invoke("send-calendar-push", {
+      body: {
+        title: value,
+        date: targetDate,
+        calendar_type: calendarTab,
+        actor_name: me.nickname || me.email || "친구",
+      },
+    }).catch(() => {});
   }
 
   async function addEvent(event) {
@@ -290,34 +507,27 @@ calendar = r'''function Calendar({ me }) {
     const value = title.trim();
     if (!value) return;
 
-    const columns = ownerColumn === "user_id" ? ["user_id", "owner_id"] : ["owner_id", "user_id"];
-    let lastError = null;
+    try {
+      const row = {
+        user_id: me.id,
+        owner_id: me.id,
+        created_by: me.id,
+        title: value,
+        start_at: `${date}T09:00:00`,
+        end_at: `${date}T10:00:00`,
+        calendar_type: calendarTab,
+      };
 
-    for (const column of columns) {
-      for (const withEnd of [true, false]) {
-        const row = {
-          [column]: me.id,
-          title: value,
-          start_at: `${date}T09:00:00`,
-        };
+      const { error } = await supabase.from("calendar_events").insert(row);
+      if (error) throw error;
 
-        if (withEnd) row.end_at = `${date}T10:00:00`;
-
-        const { error } = await supabase.from("calendar_events").insert(row);
-
-        if (!error) {
-          setOwnerColumn(column);
-          setTitle("");
-          pushNotification(value, date);
-          loadEvents();
-          return;
-        }
-
-        lastError = error;
-      }
+      setTitle("");
+      addNotification(value, date, calendarTab, me.nickname || "나");
+      sendBackgroundPush(value, date);
+      loadEvents();
+    } catch (err) {
+      setMsg(safeError(err));
     }
-
-    setMsg(safeError(lastError));
   }
 
   function changeMonth(diff) {
@@ -347,17 +557,10 @@ calendar = r'''function Calendar({ me }) {
 
   const monthDays = buildMonthDays();
   const selectedShift = shiftFor(team, date);
-  const selectedShiftDay = shiftDayLabel(team, date);
   const selectedNormal = normalWorkFor(date);
   const unreadCount = notifications.filter((item) => !item.read).length;
 
   const selectedEvents = events.filter((item) => String(item.start_at || "").slice(0, 10) === date);
-
-  const eventCountByDate = events.reduce((acc, item) => {
-    const key = String(item.start_at || "").slice(0, 10);
-    if (key) acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, {});
 
   const eventMap = events.reduce((acc, item) => {
     const key = String(item.start_at || "").slice(0, 10);
@@ -468,7 +671,7 @@ calendar = r'''function Calendar({ me }) {
 
                 <div className="ttBars">
                   {dayEvents.slice(0, 2).map((item, index) => (
-                    <span key={item.id || index} className={eventColorClass(index)}>
+                    <span key={item.id || index} className={eventColorClass(index, item.calendar_type)}>
                       {item.title}
                     </span>
                   ))}
@@ -516,7 +719,7 @@ calendar = r'''function Calendar({ me }) {
 
       <section className="ttEventList">
         {selectedEvents.map((item, index) => (
-          <article className={`ttEvent ${eventColorClass(index)}`} key={item.id}>
+          <article className={`ttEvent ${eventColorClass(index, item.calendar_type)}`} key={item.id}>
             <div>
               <b>{item.title}</b>
               <p>{dateTime(item.start_at)}</p>
@@ -539,7 +742,7 @@ calendar = r'''function Calendar({ me }) {
             </header>
 
             <div className="notifyTools">
-              <button onClick={requestNotifyPermission}>브라우저 알림 켜기</button>
+              <button onClick={requestNotifyPermission}>백그라운드 알림 켜기</button>
               <button onClick={markAllRead}>모두 읽음</button>
               <button onClick={clearNotifications}>비우기</button>
             </div>
@@ -579,685 +782,103 @@ PY
 
 cat >> app/src/styles.css <<'EOF'
 
-/* ===== v47: TimeTree-like shared calendar UI + notifications ===== */
-
-.timetreeCalendar{
-  max-width:980px !important;
-}
-
-.ttHeader{
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:12px;
-  margin-bottom:12px;
-}
-
-.monthSelect{
-  height:42px;
-  padding:0;
-  background:transparent;
-  color:var(--text);
-  font-size:22px;
-  font-weight:1000;
-  letter-spacing:-.8px;
-}
-
-.monthSelect span{
-  color:var(--muted);
-  font-size:15px;
-}
-
-.ttHeader p{
-  margin:2px 0 0;
-  color:var(--sub);
-  font-size:13px;
-  font-weight:750;
-}
-
-.ttActions{
-  display:flex;
-  gap:8px;
-}
-
-.ttIconButton{
-  position:relative;
-  width:38px;
-  height:38px;
-  display:grid;
-  place-items:center;
-  border-radius:16px;
-  background:var(--surface);
-  color:var(--text);
-  border:1px solid var(--line);
-  box-shadow:var(--shadow2);
-  font-size:18px;
-  font-weight:1000;
-}
-
-.ttIconButton i{
-  position:absolute;
-  right:-3px;
-  top:-3px;
-  min-width:17px;
-  height:17px;
-  padding:0 4px;
-  display:grid;
-  place-items:center;
-  border-radius:999px;
-  background:#ef4444;
-  color:#fff;
-  font-size:9px;
-  font-style:normal;
-  font-weight:1000;
-}
-
-.calendarTabs{
-  display:flex;
-  gap:8px;
-  overflow:auto;
-  padding-bottom:6px;
-  margin-bottom:8px;
-}
-
-.calendarTabs button{
-  flex:0 0 auto;
-  height:36px;
-  display:flex;
-  align-items:center;
-  gap:7px;
-  padding:0 12px;
-  border-radius:15px;
-  background:var(--surface);
-  color:var(--text);
-  border:1px solid var(--line);
-  box-shadow:var(--shadow2);
-  font-size:13px;
-  font-weight:950;
-}
-
-.calendarTabs span{
-  width:22px;
-  height:22px;
-  display:grid;
-  place-items:center;
-  border-radius:8px;
-  color:#fff;
-  font-size:11px;
-  font-weight:1000;
-}
-
-.calendarTabs .green span{
-  background:#22c55e;
-}
-
-.calendarTabs .blue span{
-  background:#3478f6;
-}
-
-.calendarTabs .purple span{
-  background:#8b5cf6;
-}
-
-.calendarTabs button.active{
-  border-color:var(--primary);
-  box-shadow:0 0 0 2px rgba(52,120,246,.12);
-}
-
-.calendarMode.slim{
-  height:auto;
-  margin-bottom:8px;
-}
-
-.calendarMode.slim button{
-  height:34px !important;
-  border-radius:14px !important;
-  font-size:12px !important;
-  box-shadow:none !important;
-}
-
-.slimTeam{
-  margin-bottom:8px !important;
-}
-
-.slimTeam button{
-  height:32px !important;
-  border-radius:13px !important;
-  font-size:12px !important;
-  box-shadow:none !important;
-}
-
-.ttMonthCard{
-  padding:12px;
-  margin-bottom:10px;
-  border-radius:28px;
-  background:var(--surface);
-  border:1px solid var(--line);
-  box-shadow:var(--shadow);
-}
-
-.ttMonthNav{
-  height:36px;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  margin-bottom:6px;
-}
-
-.ttMonthNav b{
-  color:var(--text);
-  font-size:16px;
-  font-weight:1000;
-}
-
-.ttMonthNav button{
-  width:34px;
-  height:34px;
-  border-radius:14px;
-  background:var(--surface2);
-  color:var(--text);
-  font-size:21px;
-  font-weight:800;
-}
-
-.ttMonthGrid{
-  display:grid;
-  grid-template-columns:repeat(7,1fr);
-  gap:5px;
-}
-
-.ttWeek{
-  height:23px;
-  display:grid;
-  place-items:center;
-  color:var(--muted);
-  font-size:10px;
-  font-weight:1000;
-}
-
-.ttWeek.sun{
-  color:#ef4444;
-}
-
-.ttWeek.sat{
-  color:#3478f6;
-}
-
-.ttDay{
-  position:relative;
-  min-width:0;
-  height:74px;
-  padding:5px;
-  display:flex;
-  flex-direction:column;
-  align-items:flex-start;
-  gap:3px;
-  border-radius:14px;
-  background:var(--surface2);
-  color:var(--text);
-  border:1px solid transparent;
-  overflow:hidden;
-  text-align:left;
-}
-
-.ttDay strong{
-  font-size:11px;
-  font-weight:1000;
-  line-height:1;
-}
-
-.ttDay em{
-  min-width:25px;
-  height:16px;
-  padding:0 5px;
-  display:grid;
-  place-items:center;
-  border-radius:999px;
-  font-style:normal;
-  font-size:9px;
-  font-weight:1000;
-  flex:0 0 auto;
-}
-
-.ttDay.muted{
-  opacity:.36;
-}
-
-.ttDay.today{
-  border-color:rgba(52,120,246,.5);
-}
-
-.ttDay.selected{
-  background:rgba(52,120,246,.1);
-  border-color:var(--primary);
-}
-
-.ttDay.saturday strong{
-  color:#2563eb;
-}
-
-.ttDay.holiday strong{
-  color:#ef4444;
-}
-
-.ttBars{
-  width:100%;
-  display:grid;
-  gap:2px;
-  margin-top:auto;
-}
-
-.ttBars span,
-.ttBars small{
-  min-width:0;
-  height:13px;
-  padding:0 4px;
-  display:block;
-  border-radius:4px;
-  color:#fff;
-  font-size:8px;
-  font-weight:900;
-  line-height:13px;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
-
-.ttBars small{
-  background:rgba(15,23,42,.2);
-}
-
-.eventGreen{
-  background:#22c55e !important;
-  color:#fff !important;
-}
-
-.eventBlue{
-  background:#3478f6 !important;
-  color:#fff !important;
-}
-
-.eventPurple{
-  background:#8b5cf6 !important;
-  color:#fff !important;
-}
-
-.eventRed{
-  background:#ef4444 !important;
-  color:#fff !important;
-}
-
-.ttSelected{
-  padding:13px;
-  margin-bottom:9px;
-  border-radius:22px;
-  background:var(--surface);
-  border:1px solid var(--line);
-  box-shadow:var(--shadow2);
-}
-
-.ttSelectedTop{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  margin-bottom:10px;
-}
-
-.ttSelectedTop span{
-  color:var(--sub);
-  font-size:11px;
-  font-weight:1000;
-}
-
-.ttSelectedTop b{
-  display:block;
-  margin-top:2px;
-  color:var(--text);
-  font-size:15px;
-  font-weight:1000;
-}
-
-.ttSelectedTop em{
-  min-width:62px;
-  height:30px;
-  padding:0 11px;
-  display:grid;
-  place-items:center;
-  border-radius:15px;
-  font-style:normal;
-  font-size:12px;
-  font-weight:1000;
-}
-
-.allTeamShift.compact{
-  gap:6px;
-}
-
-.allTeamShift.compact div{
-  min-height:46px !important;
-  border-radius:15px !important;
-}
-
-.allTeamShift.compact small{
-  font-size:9px !important;
-}
-
-.ttAddForm{
-  display:grid;
-  grid-template-columns:minmax(0,1fr) 58px;
-  gap:7px;
-  margin-bottom:10px;
-}
-
-.ttAddForm input{
-  height:42px;
-  border-radius:17px;
-  border:1px solid var(--line);
-  background:var(--surface);
-  color:var(--text);
-  padding:0 13px;
-  font:inherit;
-  font-size:14px;
-  outline:0;
-  box-shadow:var(--shadow2);
-}
-
-.ttAddForm button{
-  height:42px;
-  border-radius:17px;
-  background:var(--primary);
-  color:#fff;
-  font-size:13px;
-  font-weight:1000;
-}
-
-.ttEventList{
-  display:grid;
-  gap:7px;
-}
-
-.ttEvent{
-  min-height:46px;
-  padding:10px 12px;
-  border-radius:17px;
-  box-shadow:var(--shadow2);
-}
-
-.ttEvent b{
-  display:block;
-  color:#fff;
-  font-size:14px;
-  font-weight:1000;
-}
-
-.ttEvent p{
-  margin:3px 0 0;
-  color:rgba(255,255,255,.85);
-  font-size:11px;
-  font-weight:800;
-}
-
-.notifyOverlay{
-  position:fixed;
-  inset:0;
-  z-index:6000;
-  display:flex;
-  align-items:flex-end;
-  justify-content:center;
-  background:rgba(0,0,0,.42);
-  backdrop-filter:blur(8px);
-}
-
-.notifyPanel{
-  width:min(520px,100%);
-  max-height:82dvh;
-  display:flex;
-  flex-direction:column;
-  border-radius:28px 28px 0 0;
-  background:var(--surface);
-  border:1px solid var(--line);
-  box-shadow:0 -18px 44px rgba(0,0,0,.25);
-  overflow:hidden;
-}
-
-.notifyPanel header{
-  min-height:68px;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:16px;
-  border-bottom:1px solid var(--line);
-}
-
-.notifyPanel header b{
-  display:block;
-  color:var(--text);
-  font-size:21px;
-  font-weight:1000;
-}
-
-.notifyPanel header p{
-  margin:4px 0 0;
-  color:var(--sub);
-  font-size:12px;
-  font-weight:800;
-}
-
-.notifyPanel header button{
-  width:38px;
-  height:38px;
-  border-radius:16px;
-  background:var(--surface2);
-  color:var(--text);
-  font-size:24px;
-  font-weight:700;
-}
-
-.notifyTools{
-  display:grid;
-  grid-template-columns:1.4fr 1fr 1fr;
-  gap:7px;
-  padding:10px 16px;
-  border-bottom:1px solid var(--line);
-}
-
-.notifyTools button{
-  height:34px;
-  border-radius:14px;
-  background:var(--surface2);
-  color:var(--text);
-  font-size:12px;
-  font-weight:1000;
-}
-
-.notifyTools button:first-child{
-  background:var(--primary);
-  color:#fff;
-}
-
-.notifyList{
-  overflow:auto;
-  padding:10px 16px 18px;
-}
-
-.notifyList article{
-  min-height:72px;
-  display:flex;
-  gap:12px;
-  padding:12px 0;
-  border-bottom:1px solid var(--line);
-}
-
-.notifyList article.read{
-  opacity:.55;
-}
-
-.notifyLogo{
-  width:42px;
-  height:42px;
-  flex:0 0 42px;
-  display:grid;
-  place-items:center;
-  border-radius:14px;
-  background:#e8fff2;
-  color:#22c55e;
-  font-size:20px;
-  font-weight:1000;
-}
-
-body.dark .notifyLogo{
-  background:#163524;
-}
-
-.notifyList b{
-  display:block;
-  color:var(--text);
-  font-size:14px;
-  font-weight:1000;
-}
-
-.notifyList p{
-  margin:4px 0 0;
-  color:var(--sub);
-  font-size:13px;
-  line-height:1.35;
-  font-weight:750;
-}
-
-.notifyList span{
-  display:block;
-  margin-top:5px;
-  color:var(--muted);
-  font-size:11px;
-  font-weight:800;
-}
-
-.notifyEmpty{
-  min-height:160px;
-  display:grid;
-  place-items:center;
-  text-align:center;
-  color:var(--sub);
-}
-
-.notifyEmpty b{
-  color:var(--text);
-}
-
-@media(max-width:767px){
-  .timetreeCalendar{
-    max-width:none !important;
-  }
-
-  .ttHeader{
-    margin-bottom:10px !important;
-  }
-
-  .monthSelect{
-    height:36px !important;
-    font-size:19px !important;
-  }
-
-  .ttHeader p{
-    font-size:12px !important;
-  }
-
-  .ttIconButton{
-    width:36px !important;
-    height:36px !important;
-    border-radius:15px !important;
-  }
-
-  .calendarTabs{
-    margin-bottom:7px !important;
-  }
-
-  .calendarTabs button{
-    height:34px !important;
-    border-radius:14px !important;
-    padding:0 10px !important;
-    font-size:12px !important;
-  }
-
-  .calendarTabs span{
-    width:20px !important;
-    height:20px !important;
-    border-radius:7px !important;
-  }
-
-  .ttMonthCard{
-    padding:9px !important;
-    border-radius:23px !important;
-    margin-bottom:9px !important;
-    box-shadow:var(--shadow2) !important;
-  }
-
-  .ttMonthNav{
-    height:32px !important;
-    margin-bottom:5px !important;
-  }
-
-  .ttMonthNav b{
-    font-size:15px !important;
-  }
-
-  .ttMonthNav button{
-    width:30px !important;
-    height:30px !important;
-    border-radius:12px !important;
-    font-size:19px !important;
-  }
-
-  .ttMonthGrid{
-    gap:4px !important;
-  }
-
-  .ttWeek{
-    height:20px !important;
-    font-size:9.5px !important;
-  }
-
-  .ttDay{
-    height:63px !important;
-    padding:4px !important;
-    border-radius:12px !important;
-  }
-
-  .ttDay strong{
-    font-size:10px !important;
-  }
-
-  .ttDay em{
-    min-width:22px !important;
-    height:15px !important;
-    font-size:8px !important;
-  }
-
-  .ttBars span,
-  .ttBars small{
-    height:11px !important;
-    line-height:11px !important;
-    font-size:7px !important;
-    border-radius:3px !important;
-  }
-
-  .ttSelected{
-    padding:11px !important;
-    border-radius:20px !important;
-  }
-
-  .ttAddForm input,
-  .ttAddForm button{
-    height:40px !important;
-    border-radius:16px !important;
-  }
-
-  .notifyPanel{
-    border-radius:26px 26px 0 0 !important;
-  }
-}
+/* ===== v48 TimeTree calendar + background notification UI ===== */
+
+.timetreeCalendar{max-width:980px!important}
+.ttHeader{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:10px}
+.monthSelect{height:36px;padding:0;background:transparent;color:var(--text);font-size:19px;font-weight:1000;letter-spacing:-.8px}
+.monthSelect span{color:var(--muted);font-size:15px}
+.ttHeader p{margin:2px 0 0;color:var(--sub);font-size:12px;font-weight:750}
+.ttActions{display:flex;gap:8px}
+.ttIconButton{position:relative;width:36px;height:36px;display:grid;place-items:center;border-radius:15px;background:var(--surface);color:var(--text);border:1px solid var(--line);box-shadow:var(--shadow2);font-size:18px;font-weight:1000}
+.ttIconButton i{position:absolute;right:-3px;top:-3px;min-width:17px;height:17px;padding:0 4px;display:grid;place-items:center;border-radius:999px;background:#ef4444;color:#fff;font-size:9px;font-style:normal;font-weight:1000}
+
+.calendarTabs{display:flex;gap:8px;overflow:auto;padding-bottom:6px;margin-bottom:7px}
+.calendarTabs button{flex:0 0 auto;height:34px;display:flex;align-items:center;gap:7px;padding:0 10px;border-radius:14px;background:var(--surface);color:var(--text);border:1px solid var(--line);box-shadow:var(--shadow2);font-size:12px;font-weight:950}
+.calendarTabs span{width:20px;height:20px;display:grid;place-items:center;border-radius:7px;color:#fff;font-size:11px;font-weight:1000}
+.calendarTabs .green span{background:#22c55e}
+.calendarTabs .blue span{background:#3478f6}
+.calendarTabs .purple span{background:#8b5cf6}
+.calendarTabs button.active{border-color:var(--primary);box-shadow:0 0 0 2px rgba(52,120,246,.12)}
+
+.calendarMode.slim{height:auto;margin-bottom:8px}
+.calendarMode.slim button{height:34px!important;border-radius:14px!important;font-size:12px!important;box-shadow:none!important}
+.slimTeam{margin-bottom:8px!important}
+.slimTeam button{height:32px!important;border-radius:13px!important;font-size:12px!important;box-shadow:none!important}
+
+.ttMonthCard{padding:9px!important;margin-bottom:9px!important;border-radius:23px!important;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow2)!important}
+.ttMonthNav{height:32px;display:flex;align-items:center;justify-content:space-between;margin-bottom:5px}
+.ttMonthNav b{color:var(--text);font-size:15px;font-weight:1000}
+.ttMonthNav button{width:30px;height:30px;border-radius:12px;background:var(--surface2);color:var(--text);font-size:19px;font-weight:800}
+
+.ttMonthGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.ttWeek{height:20px;display:grid;place-items:center;color:var(--muted);font-size:9.5px;font-weight:1000}
+.ttWeek.sun{color:#ef4444}
+.ttWeek.sat{color:#3478f6}
+.ttDay{position:relative;min-width:0;height:63px;padding:4px;display:flex;flex-direction:column;align-items:flex-start;gap:3px;border-radius:12px;background:var(--surface2);color:var(--text);border:1px solid transparent;overflow:hidden;text-align:left}
+.ttDay strong{font-size:10px;font-weight:1000;line-height:1}
+.ttDay em{min-width:22px;height:15px;padding:0 5px;display:grid;place-items:center;border-radius:999px;font-style:normal;font-size:8px;font-weight:1000;flex:0 0 auto}
+.ttDay.muted{opacity:.36}
+.ttDay.today{border-color:rgba(52,120,246,.5)}
+.ttDay.selected{background:rgba(52,120,246,.1);border-color:var(--primary)}
+.ttDay.saturday strong{color:#2563eb}
+.ttDay.holiday strong{color:#ef4444}
+
+.ttBars{width:100%;display:grid;gap:2px;margin-top:auto}
+.ttBars span,.ttBars small{min-width:0;height:11px;padding:0 4px;display:block;border-radius:3px;color:#fff;font-size:7px;font-weight:900;line-height:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ttBars small{background:rgba(15,23,42,.2)}
+
+.eventGreen{background:#22c55e!important;color:#fff!important}
+.eventBlue{background:#3478f6!important;color:#fff!important}
+.eventPurple{background:#8b5cf6!important;color:#fff!important}
+.eventRed{background:#ef4444!important;color:#fff!important}
+.shiftA{background:#3478f6!important;color:#fff!important}
+.shiftB{background:#7c3aed!important;color:#fff!important}
+.shiftC{background:#06b6d4!important;color:#fff!important}
+.shiftOff{background:#e5e7eb!important;color:#374151!important}
+body.dark .shiftOff{background:#334155!important;color:#e5e7eb!important}
+.normalWork{background:#3478f6!important;color:#fff!important}
+.normalSat{background:#2563eb!important;color:#fff!important}
+.normalHoliday{background:#ef4444!important;color:#fff!important}
+
+.ttSelected{padding:11px;margin-bottom:9px;border-radius:20px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow2)}
+.ttSelectedTop{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.ttSelectedTop span{color:var(--sub);font-size:11px;font-weight:1000}
+.ttSelectedTop b{display:block;margin-top:2px;color:var(--text);font-size:15px;font-weight:1000}
+.ttSelectedTop em{min-width:62px;height:30px;padding:0 11px;display:grid;place-items:center;border-radius:15px;font-style:normal;font-size:12px;font-weight:1000}
+.allTeamShift.compact{gap:6px}
+.allTeamShift.compact div{min-height:46px!important;border-radius:15px!important}
+.allTeamShift.compact small{font-size:9px!important}
+
+.ttAddForm{display:grid;grid-template-columns:minmax(0,1fr) 58px;gap:7px;margin-bottom:10px}
+.ttAddForm input{height:40px;border-radius:16px;border:1px solid var(--line);background:var(--surface);color:var(--text);padding:0 13px;font:inherit;font-size:14px;outline:0;box-shadow:var(--shadow2)}
+.ttAddForm button{height:40px;border-radius:16px;background:var(--primary);color:#fff;font-size:13px;font-weight:1000}
+
+.ttEventList{display:grid;gap:7px}
+.ttEvent{min-height:46px;padding:10px 12px;border-radius:17px;box-shadow:var(--shadow2)}
+.ttEvent b{display:block;color:#fff;font-size:14px;font-weight:1000}
+.ttEvent p{margin:3px 0 0;color:rgba(255,255,255,.85);font-size:11px;font-weight:800}
+
+.notifyOverlay{position:fixed;inset:0;z-index:6000;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.42);backdrop-filter:blur(8px)}
+.notifyPanel{width:min(520px,100%);max-height:82dvh;display:flex;flex-direction:column;border-radius:26px 26px 0 0;background:var(--surface);border:1px solid var(--line);box-shadow:0 -18px 44px rgba(0,0,0,.25);overflow:hidden}
+.notifyPanel header{min-height:68px;display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid var(--line)}
+.notifyPanel header b{display:block;color:var(--text);font-size:21px;font-weight:1000}
+.notifyPanel header p{margin:4px 0 0;color:var(--sub);font-size:12px;font-weight:800}
+.notifyPanel header button{width:38px;height:38px;border-radius:16px;background:var(--surface2);color:var(--text);font-size:24px;font-weight:700}
+.notifyTools{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:7px;padding:10px 16px;border-bottom:1px solid var(--line)}
+.notifyTools button{height:34px;border-radius:14px;background:var(--surface2);color:var(--text);font-size:12px;font-weight:1000}
+.notifyTools button:first-child{background:var(--primary);color:#fff}
+.notifyList{overflow:auto;padding:10px 16px 18px}
+.notifyList article{min-height:72px;display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.notifyList article.read{opacity:.55}
+.notifyLogo{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:14px;background:#e8fff2;color:#22c55e;font-size:20px;font-weight:1000}
+body.dark .notifyLogo{background:#163524}
+.notifyList b{display:block;color:var(--text);font-size:14px;font-weight:1000}
+.notifyList p{margin:4px 0 0;color:var(--sub);font-size:13px;line-height:1.35;font-weight:750}
+.notifyList span{display:block;margin-top:5px;color:var(--muted);font-size:11px;font-weight:800}
+.notifyEmpty{min-height:160px;display:grid;place-items:center;text-align:center;color:var(--sub)}
+.notifyEmpty b{color:var(--text)}
 EOF
 
-echo "=== v47 timetree ui notification done ==="
+echo "=== v48 done ==="
 git status --short
