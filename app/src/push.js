@@ -17,11 +17,7 @@ export async function registerWebPush(userId) {
   const permission = await Notification.requestPermission();
   if (permission !== "granted") throw new Error("알림 권한 허용 필요");
 
-  const registration = await navigator.serviceWorker.register("/sw.js", {
-    scope: "/",
-    updateViaCache: "none",
-  });
-
+  const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" });
   await navigator.serviceWorker.ready;
 
   const old = await registration.pushManager.getSubscription();
@@ -33,13 +29,7 @@ export async function registerWebPush(userId) {
   });
 
   const { error } = await supabase.from("push_subscriptions").upsert(
-    {
-      user_id: userId,
-      endpoint: subscription.endpoint,
-      subscription: subscription.toJSON(),
-      user_agent: navigator.userAgent,
-      updated_at: new Date().toISOString(),
-    },
+    { user_id: userId, endpoint: subscription.endpoint, subscription: subscription.toJSON(), user_agent: navigator.userAgent },
     { onConflict: "endpoint" }
   );
 
