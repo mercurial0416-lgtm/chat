@@ -38,6 +38,7 @@ export async function registerWebPush(userId) {
       endpoint: subscription.endpoint,
       subscription: subscription.toJSON(),
       user_agent: navigator.userAgent,
+      updated_at: new Date().toISOString(),
     },
     { onConflict: "endpoint" }
   );

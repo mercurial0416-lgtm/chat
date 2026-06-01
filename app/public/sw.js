@@ -12,7 +12,7 @@ self.addEventListener("push", (event) => {
       body: data.body || "새 메시지가 도착했습니다.",
       icon: "/icon.svg",
       badge: "/icon.svg",
-      tag: data.roomId || "chat",
+      tag: data.kind || "rift",
       data: { url: data.url || "/" },
     })
   );
