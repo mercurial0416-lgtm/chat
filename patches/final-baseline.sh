@@ -1,9 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== v40 release-grade mobile UI rebuild ==="
+echo "=== v41 premium social app rebuild ==="
 
 mkdir -p app/src/lib app/public
+
+cat > app/src/lib/supabase.js <<'EOF'
+import { createClient } from "@supabase/supabase-js";
+
+export const SUPABASE_URL = "https://nwenbkthlpzlpfklgonb.supabase.co";
+export const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53ZW5ia3RobHB6bHBma2xnb25iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxMTA5MjMsImV4cCI6MjA5NTY4NjkyM30.PHojgVx7Yn1lUl88w_FtiMRwHBdLmVxkcUNBUBJILMU";
+
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+});
+EOF
 
 cat > app/src/main.jsx <<'EOF'
 import React from "react";
@@ -28,14 +43,14 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.error) {
       return (
-        <div className="fatalPage">
-          <div className="fatalCard">
-            <b>화면 오류</b>
+        <main className="fatalPage">
+          <section className="fatalCard">
+            <h1>화면 오류</h1>
             <p>아래 오류 문구를 보내줘.</p>
             <pre>{String(this.state.error?.message || this.state.error)}</pre>
             <button onClick={() => location.reload()}>새로고침</button>
-          </div>
-        </div>
+          </section>
+        </main>
       );
     }
 
@@ -52,54 +67,36 @@ ReactDOM.createRoot(document.getElementById("root")).render(
 );
 EOF
 
-cat > app/src/lib/supabase.js <<'EOF'
-import { createClient } from "@supabase/supabase-js";
-
-export const SUPABASE_URL = "https://nwenbkthlpzlpfklgonb.supabase.co";
-export const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53ZW5ia3RobHB6bHBma2xnb25iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxMTA5MjMsImV4cCI6MjA5NTY4NjkyM30.PHojgVx7Yn1lUl88w_FtiMRwHBdLmVxkcUNBUBJILMU";
-
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-});
-EOF
-
 cat > app/src/App.jsx <<'EOF'
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { registerWebPush } from "./push";
 
 const TABS = [
-  { key: "home", label: "홈", icon: "홈" },
-  { key: "chats", label: "채팅", icon: "톡" },
-  { key: "calendar", label: "캘린더", icon: "일" },
-  { key: "more", label: "더보기", icon: "더" },
+  { key: "home", label: "홈", icon: "home" },
+  { key: "chats", label: "채팅", icon: "chat" },
+  { key: "calendar", label: "일정", icon: "calendar" },
+  { key: "more", label: "설정", icon: "settings" },
 ];
 
 const safeError = (err) => err?.message || err?.error_description || err?.error || String(err || "오류");
 const nowIso = () => new Date().toISOString();
 
-function toDateKey(value = new Date()) {
+function dateKey(value = new Date()) {
   const d = new Date(value);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function timeText(value) {
+function timeOnly(value) {
   if (!value) return "";
   try {
-    return new Date(value).toLocaleTimeString("ko-KR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return new Date(value).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
   } catch {
     return "";
   }
 }
 
-function dayText(value) {
+function dateTime(value) {
   if (!value) return "";
   try {
     return new Date(value).toLocaleString("ko-KR", {
@@ -127,14 +124,111 @@ function displayName(user) {
   return user?.nickname || user?.displayName || user?.name || user?.title || user?.email || "상대방";
 }
 
-function initials(user) {
+function initial(user) {
   return displayName(user).trim().slice(0, 1).toUpperCase() || "?";
 }
 
-function Avatar({ user, size = 48, glow = false }) {
+function Icon({ name, size = 22 }) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2.2,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    "aria-hidden": true,
+  };
+
+  if (name === "home") {
+    return (
+      <svg {...common}>
+        <path d="M3 11.5 12 4l9 7.5" />
+        <path d="M5.5 10.5V20h13v-9.5" />
+        <path d="M9.5 20v-6h5v6" />
+      </svg>
+    );
+  }
+
+  if (name === "chat") {
+    return (
+      <svg {...common}>
+        <path d="M5 6.8C5 5.25 6.25 4 7.8 4h8.4C17.75 4 19 5.25 19 6.8v6.4c0 1.55-1.25 2.8-2.8 2.8H11l-4.5 3.2V16H7.8C6.25 16 5 14.75 5 13.2V6.8Z" />
+        <path d="M8.5 9h7" />
+        <path d="M8.5 12h4.5" />
+      </svg>
+    );
+  }
+
+  if (name === "calendar") {
+    return (
+      <svg {...common}>
+        <path d="M7 3.8v3" />
+        <path d="M17 3.8v3" />
+        <path d="M5.5 6h13A2.5 2.5 0 0 1 21 8.5v10A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5v-10A2.5 2.5 0 0 1 5.5 6Z" />
+        <path d="M3.5 10h17" />
+        <path d="M8 14h.01" />
+        <path d="M12 14h.01" />
+        <path d="M16 14h.01" />
+      </svg>
+    );
+  }
+
+  if (name === "settings") {
+    return (
+      <svg {...common}>
+        <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.36a1.7 1.7 0 0 0-1 .5 1.7 1.7 0 0 0-.5 1V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-.5-1 1.7 1.7 0 0 0-1-.5 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.64 15a1.7 1.7 0 0 0-.5-1 1.7 1.7 0 0 0-1-.5H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1-.5 1.7 1.7 0 0 0 .5-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.64a1.7 1.7 0 0 0 1-.5 1.7 1.7 0 0 0 .5-1V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 .5 1 1.7 1.7 0 0 0 1 .5 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.36 9c.2.36.38.75.5 1.16.12.4.44.73.84.84H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
+      </svg>
+    );
+  }
+
+  if (name === "search") {
+    return (
+      <svg {...common}>
+        <circle cx="10.5" cy="10.5" r="6.5" />
+        <path d="m16 16 4 4" />
+      </svg>
+    );
+  }
+
+  if (name === "send") {
+    return (
+      <svg {...common}>
+        <path d="M21 3 10 14" />
+        <path d="m21 3-7 18-4-7-7-4 18-7Z" />
+      </svg>
+    );
+  }
+
+  if (name === "back") {
+    return (
+      <svg {...common}>
+        <path d="M15 18 9 12l6-6" />
+      </svg>
+    );
+  }
+
+  if (name === "bell") {
+    return (
+      <svg {...common}>
+        <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z" />
+        <path d="M10 21h4" />
+      </svg>
+    );
+  }
+
+  return null;
+}
+
+function Avatar({ user, size = 48, online = false }) {
   return (
-    <div className={`avatar ${glow ? "avatarGlow" : ""}`} style={{ width: size, height: size }}>
-      {user?.avatar_url ? <img src={user.avatar_url} alt="" /> : <span>{initials(user)}</span>}
+    <div className="avatarWrap" style={{ width: size, height: size }}>
+      <div className="avatar">
+        {user?.avatar_url ? <img src={user.avatar_url} alt="" /> : <span>{initial(user)}</span>}
+      </div>
+      {online && <i />}
     </div>
   );
 }
@@ -146,20 +240,21 @@ function Toast({ children }) {
 
 function Empty({ title, text }) {
   return (
-    <div className="emptyState">
-      <div className="emptyOrb">·</div>
+    <div className="empty">
+      <div className="emptyIcon">+</div>
       <b>{title}</b>
       <p>{text}</p>
     </div>
   );
 }
 
-function TopBar({ title, subtitle, right }) {
+function Header({ eyebrow, title, text, right }) {
   return (
-    <header className="topBar">
+    <header className="header">
       <div>
+        {eyebrow && <span>{eyebrow}</span>}
         <h1>{title}</h1>
-        {subtitle && <p>{subtitle}</p>}
+        {text && <p>{text}</p>}
       </div>
       {right}
     </header>
@@ -180,8 +275,8 @@ function Auth() {
     setMsg("");
 
     try {
-      if (!email.trim()) throw new Error("이메일을 입력해줘.");
-      if (password.length < 6) throw new Error("비밀번호는 6자 이상.");
+      if (!email.trim()) throw new Error("이메일 입력 필요");
+      if (password.length < 6) throw new Error("비밀번호 6자 이상");
 
       if (mode === "signup") {
         const { error } = await supabase.auth.signUp({
@@ -189,7 +284,6 @@ function Auth() {
           password,
           options: { data: { nickname: nickname.trim() || email.split("@")[0] } },
         });
-
         if (error) throw error;
         setMode("login");
         setMsg("가입 완료. 로그인해줘.");
@@ -198,7 +292,6 @@ function Auth() {
           email: email.trim(),
           password,
         });
-
         if (error) throw error;
         location.reload();
       }
@@ -212,16 +305,20 @@ function Auth() {
   return (
     <main className="authPage">
       <form className="authCard" onSubmit={submit}>
-        <div className="authLogo">C</div>
-        <div>
-          <h1>Chatly</h1>
-          <p>친구, 일정, 대화를 깔끔하게.</p>
+        <div className="brand">
+          <div>R</div>
+          <span>Rift</span>
         </div>
+
+        <section>
+          <h1>{mode === "login" ? "다시 만나서 반가워요" : "새 계정 만들기"}</h1>
+          <p>친구, 채팅, 일정을 한 곳에서 관리해요.</p>
+        </section>
 
         {mode === "signup" && (
           <label className="field">
             <span>닉네임</span>
-            <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="형준" />
+            <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="닉네임" />
           </label>
         )}
 
@@ -235,19 +332,12 @@ function Auth() {
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="6자 이상" />
         </label>
 
-        <button className="primaryBtn" disabled={busy}>
+        <button className="primaryButton" disabled={busy}>
           {busy ? "처리중..." : mode === "login" ? "로그인" : "가입하기"}
         </button>
 
-        <button
-          type="button"
-          className="textBtn"
-          onClick={() => {
-            setMsg("");
-            setMode(mode === "login" ? "signup" : "login");
-          }}
-        >
-          {mode === "login" ? "새 계정 만들기" : "로그인으로 돌아가기"}
+        <button type="button" className="linkButton" onClick={() => setMode(mode === "login" ? "signup" : "login")}>
+          {mode === "login" ? "계정 만들기" : "로그인으로 돌아가기"}
         </button>
 
         <Toast>{msg}</Toast>
@@ -311,7 +401,6 @@ export default function App() {
           email: user.email,
           nickname: user.user_metadata?.nickname || user.email?.split("@")[0] || "사용자",
         };
-
         await supabase.from("profiles").upsert(row);
         data = row;
       }
@@ -333,73 +422,68 @@ export default function App() {
     setTab("more");
   }
 
-  function goTab(next) {
+  function switchTab(next) {
     setTab(next);
     setRoom(null);
   }
 
-  if (booting) return <div className="loadingPage">불러오는 중...</div>;
+  if (booting) return <main className="loading">불러오는 중...</main>;
   if (!session) return <Auth />;
-  if (!me) return <div className="loadingPage">프로필 불러오는 중...</div>;
+  if (!me) return <main className="loading">프로필 불러오는 중...</main>;
 
   return (
-    <div className="appShell">
-      <aside className="sideRail">
-        <button className="sideProfile" onClick={openProfile}>
-          <Avatar user={me} size={44} glow />
+    <div className="app">
+      <aside className="rail">
+        <button className="railProfile" onClick={openProfile}>
+          <Avatar user={me} size={44} online />
         </button>
 
         {TABS.map((item) => (
-          <button key={item.key} className={tab === item.key ? "active" : ""} onClick={() => goTab(item.key)}>
-            <b>{item.icon}</b>
-            <span>{item.label}</span>
+          <button key={item.key} className={tab === item.key ? "active" : ""} onClick={() => switchTab(item.key)}>
+            <Icon name={item.icon} size={22} />
+            <small>{item.label}</small>
           </button>
         ))}
       </aside>
 
-      <main className="phoneFrame">
-        <section className={tab === "chats" ? "screen chatScreen" : "screen"}>
-          {tab === "home" && (
-            <Home
-              me={me}
-              openProfile={openProfile}
-              openRoom={(nextRoom) => {
-                setRoom(nextRoom);
-                setTab("chats");
-              }}
-            />
-          )}
+      <main className={tab === "chats" ? "main split" : "main"}>
+        {tab === "home" && (
+          <Home
+            me={me}
+            openProfile={openProfile}
+            openRoom={(nextRoom) => {
+              setRoom(nextRoom);
+              setTab("chats");
+            }}
+          />
+        )}
 
-          {tab === "chats" && (
-            <>
-              <Chats me={me} activeRoom={room} setRoom={setRoom} />
-              <div className="desktopChatPane">
-                {room ? (
-                  <Room me={me} room={room} />
-                ) : (
-                  <Empty title="대화방을 선택해줘" text="친구 카드에서 채팅을 시작하거나 대화 목록을 열어줘." />
-                )}
-              </div>
-              {room && (
-                <div className="mobileChatPane">
-                  <Room me={me} room={room} onBack={() => setRoom(null)} />
-                </div>
-              )}
-            </>
-          )}
+        {tab === "chats" && (
+          <>
+            <Chats me={me} activeRoom={room} setRoom={setRoom} />
+            <section className="chatPane">
+              {room ? <Room me={me} room={room} /> : <Empty title="대화방 선택" text="홈에서 친구를 선택하거나 채팅 목록을 열어줘." />}
+            </section>
+            {room && (
+              <section className="mobileRoom">
+                <Room me={me} room={room} onBack={() => setRoom(null)} />
+              </section>
+            )}
+          </>
+        )}
 
-          {tab === "calendar" && <Calendar me={me} />}
-          {tab === "more" && (
-            <More
-              me={me}
-              section={moreSection}
-              setSection={setMoreSection}
-              reloadMe={() => loadMe(session.user)}
-            />
-          )}
-        </section>
+        {tab === "calendar" && <Calendar me={me} />}
 
-        <BottomNav tab={tab} setTab={goTab} />
+        {tab === "more" && (
+          <More
+            me={me}
+            section={moreSection}
+            setSection={setMoreSection}
+            reloadMe={() => loadMe(session.user)}
+          />
+        )}
+
+        <BottomNav tab={tab} setTab={switchTab} />
       </main>
 
       <Toast>{msg}</Toast>
@@ -412,7 +496,7 @@ function BottomNav({ tab, setTab }) {
     <nav className="bottomNav">
       {TABS.map((item) => (
         <button key={item.key} className={tab === item.key ? "active" : ""} onClick={() => setTab(item.key)}>
-          <b>{item.icon}</b>
+          <Icon name={item.icon} size={22} />
           <span>{item.label}</span>
         </button>
       ))}
@@ -454,43 +538,42 @@ function Home({ me, openProfile, openRoom }) {
   }, [users, query]);
 
   return (
-    <div className="page homePage">
-      <TopBar
-        title="홈"
-        subtitle="친구와 빠르게 연결"
+    <section className="page home">
+      <Header
+        eyebrow="Rift"
+        title="친구"
+        text="지금 대화할 사람을 골라요"
         right={
-          <button className="miniProfile" onClick={openProfile}>
-            <Avatar user={me} size={42} />
+          <button className="roundIcon" onClick={openProfile}>
+            <Avatar user={me} size={44} online />
           </button>
         }
       />
 
-      <button className="heroProfile" onClick={openProfile}>
-        <div className="heroLeft">
-          <Avatar user={me} size={62} glow />
-          <div>
-            <span>내 프로필</span>
-            <b>{me.nickname}</b>
-            <p>{me.status_message || "상태메시지를 설정해보세요"}</p>
-          </div>
+      <button className="profileHero" onClick={openProfile}>
+        <Avatar user={me} size={64} online />
+        <div>
+          <span>내 프로필</span>
+          <b>{me.nickname}</b>
+          <p>{me.status_message || "상태메시지를 설정해보세요"}</p>
         </div>
-        <em>수정</em>
+        <em>편집</em>
       </button>
 
-      <div className="searchBox">
-        <span>⌕</span>
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="친구 또는 이메일 검색" />
+      <div className="searchBar">
+        <Icon name="search" size={20} />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="친구, 이메일 검색" />
       </div>
 
-      <div className="sectionHead">
+      <div className="sectionTitle">
         <b>전체 사용자</b>
-        <span>{filtered.length}명</span>
+        <span>{filtered.length}</span>
       </div>
 
-      <div className="peopleList">
+      <div className="list">
         {filtered.map((user) => (
-          <article className="personItem" key={user.id}>
-            <Avatar user={user} size={54} />
+          <article className="personCard" key={user.id}>
+            <Avatar user={user} size={54} online />
             <div>
               <b>{displayName(user)}</b>
               <p>{user.status_message || user.email}</p>
@@ -502,7 +585,7 @@ function Home({ me, openProfile, openRoom }) {
 
       {!filtered.length && <Empty title="사용자 없음" text="가입한 사용자가 여기에 표시돼." />}
       <Toast>{msg}</Toast>
-    </div>
+    </section>
   );
 }
 
@@ -511,7 +594,6 @@ async function createDM(me, user) {
 
   try {
     const { data, error } = await supabase.rpc("get_or_create_dm", { other_user_id: user.id });
-
     if (!error && data) {
       const id = Array.isArray(data) ? data[0]?.id || data[0]?.room_id || data[0] : data;
       return { id, displayName: label, avatar_url: user.avatar_url, last_message: "", updated_at: nowIso() };
@@ -632,33 +714,34 @@ function Chats({ me, activeRoom, setRoom }) {
   }
 
   return (
-    <div className="page chatListPage">
-      <TopBar
+    <section className="page chats">
+      <Header
+        eyebrow="Messages"
         title="채팅"
-        subtitle="대화 목록"
-        right={<button className="refreshBtn" onClick={loadRooms}>새로고침</button>}
+        text="최근 대화"
+        right={<button className="pillButton" onClick={loadRooms}>새로고침</button>}
       />
 
-      <div className="chatCards">
+      <div className="list">
         {rooms.map((room) => (
           <button
             key={room.id}
-            className={`chatItem ${activeRoom?.id === room.id ? "active" : ""}`}
+            className={`chatCard ${activeRoom?.id === room.id ? "active" : ""}`}
             onClick={() => setRoom(room)}
           >
-            <Avatar user={{ nickname: room.displayName, avatar_url: room.avatar_url }} size={54} />
+            <Avatar user={{ nickname: room.displayName, avatar_url: room.avatar_url }} size={54} online />
             <div>
               <b>{room.displayName || "상대방"}</b>
-              <p>{room.last_message || "대화를 시작해보세요"}</p>
+              <p>{room.last_message || "아직 메시지가 없어요"}</p>
             </div>
-            <time>{dayText(room.updated_at || room.created_at)}</time>
+            <time>{dateTime(room.updated_at || room.created_at)}</time>
           </button>
         ))}
       </div>
 
       {!rooms.length && <Empty title="대화방 없음" text="홈에서 친구를 선택해 채팅을 시작해줘." />}
       <Toast>{msg}</Toast>
-    </div>
+    </section>
   );
 }
 
@@ -739,11 +822,17 @@ function Room({ me, room, onBack }) {
   return (
     <div className="room">
       <header className="roomHeader">
-        {onBack && <button className="backButton" onClick={onBack}>‹</button>}
-        <Avatar user={{ nickname: room.displayName, avatar_url: room.avatar_url }} size={42} />
+        {onBack && (
+          <button className="iconButton" onClick={onBack}>
+            <Icon name="back" size={24} />
+          </button>
+        )}
+
+        <Avatar user={{ nickname: room.displayName, avatar_url: room.avatar_url }} size={44} online />
+
         <div>
           <b>{room.displayName || "상대방"}</b>
-          <p>{visibleMessages.length}개 메시지</p>
+          <p>{visibleMessages.length}개의 메시지</p>
         </div>
       </header>
 
@@ -755,7 +844,7 @@ function Room({ me, room, onBack }) {
           return (
             <div key={message.id || message.created_at} className={`message ${mine ? "mine" : "other"}`}>
               <div className="bubble">{body}</div>
-              <span>{timeText(message.created_at)}</span>
+              <span>{timeOnly(message.created_at)}</span>
             </div>
           );
         })}
@@ -764,7 +853,9 @@ function Room({ me, room, onBack }) {
 
       <form className="composer" onSubmit={send}>
         <input value={text} onChange={(e) => setText(e.target.value)} placeholder="메시지 입력" />
-        <button>전송</button>
+        <button>
+          <Icon name="send" size={19} />
+        </button>
       </form>
 
       <Toast>{msg}</Toast>
@@ -773,7 +864,7 @@ function Room({ me, room, onBack }) {
 }
 
 function Calendar({ me }) {
-  const [date, setDate] = useState(toDateKey());
+  const [date, setDate] = useState(dateKey());
   const [ownerColumn, setOwnerColumn] = useState("user_id");
   const [events, setEvents] = useState([]);
   const [title, setTitle] = useState("");
@@ -848,32 +939,33 @@ function Calendar({ me }) {
   }
 
   return (
-    <div className="page calendarPage">
-      <TopBar
-        title="캘린더"
-        subtitle="내 일정 관리"
-        right={<button className="refreshBtn" onClick={() => setDate(toDateKey())}>오늘</button>}
+    <section className="page calendar">
+      <Header
+        eyebrow="Schedule"
+        title="일정"
+        text="오늘과 약속을 관리해요"
+        right={<button className="pillButton" onClick={() => setDate(dateKey())}>오늘</button>}
       />
 
-      <div className="calendarHero">
+      <section className="calendarHero">
         <span>선택 날짜</span>
         <b>{date}</b>
-      </div>
+      </section>
 
-      <input className="datePicker" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      <input className="dateInput" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
 
-      <form className="scheduleForm" onSubmit={addEvent}>
+      <form className="addForm" onSubmit={addEvent}>
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="일정 추가" />
         <button>추가</button>
       </form>
 
       <div className="eventList">
         {events.map((item) => (
-          <article className="eventItem" key={item.id}>
-            <div className="eventDot" />
+          <article className="eventCard" key={item.id}>
+            <i />
             <div>
               <b>{item.title}</b>
-              <p>{dayText(item.start_at)}</p>
+              <p>{dateTime(item.start_at)}</p>
             </div>
           </article>
         ))}
@@ -881,17 +973,17 @@ function Calendar({ me }) {
 
       {!events.length && <Empty title="일정 없음" text="날짜를 고르고 일정을 추가해줘." />}
       <Toast>{msg}</Toast>
-    </div>
+    </section>
   );
 }
 
 function More({ me, section, setSection, reloadMe }) {
   return (
-    <div className="page morePage">
-      <TopBar title="더보기" subtitle="프로필과 설정" />
+    <section className="page more">
+      <Header eyebrow="Account" title="설정" text="프로필과 앱 설정" />
 
-      <button className="moreProfile" onClick={() => setSection("profile")}>
-        <Avatar user={me} size={66} glow />
+      <button className="accountCard" onClick={() => setSection("profile")}>
+        <Avatar user={me} size={66} online />
         <div>
           <span>내 계정</span>
           <b>{me.nickname}</b>
@@ -909,22 +1001,22 @@ function More({ me, section, setSection, reloadMe }) {
           <span>푸시 설정</span>
         </button>
         <button className={section === "location" ? "active" : ""} onClick={() => setSection("location")}>
-          <b>위치공유</b>
-          <span>친구 위치</span>
+          <b>위치</b>
+          <span>위치공유</span>
         </button>
         <button className={section === "settings" ? "active" : ""} onClick={() => setSection("settings")}>
-          <b>설정</b>
+          <b>환경설정</b>
           <span>테마 · 로그아웃</span>
         </button>
       </div>
 
-      <div className="panel">
+      <section className="panel">
         {section === "profile" && <Profile me={me} reloadMe={reloadMe} />}
         {section === "notify" && <Notify me={me} />}
         {section === "location" && <Location />}
         {section === "settings" && <Settings me={me} reloadMe={reloadMe} />}
-      </div>
-    </div>
+      </section>
+    </section>
   );
 }
 
@@ -962,7 +1054,7 @@ function Profile({ me, reloadMe }) {
       <h2>프로필 수정</h2>
 
       <div className="profilePreview">
-        <Avatar user={{ ...me, nickname, avatar_url: avatar }} size={66} glow />
+        <Avatar user={{ ...me, nickname, avatar_url: avatar }} size={64} online />
         <div>
           <b>{nickname || me.email}</b>
           <p>{status || "상태메시지 없음"}</p>
@@ -984,7 +1076,7 @@ function Profile({ me, reloadMe }) {
         <input value={avatar} onChange={(e) => setAvatar(e.target.value)} placeholder="https://..." />
       </label>
 
-      <button className="primaryBtn" onClick={save}>저장</button>
+      <button className="primaryButton" onClick={save}>저장</button>
       <Toast>{msg}</Toast>
     </div>
   );
@@ -1005,8 +1097,8 @@ function Notify({ me }) {
   return (
     <div className="formPanel">
       <h2>알림</h2>
-      <p>PC/모바일 기기마다 한 번씩 켜야 해.</p>
-      <button className="primaryBtn" onClick={enable}>백그라운드 알림 켜기</button>
+      <p>PC/모바일 기기마다 한 번씩 켜야 함.</p>
+      <button className="primaryButton" onClick={enable}>백그라운드 알림 켜기</button>
       <Toast>{msg}</Toast>
     </div>
   );
@@ -1038,15 +1130,15 @@ function Settings({ me, reloadMe }) {
 
   return (
     <div className="formPanel">
-      <h2>설정</h2>
+      <h2>환경설정</h2>
 
       <label className="switchRow">
         <span>다크모드</span>
         <input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} />
       </label>
 
-      <button className="primaryBtn" onClick={save}>저장</button>
-      <button className="dangerBtn" onClick={() => supabase.auth.signOut().then(() => location.reload())}>로그아웃</button>
+      <button className="primaryButton" onClick={save}>저장</button>
+      <button className="dangerButton" onClick={() => supabase.auth.signOut().then(() => location.reload())}>로그아웃</button>
       <Toast>{msg}</Toast>
     </div>
   );
@@ -1058,38 +1150,36 @@ cat > app/src/styles.css <<'EOF'
   --bg:#f6f7fb;
   --surface:#ffffff;
   --surface2:#f1f4f9;
-  --text:#111827;
-  --sub:#7a8494;
-  --muted:#a0a8b5;
-  --line:rgba(17,24,39,.08);
-  --yellow:#ffd84d;
-  --yellow2:#ffe995;
-  --blue:#5f7cff;
-  --green:#2ac08f;
-  --red:#ff4e66;
-  --shadow:0 18px 44px rgba(17,24,39,.11);
-  --shadow2:0 8px 24px rgba(17,24,39,.075);
-  --r20:20px;
-  --r24:24px;
-  --r28:28px;
-  --r32:32px;
+  --text:#0f172a;
+  --sub:#64748b;
+  --muted:#94a3b8;
+  --line:rgba(15,23,42,.08);
+  --primary:#2563eb;
+  --primary2:#7c3aed;
+  --accent:#06b6d4;
+  --green:#22c55e;
+  --danger:#ef4444;
+  --shadow:0 18px 44px rgba(15,23,42,.10);
+  --shadow2:0 8px 24px rgba(15,23,42,.07);
+  --blur:rgba(255,255,255,.82);
 }
 
 body.dark{
-  --bg:#0e1118;
-  --surface:#171c26;
-  --surface2:#202634;
-  --text:#f7f8fb;
-  --sub:#a3acbb;
-  --muted:#727b8c;
+  --bg:#0b1020;
+  --surface:#111827;
+  --surface2:#1e293b;
+  --text:#f8fafc;
+  --sub:#94a3b8;
+  --muted:#64748b;
   --line:rgba(255,255,255,.08);
-  --yellow:#ffdf64;
-  --yellow2:#fff0a8;
-  --blue:#7b92ff;
-  --green:#3dd6a6;
-  --red:#ff6578;
-  --shadow:0 20px 48px rgba(0,0,0,.32);
-  --shadow2:0 10px 26px rgba(0,0,0,.23);
+  --primary:#60a5fa;
+  --primary2:#a78bfa;
+  --accent:#22d3ee;
+  --green:#4ade80;
+  --danger:#fb7185;
+  --shadow:0 22px 54px rgba(0,0,0,.35);
+  --shadow2:0 10px 28px rgba(0,0,0,.24);
+  --blur:rgba(17,24,39,.82);
 }
 
 *{box-sizing:border-box}
@@ -1101,7 +1191,10 @@ html,body,#root{
   font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,sans-serif;
 }
 body{
-  background:var(--bg);
+  background:
+    radial-gradient(circle at 16% 0%, rgba(37,99,235,.14), transparent 30%),
+    radial-gradient(circle at 90% 8%, rgba(124,58,237,.12), transparent 30%),
+    var(--bg);
   color:var(--text);
 }
 button,input{
@@ -1121,46 +1214,42 @@ img{
   max-width:100%;
 }
 
-.loadingPage,.fatalPage{
+.loading,.fatalPage{
   width:100vw;
   height:100dvh;
   display:grid;
   place-items:center;
   color:var(--sub);
-  background:
-    radial-gradient(circle at 18% 0%, rgba(95,124,255,.16), transparent 32%),
-    radial-gradient(circle at 90% 12%, rgba(255,216,77,.16), transparent 28%),
-    var(--bg);
+  font-weight:800;
 }
 .fatalCard{
-  width:min(420px,calc(100vw - 32px));
+  width:min(430px,calc(100vw - 32px));
   padding:24px;
-  border-radius:var(--r28);
+  border-radius:30px;
   background:var(--surface);
   border:1px solid var(--line);
   box-shadow:var(--shadow);
 }
-.fatalCard b{
-  display:block;
-  font-size:24px;
+.fatalCard h1{
+  margin:0;
 }
 .fatalCard p{
   color:var(--sub);
 }
 .fatalCard pre{
-  overflow:auto;
   white-space:pre-wrap;
+  overflow:auto;
   background:var(--surface2);
+  border-radius:18px;
   padding:12px;
-  border-radius:16px;
 }
 .fatalCard button{
   width:100%;
-  height:48px;
+  height:50px;
   border-radius:18px;
-  background:linear-gradient(135deg,var(--yellow),var(--yellow2));
-  font-weight:1000;
-  color:#171717;
+  color:#fff;
+  font-weight:900;
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
 }
 
 /* Auth */
@@ -1170,47 +1259,48 @@ img{
   display:grid;
   place-items:center;
   padding:18px;
-  background:
-    radial-gradient(circle at 20% 0%, rgba(95,124,255,.16), transparent 34%),
-    radial-gradient(circle at 88% 8%, rgba(255,216,77,.18), transparent 30%),
-    var(--bg);
 }
 .authCard{
   width:min(430px,100%);
-  padding:26px;
   display:grid;
-  gap:14px;
+  gap:16px;
+  padding:26px;
   border-radius:34px;
-  background:rgba(255,255,255,.86);
+  background:var(--blur);
   border:1px solid var(--line);
   box-shadow:var(--shadow);
-  backdrop-filter:blur(18px);
+  backdrop-filter:blur(22px);
 }
-body.dark .authCard{
-  background:rgba(23,28,38,.88);
+.brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
 }
-.authLogo{
-  width:58px;
-  height:58px;
+.brand div{
+  width:48px;
+  height:48px;
   display:grid;
   place-items:center;
-  border-radius:22px;
-  background:linear-gradient(135deg,var(--yellow),var(--yellow2));
-  color:#171717;
-  font-size:26px;
+  border-radius:17px;
+  color:#fff;
   font-weight:1000;
-  box-shadow:0 12px 26px rgba(255,216,77,.24);
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
+}
+.brand span{
+  font-size:19px;
+  font-weight:1000;
+  letter-spacing:-.6px;
 }
 .authCard h1{
   margin:0;
-  font-size:42px;
-  line-height:1;
-  letter-spacing:-1.8px;
+  font-size:34px;
+  line-height:1.08;
+  letter-spacing:-1.4px;
 }
 .authCard p{
-  margin:6px 0 0;
+  margin:7px 0 0;
   color:var(--sub);
-  font-weight:700;
+  font-weight:750;
 }
 .field{
   display:grid;
@@ -1224,22 +1314,22 @@ body.dark .authCard{
 .field input{
   width:100%;
   height:54px;
-  border-radius:22px;
-  border:1px solid var(--line);
-  background:var(--surface2);
-  color:var(--text);
   padding:0 16px;
+  border-radius:20px;
+  border:1px solid var(--line);
+  background:var(--surface);
+  color:var(--text);
 }
-.primaryBtn{
+.primaryButton{
   width:100%;
   height:54px;
-  border-radius:22px;
-  background:linear-gradient(135deg,var(--yellow),var(--yellow2));
-  color:#171717;
+  border-radius:20px;
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
+  color:#fff;
   font-weight:1000;
-  box-shadow:0 12px 28px rgba(255,216,77,.2);
+  box-shadow:0 12px 28px rgba(37,99,235,.2);
 }
-.textBtn{
+.linkButton{
   height:42px;
   background:transparent;
   color:var(--sub);
@@ -1247,219 +1337,230 @@ body.dark .authCard{
 }
 
 /* Layout */
-.appShell{
+.app{
   width:100vw;
   height:100vh;
   display:grid;
-  grid-template-columns:82px minmax(0,1fr);
-  background:
-    radial-gradient(circle at 16% 0%, rgba(95,124,255,.1), transparent 30%),
-    var(--bg);
+  grid-template-columns:84px minmax(0,1fr);
 }
-.sideRail{
+.rail{
   height:100vh;
   padding:14px 9px;
   display:flex;
   flex-direction:column;
   align-items:center;
   gap:9px;
+  background:var(--blur);
   border-right:1px solid var(--line);
-  background:rgba(255,255,255,.72);
-  backdrop-filter:blur(18px);
+  backdrop-filter:blur(24px);
 }
-body.dark .sideRail{
-  background:rgba(23,28,38,.74);
-}
-.sideRail button{
-  width:60px;
-  min-height:60px;
+.rail button{
+  width:62px;
+  min-height:62px;
   display:grid;
   place-items:center;
-  gap:2px;
-  border-radius:23px;
+  gap:3px;
+  border-radius:22px;
   background:transparent;
   color:var(--muted);
   font-weight:950;
 }
-.sideRail button.active{
-  background:linear-gradient(135deg,var(--yellow),var(--yellow2));
-  color:#171717;
-  box-shadow:0 12px 26px rgba(255,216,77,.2);
+.rail button.active{
+  color:#fff;
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
+  box-shadow:0 14px 30px rgba(37,99,235,.22);
 }
-.sideRail button b{
-  font-size:14px;
-}
-.sideRail button span{
+.rail small{
   font-size:10px;
 }
-.sideProfile{
+.railProfile{
   padding:0;
   margin-bottom:8px;
 }
-.phoneFrame{
+.main{
   height:100vh;
   min-width:0;
-  overflow:hidden;
+  overflow:auto;
+  padding:24px;
   position:relative;
 }
-.screen{
-  width:100%;
-  height:100vh;
-  overflow:auto;
-  padding:22px 24px 26px;
-}
-.chatScreen{
+.main.split{
   display:grid;
   grid-template-columns:400px minmax(0,1fr);
   gap:0;
   padding:0;
+  overflow:hidden;
 }
-.chatScreen .chatListPage{
-  padding:22px 20px 26px;
+.main.split .chats{
+  height:100vh;
+  overflow:auto;
+  padding:24px 20px;
   border-right:1px solid var(--line);
 }
-.desktopChatPane{
-  min-width:0;
+.chatPane{
   height:100vh;
   overflow:hidden;
   background:
-    radial-gradient(circle at 0% 0%, rgba(95,124,255,.1), transparent 34%),
-    var(--bg);
+    radial-gradient(circle at 0% 0%, rgba(37,99,235,.12), transparent 34%),
+    transparent;
+}
+.page{
+  max-width:900px;
+  margin:0 auto;
 }
 
-/* Common */
-.avatar{
-  display:grid;
-  place-items:center;
-  overflow:hidden;
-  flex:0 0 auto;
-  border-radius:21px;
-  background:linear-gradient(135deg,#eef3fb,#dce5f3);
-  color:#111827;
-  font-weight:1000;
-}
-body.dark .avatar{
-  background:linear-gradient(135deg,#2a3344,#202634);
-  color:#f7f8fb;
-}
-.avatar img{
-  width:100%;
-  height:100%;
-  object-fit:cover;
-}
-.avatarGlow{
-  box-shadow:0 12px 30px rgba(95,124,255,.18);
-}
-.topBar{
+/* Header */
+.header{
   display:flex;
   align-items:flex-start;
   justify-content:space-between;
   gap:14px;
   margin-bottom:18px;
 }
-.topBar h1{
-  margin:0;
-  font-size:36px;
-  line-height:1;
-  letter-spacing:-1.6px;
+.header span{
+  display:block;
+  color:var(--primary);
+  font-size:12px;
+  font-weight:1000;
+  letter-spacing:.3px;
+  text-transform:uppercase;
 }
-.topBar p{
-  margin:7px 0 0;
+.header h1{
+  margin:3px 0 0;
+  font-size:38px;
+  line-height:1;
+  letter-spacing:-1.7px;
+}
+.header p{
+  margin:8px 0 0;
   color:var(--sub);
   font-size:14px;
-  font-weight:800;
+  font-weight:760;
 }
-.miniProfile{
-  width:48px;
-  height:48px;
-  border-radius:20px;
+.roundIcon,.iconButton{
+  width:46px;
+  height:46px;
+  display:grid;
+  place-items:center;
+  border-radius:18px;
   background:var(--surface);
+  color:var(--text);
   border:1px solid var(--line);
   box-shadow:var(--shadow2);
 }
+.pillButton{
+  height:40px;
+  padding:0 15px;
+  border-radius:20px;
+  background:var(--surface);
+  color:var(--text);
+  border:1px solid var(--line);
+  box-shadow:var(--shadow2);
+  font-size:13px;
+  font-weight:950;
+}
+
+/* Avatar */
+.avatarWrap{
+  position:relative;
+  flex:0 0 auto;
+}
+.avatar{
+  width:100%;
+  height:100%;
+  display:grid;
+  place-items:center;
+  border-radius:inherit;
+  overflow:hidden;
+  color:#fff;
+  font-weight:1000;
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
+}
+.avatar img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.avatarWrap i{
+  position:absolute;
+  right:-1px;
+  bottom:-1px;
+  width:13px;
+  height:13px;
+  border-radius:50%;
+  background:var(--green);
+  border:3px solid var(--surface);
+}
 
 /* Home */
-.homePage{
-  max-width:920px;
-  margin:0 auto;
+.home{
+  padding-bottom:24px;
 }
-.heroProfile{
+.profileHero{
   width:100%;
-  min-height:116px;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:14px;
-  padding:18px;
-  margin-bottom:16px;
-  border-radius:34px;
-  background:
-    linear-gradient(135deg,rgba(255,216,77,.26),rgba(95,124,255,.13)),
-    var(--surface);
-  border:1px solid rgba(255,216,77,.36);
-  color:var(--text);
-  box-shadow:var(--shadow);
-  text-align:left;
-}
-.heroLeft{
-  min-width:0;
+  min-height:118px;
   display:flex;
   align-items:center;
   gap:15px;
+  padding:18px;
+  margin-bottom:16px;
+  border-radius:32px;
+  background:
+    linear-gradient(135deg,rgba(37,99,235,.13),rgba(124,58,237,.1)),
+    var(--surface);
+  color:var(--text);
+  border:1px solid var(--line);
+  box-shadow:var(--shadow);
+  text-align:left;
 }
-.heroLeft div{
+.profileHero div{
   min-width:0;
+  flex:1;
 }
-.heroProfile span{
-  display:block;
+.profileHero span{
   color:var(--sub);
   font-size:13px;
   font-weight:900;
 }
-.heroProfile b{
+.profileHero b{
   display:block;
   margin-top:3px;
-  font-size:22px;
+  font-size:23px;
   line-height:1.1;
-  letter-spacing:-.6px;
+  letter-spacing:-.8px;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
 }
-.heroProfile p{
+.profileHero p{
   margin:6px 0 0;
   color:var(--sub);
   font-size:14px;
-  font-weight:750;
+  font-weight:760;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
 }
-.heroProfile em{
-  flex:0 0 auto;
-  font-style:normal;
-  color:var(--sub);
+.profileHero em{
+  color:var(--primary);
   font-size:13px;
+  font-style:normal;
   font-weight:1000;
 }
-.searchBox{
+.searchBar{
   height:56px;
   display:flex;
   align-items:center;
-  gap:10px;
+  gap:11px;
   padding:0 16px;
   margin-bottom:18px;
-  border-radius:24px;
+  border-radius:22px;
   background:var(--surface);
   border:1px solid var(--line);
   box-shadow:var(--shadow2);
-}
-.searchBox span{
   color:var(--muted);
-  font-size:20px;
-  font-weight:1000;
 }
-.searchBox input{
+.searchBar input{
   min-width:0;
   flex:1;
   height:100%;
@@ -1467,136 +1568,126 @@ body.dark .avatar{
   background:transparent;
   color:var(--text);
 }
-.sectionHead{
+.sectionTitle{
   display:flex;
   align-items:center;
   justify-content:space-between;
   margin:0 2px 10px;
 }
-.sectionHead b{
+.sectionTitle b{
   font-size:15px;
   font-weight:1000;
 }
-.sectionHead span{
+.sectionTitle span{
   color:var(--sub);
   font-size:13px;
   font-weight:900;
 }
-.peopleList,.chatCards,.eventList{
+.list{
   display:grid;
   gap:10px;
 }
-.personItem,.chatItem{
+.personCard,.chatCard{
   width:100%;
   min-height:82px;
   display:flex;
   align-items:center;
   gap:13px;
   padding:14px;
-  border-radius:30px;
+  border-radius:28px;
   background:var(--surface);
   color:var(--text);
   border:1px solid var(--line);
   box-shadow:var(--shadow2);
   text-align:left;
-  transition:transform .14s ease, border-color .14s ease, background .14s ease;
 }
-.personItem:active,.chatItem:active{
-  transform:scale(.986);
-}
-.personItem:hover,.chatItem:hover,.chatItem.active{
-  border-color:rgba(255,216,77,.55);
-  background:
-    linear-gradient(135deg,rgba(255,216,77,.16),rgba(95,124,255,.08)),
-    var(--surface);
-}
-.personItem div,.chatItem div{
+.personCard div,.chatCard div{
   min-width:0;
   flex:1;
 }
-.personItem b,.chatItem b{
+.personCard b,.chatCard b{
   display:block;
-  color:var(--text);
   font-size:18px;
   line-height:1.2;
-  font-weight:1000;
+  letter-spacing:-.2px;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
 }
-.personItem p,.chatItem p{
+.personCard p,.chatCard p{
   margin:5px 0 0;
   color:var(--sub);
   font-size:13px;
-  font-weight:750;
+  font-weight:760;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
 }
-.personItem button{
-  min-width:60px;
+.personCard button{
+  min-width:58px;
   height:38px;
-  padding:0 15px;
+  padding:0 14px;
   border-radius:19px;
+  color:#fff;
   background:var(--text);
-  color:var(--bg);
   font-size:14px;
   font-weight:1000;
 }
-body.dark .personItem button{
-  background:linear-gradient(135deg,var(--yellow),var(--yellow2));
-  color:#171717;
+body.dark .personCard button{
+  color:#fff;
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
 }
-.chatItem time{
+
+/* Chats */
+.chatCard{
+  transition:transform .14s ease, border-color .14s ease;
+}
+.chatCard:active,.personCard:active{
+  transform:scale(.985);
+}
+.chatCard.active{
+  border-color:rgba(37,99,235,.45);
+  background:
+    linear-gradient(135deg,rgba(37,99,235,.1),rgba(124,58,237,.07)),
+    var(--surface);
+}
+.chatCard time{
   max-width:72px;
+  text-align:right;
   color:var(--muted);
   font-size:11px;
   font-weight:850;
-  text-align:right;
 }
 
 /* Room */
+.mobileRoom{
+  display:none;
+}
 .room{
   height:100%;
   display:flex;
   flex-direction:column;
   background:
-    radial-gradient(circle at 10% 0%, rgba(95,124,255,.12), transparent 34%),
-    var(--bg);
+    radial-gradient(circle at 12% 0%, rgba(37,99,235,.12), transparent 34%),
+    transparent;
 }
 .roomHeader{
-  min-height:72px;
+  min-height:74px;
   display:flex;
   align-items:center;
   gap:12px;
   padding:0 18px;
   border-bottom:1px solid var(--line);
-  background:rgba(255,255,255,.76);
-  backdrop-filter:blur(18px);
-}
-body.dark .roomHeader{
-  background:rgba(23,28,38,.78);
-}
-.backButton{
-  width:42px;
-  height:42px;
-  display:grid;
-  place-items:center;
-  border-radius:50%;
-  background:var(--surface);
-  color:var(--text);
-  font-size:28px;
-  box-shadow:var(--shadow2);
+  background:var(--blur);
+  backdrop-filter:blur(24px);
 }
 .roomHeader div{
   min-width:0;
 }
 .roomHeader b{
   display:block;
-  color:var(--text);
   font-size:18px;
   line-height:1.2;
-  font-weight:1000;
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
@@ -1605,7 +1696,7 @@ body.dark .roomHeader{
   margin:4px 0 0;
   color:var(--sub);
   font-size:12px;
-  font-weight:800;
+  font-weight:780;
 }
 .messages{
   flex:1;
@@ -1635,8 +1726,8 @@ body.dark .roomHeader{
   white-space:pre-wrap;
 }
 .mine .bubble{
-  background:linear-gradient(135deg,var(--yellow),var(--yellow2));
-  color:#171717;
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
+  color:#fff;
   border-color:transparent;
   border-top-right-radius:8px;
 }
@@ -1650,63 +1741,47 @@ body.dark .roomHeader{
   font-weight:800;
 }
 .composer{
-  min-height:76px;
+  min-height:78px;
   display:grid;
-  grid-template-columns:minmax(0,1fr) 64px;
-  gap:8px;
-  padding:11px;
+  grid-template-columns:minmax(0,1fr) 54px;
+  gap:9px;
+  padding:12px;
   border-top:1px solid var(--line);
-  background:rgba(255,255,255,.8);
-  backdrop-filter:blur(18px);
-}
-body.dark .composer{
-  background:rgba(23,28,38,.82);
+  background:var(--blur);
+  backdrop-filter:blur(24px);
 }
 .composer input{
   height:54px;
-  border:1px solid var(--line);
-  border-radius:27px;
-  background:var(--surface2);
-  color:var(--text);
   padding:0 17px;
+  border-radius:27px;
+  border:1px solid var(--line);
+  background:var(--surface);
+  color:var(--text);
 }
 .composer button{
   height:54px;
-  border-radius:27px;
-  background:linear-gradient(135deg,var(--yellow),var(--yellow2));
-  color:#171717;
-  font-size:15px;
-  font-weight:1000;
+  border-radius:22px;
+  display:grid;
+  place-items:center;
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
+  color:#fff;
 }
 
 /* Calendar */
-.calendarPage{
-  max-width:760px;
-  margin:0 auto;
-}
-.refreshBtn{
-  height:40px;
-  padding:0 15px;
-  border-radius:20px;
-  background:var(--surface);
-  color:var(--text);
-  border:1px solid var(--line);
-  box-shadow:var(--shadow2);
-  font-size:13px;
-  font-weight:1000;
+.calendar,.more{
+  max-width:820px;
 }
 .calendarHero{
   padding:20px;
   margin-bottom:12px;
   border-radius:32px;
   background:
-    linear-gradient(135deg,rgba(95,124,255,.14),rgba(255,216,77,.14)),
+    linear-gradient(135deg,rgba(6,182,212,.12),rgba(37,99,235,.12)),
     var(--surface);
   border:1px solid var(--line);
   box-shadow:var(--shadow);
 }
 .calendarHero span{
-  display:block;
   color:var(--sub);
   font-size:13px;
   font-weight:900;
@@ -1714,46 +1789,48 @@ body.dark .composer{
 .calendarHero b{
   display:block;
   margin-top:5px;
-  color:var(--text);
   font-size:28px;
   letter-spacing:-1px;
-  font-weight:1000;
 }
-.datePicker{
+.dateInput{
   width:100%;
   height:54px;
   margin-bottom:10px;
   padding:0 16px;
-  border:1px solid var(--line);
   border-radius:22px;
+  border:1px solid var(--line);
   background:var(--surface);
   color:var(--text);
   box-shadow:var(--shadow2);
 }
-.scheduleForm{
+.addForm{
   display:grid;
   grid-template-columns:minmax(0,1fr) 68px;
-  gap:8px;
+  gap:9px;
   margin-bottom:14px;
 }
-.scheduleForm input{
+.addForm input{
   height:54px;
-  border:1px solid var(--line);
+  padding:0 16px;
   border-radius:22px;
+  border:1px solid var(--line);
   background:var(--surface);
   color:var(--text);
-  padding:0 16px;
   box-shadow:var(--shadow2);
 }
-.scheduleForm button{
+.addForm button{
   height:54px;
   border-radius:22px;
-  background:linear-gradient(135deg,var(--yellow),var(--yellow2));
-  color:#171717;
+  background:var(--text);
+  color:var(--bg);
   font-weight:1000;
 }
-.eventItem{
-  min-height:72px;
+.eventList{
+  display:grid;
+  gap:10px;
+}
+.eventCard{
+  min-height:76px;
   display:flex;
   align-items:center;
   gap:13px;
@@ -1763,72 +1840,61 @@ body.dark .composer{
   border:1px solid var(--line);
   box-shadow:var(--shadow2);
 }
-.eventDot{
+.eventCard i{
   width:11px;
-  height:38px;
+  height:40px;
   border-radius:999px;
-  background:linear-gradient(180deg,var(--blue),var(--yellow));
+  background:linear-gradient(180deg,var(--primary),var(--accent));
 }
-.eventItem b{
+.eventCard b{
   display:block;
-  color:var(--text);
   font-size:17px;
-  font-weight:1000;
 }
-.eventItem p{
-  margin:4px 0 0;
+.eventCard p{
+  margin:5px 0 0;
   color:var(--sub);
   font-size:13px;
-  font-weight:750;
+  font-weight:760;
 }
 
 /* More */
-.morePage{
-  max-width:920px;
-  margin:0 auto;
-}
-.moreProfile{
+.accountCard{
   width:100%;
-  min-height:112px;
+  min-height:116px;
   display:flex;
   align-items:center;
   gap:15px;
   padding:18px;
   margin-bottom:14px;
-  border-radius:34px;
-  background:var(--surface);
+  border-radius:32px;
+  background:
+    linear-gradient(135deg,rgba(37,99,235,.1),rgba(124,58,237,.08)),
+    var(--surface);
   color:var(--text);
   border:1px solid var(--line);
   box-shadow:var(--shadow);
   text-align:left;
 }
-.moreProfile div{
+.accountCard div{
   min-width:0;
 }
-.moreProfile span{
-  display:block;
+.accountCard span{
   color:var(--sub);
   font-size:13px;
   font-weight:900;
 }
-.moreProfile b{
+.accountCard b{
   display:block;
   margin-top:3px;
-  font-size:22px;
-  font-weight:1000;
-  letter-spacing:-.6px;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
+  font-size:23px;
+  line-height:1.1;
+  letter-spacing:-.8px;
 }
-.moreProfile p{
-  margin:5px 0 0;
+.accountCard p{
+  margin:6px 0 0;
   color:var(--sub);
   font-size:14px;
-  font-weight:750;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
+  font-weight:760;
 }
 .menuGrid{
   display:grid;
@@ -1837,7 +1903,7 @@ body.dark .composer{
   margin-bottom:14px;
 }
 .menuGrid button{
-  min-height:78px;
+  min-height:82px;
   padding:15px;
   border-radius:28px;
   background:var(--surface);
@@ -1847,15 +1913,14 @@ body.dark .composer{
   text-align:left;
 }
 .menuGrid button.active{
-  border-color:rgba(255,216,77,.55);
+  border-color:rgba(37,99,235,.38);
   background:
-    linear-gradient(135deg,rgba(255,216,77,.18),rgba(95,124,255,.1)),
+    linear-gradient(135deg,rgba(37,99,235,.11),rgba(124,58,237,.08)),
     var(--surface);
 }
 .menuGrid b{
   display:block;
   font-size:16px;
-  font-weight:1000;
 }
 .menuGrid span{
   display:block;
@@ -1877,14 +1942,13 @@ body.dark .composer{
 }
 .formPanel h2{
   margin:0 0 2px;
-  color:var(--text);
   font-size:27px;
   letter-spacing:-1px;
 }
 .formPanel > p{
   margin:0;
   color:var(--sub);
-  font-weight:750;
+  font-weight:760;
 }
 .profilePreview{
   min-height:94px;
@@ -1898,15 +1962,13 @@ body.dark .composer{
 }
 .profilePreview b{
   display:block;
-  color:var(--text);
   font-size:18px;
-  font-weight:1000;
 }
 .profilePreview p{
   margin:5px 0 0;
   color:var(--sub);
   font-size:13px;
-  font-weight:750;
+  font-weight:760;
 }
 .switchRow{
   min-height:56px;
@@ -1923,18 +1985,18 @@ body.dark .composer{
   width:20px;
   height:20px;
 }
-.dangerBtn{
+.dangerButton{
   width:100%;
   height:54px;
   border-radius:22px;
   background:var(--surface2);
-  color:var(--red);
+  color:var(--danger);
   border:1px solid var(--line);
   font-weight:1000;
 }
 
 /* Empty / Toast */
-.emptyState{
+.empty{
   min-height:220px;
   display:grid;
   place-items:center;
@@ -1942,7 +2004,7 @@ body.dark .composer{
   color:var(--sub);
   padding:26px;
 }
-.emptyOrb{
+.emptyIcon{
   width:46px;
   height:46px;
   display:grid;
@@ -1950,105 +2012,92 @@ body.dark .composer{
   border-radius:50%;
   background:var(--surface2);
   color:var(--muted);
-  font-size:28px;
+  font-size:26px;
 }
-.emptyState b{
+.empty b{
   color:var(--text);
   font-size:18px;
-  font-weight:1000;
 }
-.emptyState p{
+.empty p{
   margin:6px 0 0;
-  color:var(--sub);
-  font-weight:750;
+  font-weight:760;
 }
 .toast{
   position:fixed;
   left:14px;
   right:14px;
-  bottom:88px;
+  bottom:90px;
   z-index:5000;
   padding:13px 15px;
   border-radius:22px;
-  background:rgba(255,244,190,.96);
-  color:#382e00;
-  border:1px solid rgba(170,132,0,.22);
-  box-shadow:0 16px 36px rgba(0,0,0,.18);
-  backdrop-filter:blur(16px);
+  background:rgba(15,23,42,.9);
+  color:#fff;
+  box-shadow:0 16px 36px rgba(0,0,0,.22);
+  backdrop-filter:blur(18px);
   font-size:13px;
   font-weight:850;
 }
 
 /* Mobile */
-.bottomNav,.mobileChatPane{
+.bottomNav{
   display:none;
 }
 
 @media(max-width:767px){
-  .appShell{
+  .app{
     display:block;
     height:100dvh;
-    background:
-      radial-gradient(circle at 20% 0%, rgba(95,124,255,.14), transparent 32%),
-      var(--bg);
   }
 
-  .sideRail{
+  .rail{
     display:none;
   }
 
-  .phoneFrame{
-    height:100dvh;
-  }
-
-  .screen{
+  .main{
     height:100dvh;
     overflow:auto;
-    padding:calc(18px + env(safe-area-inset-top)) 16px calc(94px + env(safe-area-inset-bottom));
+    padding:calc(18px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom));
   }
 
-  .chatScreen{
+  .main.split{
     display:block;
-    padding:calc(18px + env(safe-area-inset-top)) 16px calc(94px + env(safe-area-inset-bottom));
+    height:100dvh;
+    overflow:auto;
+    padding:calc(18px + env(safe-area-inset-top)) 16px calc(96px + env(safe-area-inset-bottom));
   }
 
-  .chatScreen .chatListPage{
+  .main.split .chats{
+    height:auto;
     padding:0;
     border-right:0;
+    overflow:visible;
   }
 
-  .desktopChatPane{
+  .chatPane{
     display:none;
   }
 
-  .topBar{
+  .page{
+    max-width:none;
+    margin:0;
+  }
+
+  .header{
     margin-bottom:18px;
   }
 
-  .topBar h1{
-    font-size:38px;
-    letter-spacing:-1.8px;
+  .header h1{
+    font-size:39px;
+    letter-spacing:-1.9px;
   }
 
-  .topBar p{
-    font-size:13px;
+  .profileHero,.accountCard{
+    border-radius:34px;
   }
 
-  .heroProfile{
-    min-height:120px;
-    border-radius:36px;
-  }
-
-  .personItem,.chatItem{
+  .personCard,.chatCard{
     min-height:82px;
     border-radius:30px;
-  }
-
-  .personItem button{
-    min-width:58px;
-    height:36px;
-    border-radius:18px;
-    padding:0 14px;
   }
 
   .bottomNav{
@@ -2056,49 +2105,41 @@ body.dark .composer{
     left:12px;
     right:12px;
     bottom:calc(10px + env(safe-area-inset-bottom));
-    z-index:800;
-    height:66px;
+    z-index:900;
+    height:68px;
     display:grid;
     grid-template-columns:repeat(4,1fr);
     gap:4px;
     padding:6px;
     border-radius:30px;
-    background:rgba(255,255,255,.88);
+    background:var(--blur);
     border:1px solid var(--line);
-    box-shadow:0 18px 44px rgba(0,0,0,.2);
-    backdrop-filter:blur(22px);
-  }
-
-  body.dark .bottomNav{
-    background:rgba(23,28,38,.88);
+    box-shadow:0 20px 48px rgba(0,0,0,.22);
+    backdrop-filter:blur(24px);
   }
 
   .bottomNav button{
-    height:54px;
+    height:56px;
     display:grid;
     place-items:center;
+    gap:3px;
     border-radius:24px;
     background:transparent;
     color:var(--muted);
     font-weight:1000;
   }
 
-  .bottomNav b{
-    display:none;
-  }
-
   .bottomNav span{
-    font-size:11px;
-    font-weight:1000;
+    font-size:10px;
   }
 
   .bottomNav button.active{
-    background:linear-gradient(135deg,var(--yellow),var(--yellow2));
-    color:#171717;
-    box-shadow:0 10px 22px rgba(255,216,77,.24);
+    color:#fff;
+    background:linear-gradient(135deg,var(--primary),var(--primary2));
+    box-shadow:0 10px 22px rgba(37,99,235,.24);
   }
 
-  .mobileChatPane{
+  .mobileRoom{
     position:fixed;
     inset:0;
     z-index:1000;
@@ -2106,47 +2147,34 @@ body.dark .composer{
     background:var(--bg);
   }
 
-  .mobileChatPane .room{
+  .mobileRoom .room{
     height:100dvh;
   }
 
-  .mobileChatPane .roomHeader{
-    min-height:calc(72px + env(safe-area-inset-top));
+  .mobileRoom .roomHeader{
+    min-height:calc(74px + env(safe-area-inset-top));
     padding-top:env(safe-area-inset-top);
   }
 
-  .mobileChatPane .messages{
+  .mobileRoom .messages{
     padding:16px 12px;
   }
 
-  .mobileChatPane .composer{
-    min-height:calc(76px + env(safe-area-inset-bottom));
-    padding-bottom:calc(11px + env(safe-area-inset-bottom));
+  .mobileRoom .composer{
+    min-height:calc(78px + env(safe-area-inset-bottom));
+    padding-bottom:calc(12px + env(safe-area-inset-bottom));
   }
 
   .bubble{
     max-width:84%;
   }
 
-  .composer{
-    grid-template-columns:minmax(0,1fr) 62px;
-  }
-
-  .composer input,.composer button{
-    height:52px;
-  }
-
-  .moreProfile{
-    border-radius:36px;
+  .menuGrid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
   }
 
   .panel{
-    border-radius:34px;
     padding:18px;
-  }
-
-  .menuGrid button{
-    min-height:80px;
     border-radius:30px;
   }
 
@@ -2243,7 +2271,6 @@ self.addEventListener("notificationclick", (event) => {
         if (client.navigate) client.navigate(event.notification.data?.url || "/");
         return;
       }
-
       return self.clients.openWindow(event.notification.data?.url || "/");
     })
   );
@@ -2253,15 +2280,15 @@ EOF
 cat > app/public/icon.svg <<'EOF'
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
   <defs>
-    <linearGradient id="g" x1="18" y1="18" x2="110" y2="110" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFD84D"/>
-      <stop offset="1" stop-color="#FFE995"/>
+    <linearGradient id="g" x1="20" y1="16" x2="108" y2="112" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#7C3AED"/>
     </linearGradient>
   </defs>
   <rect width="128" height="128" rx="32" fill="url(#g)"/>
-  <path d="M29 46c0-13 12-24 27-24h20c15 0 27 11 27 24v17c0 13-12 24-27 24H59l-24 19V86c-4-3-6-8-6-15V46z" fill="#111827"/>
+  <path d="M30 47c0-13 11-24 25-24h22c14 0 25 11 25 24v18c0 13-11 24-25 24H60l-25 18V88c-4-3-5-8-5-15V47z" fill="white"/>
 </svg>
 EOF
 
-echo "=== v40 release-grade files written ==="
+echo "=== v41 premium social app files written ==="
 git status --short
