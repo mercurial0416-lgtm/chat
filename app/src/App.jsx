@@ -804,16 +804,36 @@ function Calendar({ me }) {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), 1);
   });
+
   const [ownerColumn, setOwnerColumn] = useState("user_id");
   const [events, setEvents] = useState([]);
   const [title, setTitle] = useState("");
   const [msg, setMsg] = useState("");
 
   const [team, setTeam] = useState(() => localStorage.getItem("rift_shift_team") || "1");
-  const [anchorDate, setAnchorDate] = useState(() => localStorage.getItem("rift_shift_anchor") || "2026-06-01");
-  const [anchorShift, setAnchorShift] = useState(() => localStorage.getItem("rift_shift_anchor_shift") || "A");
 
-  const shifts = ["A", "B", "C", "휴"];
+  const [anchors, setAnchors] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("rift_shift_anchors") || "") || {};
+    } catch {
+      return {};
+    }
+  });
+
+  const defaultAnchors = {
+    "1": "2026-06-08",
+    "2": "2026-06-02",
+    "3": "2026-06-20",
+    "4": "2026-06-14",
+  };
+
+  const finalAnchors = {
+    "1": anchors["1"] || defaultAnchors["1"],
+    "2": anchors["2"] || defaultAnchors["2"],
+    "3": anchors["3"] || defaultAnchors["3"],
+    "4": anchors["4"] || defaultAnchors["4"],
+  };
+
   const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
 
   useEffect(() => {
@@ -821,12 +841,8 @@ function Calendar({ me }) {
   }, [team]);
 
   useEffect(() => {
-    localStorage.setItem("rift_shift_anchor", anchorDate);
-  }, [anchorDate]);
-
-  useEffect(() => {
-    localStorage.setItem("rift_shift_anchor_shift", anchorShift);
-  }, [anchorShift]);
+    localStorage.setItem("rift_shift_anchors", JSON.stringify(finalAnchors));
+  }, [anchors]);
 
   useEffect(() => {
     loadEvents();
@@ -849,12 +865,32 @@ function Calendar({ me }) {
     return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
   }
 
+  function cycleIndex(teamNo, key) {
+    const anchor = finalAnchors[String(teamNo)] || defaultAnchors[String(teamNo)];
+    const diff = dayNumber(key) - dayNumber(anchor);
+    return ((diff % 24) + 24) % 24;
+  }
+
   function shiftFor(teamNo, key) {
-    const baseIndex = Math.max(0, shifts.indexOf(anchorShift));
-    const delta = dayNumber(key) - dayNumber(anchorDate || "2026-06-01");
-    const offset = Number(teamNo || 1) - 1;
-    const index = ((baseIndex + delta + offset) % 4 + 4) % 4;
-    return shifts[index];
+    const i = cycleIndex(teamNo, key);
+
+    if (i >= 0 && i <= 5) return "A";
+    if (i >= 6 && i <= 7) return "휴";
+    if (i >= 8 && i <= 13) return "B";
+    if (i >= 14 && i <= 15) return "휴";
+    if (i >= 16 && i <= 21) return "C";
+    return "휴";
+  }
+
+  function shiftDayLabel(teamNo, key) {
+    const i = cycleIndex(teamNo, key);
+
+    if (i <= 5) return `${i + 1}일차`;
+    if (i <= 7) return `휴${i - 5}`;
+    if (i <= 13) return `${i - 7}일차`;
+    if (i <= 15) return `휴${i - 13}`;
+    if (i <= 21) return `${i - 15}일차`;
+    return `휴${i - 21}`;
   }
 
   function shiftClass(value) {
@@ -877,6 +913,7 @@ function Calendar({ me }) {
   function buildMonthDays() {
     const first = new Date(month.getFullYear(), month.getMonth(), 1);
     const startDay = new Date(month.getFullYear(), month.getMonth(), 1 - first.getDay());
+
     return Array.from({ length: 42 }, (_, i) => {
       const d = new Date(startDay);
       d.setDate(startDay.getDate() + i);
@@ -967,25 +1004,37 @@ function Calendar({ me }) {
     setMonth(new Date(day.getFullYear(), day.getMonth(), 1));
   }
 
+  function updateAnchor(teamNo, value) {
+    setAnchors((prev) => ({
+      ...prev,
+      [teamNo]: value,
+    }));
+  }
+
   const monthDays = buildMonthDays();
   const selectedShift = shiftFor(team, date);
+  const selectedShiftDay = shiftDayLabel(team, date);
+
   const selectedEvents = events.filter((item) => String(item.start_at || "").slice(0, 10) === date);
+
   const eventCountByDate = events.reduce((acc, item) => {
     const key = String(item.start_at || "").slice(0, 10);
     if (key) acc[key] = (acc[key] || 0) + 1;
     return acc;
   }, {});
+
   const allTeamShifts = ["1", "2", "3", "4"].map((teamNo) => ({
     team: teamNo,
     shift: shiftFor(teamNo, date),
+    dayLabel: shiftDayLabel(teamNo, date),
   }));
 
   return (
     <section className="page calendar calendarPro">
       <Header
-        eyebrow="4조 3교대"
+        eyebrow="6근무 2휴무"
         title="캘린더"
-        text="월간 근무표와 개인 일정을 같이 관리"
+        text="A 6일 · 휴 2일 · B 6일 · 휴 2일 · C 6일 · 휴 2일"
         right={<button className="pillButton" onClick={goToday}>오늘</button>}
       />
 
@@ -993,7 +1042,7 @@ function Calendar({ me }) {
         <div>
           <span>선택 조</span>
           <b>{team}조 · {selectedShift}</b>
-          <p>{date} 기준 근무</p>
+          <p>{date} · {selectedShiftDay}</p>
         </div>
 
         <div className={`bigShift ${shiftClass(selectedShift)}`}>
@@ -1013,20 +1062,17 @@ function Calendar({ me }) {
         ))}
       </section>
 
-      <section className="shiftSettings">
-        <label>
-          <span>기준일</span>
-          <input type="date" value={anchorDate} onChange={(e) => setAnchorDate(e.target.value)} />
-        </label>
-
-        <label>
-          <span>기준 근무</span>
-          <select value={anchorShift} onChange={(e) => setAnchorShift(e.target.value)}>
-            {shifts.map((item) => (
-              <option key={item} value={item}>{item}</option>
-            ))}
-          </select>
-        </label>
+      <section className="anchorGrid">
+        {["1", "2", "3", "4"].map((teamNo) => (
+          <label key={teamNo}>
+            <span>{teamNo}조 A 첫날</span>
+            <input
+              type="date"
+              value={finalAnchors[teamNo]}
+              onChange={(e) => updateAnchor(teamNo, e.target.value)}
+            />
+          </label>
+        ))}
       </section>
 
       <section className="monthCard">
@@ -1085,6 +1131,7 @@ function Calendar({ me }) {
             <div key={item.team} className={item.team === team ? "active" : ""}>
               <span>{item.team}조</span>
               <b className={shiftClass(item.shift)}>{item.shift}</b>
+              <small>{item.dayLabel}</small>
             </div>
           ))}
         </div>
