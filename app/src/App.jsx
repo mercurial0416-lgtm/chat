@@ -12,6 +12,40 @@ const TABS = [
 const safeError = (err) => err?.message || err?.error_description || err?.error || String(err || "오류");
 const nowIso = () => new Date().toISOString();
 
+async function showBrowserNotification(title, options = {}) {
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+
+  const payload = {
+    icon: "/icon.svg",
+    badge: "/icon.svg",
+    ...options,
+  };
+
+  try {
+    if ("serviceWorker" in navigator) {
+      let registration = await navigator.serviceWorker.getRegistration("/");
+
+      if (!registration) {
+        registration = await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise((resolve) => setTimeout(() => resolve(null), 1200)),
+        ]);
+      }
+
+      if (registration?.showNotification) {
+        await registration.showNotification(title, payload);
+        return;
+      }
+    }
+  } catch {}
+
+  try {
+    new Notification(title, payload);
+  } catch {}
+}
+
+
 function dateKey(value = new Date()) {
   const d = new Date(value);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -1141,10 +1175,7 @@ function Calendar({ me }) {
       setMsg("백그라운드 알림 등록 완료");
 
       if ("Notification" in window && Notification.permission === "granted") {
-        new Notification("Rift 알림 설정 완료", {
-          body: "친구가 일정을 등록하면 백그라운드 알림이 와요.",
-          icon: "/icon.svg",
-        });
+        showBrowserNotification("Rift 알림 설정 완료", { body: "친구가 일정을 등록하면 백그라운드 알림이 와요." });
       }
     } catch (err) {
       setMsg(safeError(err));
@@ -1166,10 +1197,7 @@ function Calendar({ me }) {
     setNotifications((prev) => [item, ...prev].slice(0, 80));
 
     if ("Notification" in window && Notification.permission === "granted") {
-      new Notification(item.title, {
-        body: item.body,
-        icon: "/icon.svg",
-      });
+      showBrowserNotification(item.title, { body: item.body });
     }
   }
 
