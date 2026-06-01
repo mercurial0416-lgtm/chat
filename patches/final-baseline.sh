@@ -1,24 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== final baseline: renderer + chat + calendar owner_id/user_id + clean ui ==="
+echo "=== final baseline v25: dm fix + clean mobile ui ==="
 
 mkdir -p app/src/lib app/public
-
-cat > app/src/lib/supabase.js <<'EOF'
-import { createClient } from "@supabase/supabase-js";
-
-export const SUPABASE_URL = "https://nwenbkthlpzlpfklgonb.supabase.co";
-export const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53ZW5ia3RobHB6bHBma2xnb25iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxMTA5MjMsImV4cCI6MjA5NTY4NjkyM30.PHojgVx7Yn1lUl88w_FtiMRwHBdLmVxkcUNBUBJILMU";
-
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-});
-EOF
 
 cat > app/src/main.jsx <<'EOF'
 import React from "react";
@@ -111,8 +96,12 @@ function uniq(items, key = "id") {
   });
 }
 
+function displayName(user) {
+  return user?.nickname || user?.email || user?.displayName || user?.name || "대화";
+}
+
 function Avatar({ user, size = 48 }) {
-  const name = user?.nickname || user?.email || "?";
+  const name = displayName(user);
   return (
     <div className="avatar" style={{ width: size, height: size }}>
       {user?.avatar_url ? <img src={user.avatar_url} alt="" /> : <span>{name.trim().slice(0, 1).toUpperCase()}</span>}
@@ -254,7 +243,6 @@ export default function App() {
           email: user.email,
           nickname: user.user_metadata?.nickname || user.email?.split("@")[0] || "사용자",
         };
-
         await supabase.from("profiles").upsert(row);
         data = row;
       }
@@ -301,7 +289,16 @@ export default function App() {
         </header>
 
         <div className={tab === "chats" ? "content split" : "content"}>
-          {tab === "friends" && <Friends me={me} openRoom={(nextRoom) => { setRoom(nextRoom); setTab("chats"); }} />}
+          {tab === "friends" && (
+            <Friends
+              me={me}
+              openRoom={(nextRoom) => {
+                setRoom(nextRoom);
+                setTab("chats");
+              }}
+            />
+          )}
+
           {tab === "chats" && (
             <>
               <Chats me={me} room={room} setRoom={setRoom} />
@@ -315,6 +312,7 @@ export default function App() {
               )}
             </>
           )}
+
           {tab === "calendar" && <Calendar me={me} />}
           {tab === "more" && <More me={me} reloadMe={() => loadMe(session.user)} />}
         </div>
@@ -364,14 +362,14 @@ function Friends({ me, openRoom }) {
       const nextRoom = await createDM(me, user);
       openRoom(nextRoom);
     } catch (err) {
-      setMsg(errText(err));
+      setMsg(`대화방 생성 실패: ${errText(err)}`);
     }
   }
 
   const filtered = users.filter((user) => `${user.nickname || ""} ${user.email || ""}`.toLowerCase().includes(query.toLowerCase()));
 
   return (
-    <section className="page">
+    <section className="page friendsPage">
       <h2 className="mobileTitle">친구</h2>
       <input className="search" placeholder="친구/이메일 검색" value={query} onChange={(e) => setQuery(e.target.value)} />
 
@@ -403,24 +401,40 @@ function Friends({ me, openRoom }) {
 }
 
 async function createDM(me, user) {
-  const name = user.nickname || user.email || "대화";
+  const label = displayName(user);
 
   try {
     const { data, error } = await supabase.rpc("get_or_create_dm", { other_user_id: user.id });
     if (!error && data) {
       const id = Array.isArray(data) ? data[0]?.id || data[0]?.room_id || data[0] : data;
-      return { id, name, updated_at: now(), last_message: "" };
+      return { id, displayName: label, name: label, updated_at: now(), last_message: "" };
     }
   } catch {
-    // fallback below
+    // fallback
+  }
+
+  try {
+    const myRooms = await supabase.from("chat_room_members").select("room_id").eq("user_id", me.id);
+    const otherRooms = await supabase.from("chat_room_members").select("room_id").eq("user_id", user.id);
+
+    if (!myRooms.error && !otherRooms.error) {
+      const mine = new Set((myRooms.data || []).map((x) => x.room_id));
+      const existing = (otherRooms.data || []).find((x) => mine.has(x.room_id));
+      if (existing?.room_id) {
+        return { id: existing.room_id, displayName: label, name: label, updated_at: now(), last_message: "" };
+      }
+    }
+  } catch {
+    // ignore
   }
 
   const variants = [
-    { name, room_type: "dm", type: "dm", created_by: me.id, last_message: "", updated_at: now() },
-    { name, room_type: "dm", created_by: me.id, last_message: "", updated_at: now() },
-    { name, type: "dm", created_by: me.id, last_message: "", updated_at: now() },
-    { name, created_by: me.id, last_message: "", updated_at: now() },
-    { name },
+    { name: label, room_type: "dm", type: "dm", created_by: me.id, last_message: "", updated_at: now() },
+    { room_type: "dm", type: "dm", created_by: me.id, last_message: "", updated_at: now() },
+    { type: "dm", created_by: me.id, last_message: "", updated_at: now() },
+    { created_by: me.id, last_message: "", updated_at: now() },
+    { created_by: me.id },
+    {},
   ];
 
   let room = null;
@@ -435,14 +449,19 @@ async function createDM(me, user) {
     lastError = error;
   }
 
-  if (!room) throw new Error(`대화방 생성 실패: ${errText(lastError)}`);
+  if (!room) throw lastError || new Error("대화방 생성 실패");
 
-  await supabase.from("chat_room_members").insert([
-    { room_id: room.id, user_id: me.id },
-    { room_id: room.id, user_id: user.id },
-  ]);
+  const { error: memberError } = await supabase.from("chat_room_members").upsert(
+    [
+      { room_id: room.id, user_id: me.id },
+      { room_id: room.id, user_id: user.id },
+    ],
+    { onConflict: "room_id,user_id" }
+  );
 
-  return { ...room, name };
+  if (memberError) throw memberError;
+
+  return { ...room, displayName: label, name: label };
 }
 
 function Chats({ me, room, setRoom }) {
@@ -457,17 +476,41 @@ function Chats({ me, room, setRoom }) {
 
   async function load() {
     try {
-      let output = [];
+      const memberResult = await supabase.from("chat_room_members").select("room_id").eq("user_id", me.id);
+      if (memberResult.error) throw memberResult.error;
 
-      const memberResult = await supabase.from("chat_room_members").select("room_id, chat_rooms(*)").eq("user_id", me.id);
-
-      if (!memberResult.error && memberResult.data) {
-        output = memberResult.data.map((item) => item.chat_rooms).filter(Boolean);
-      } else {
-        const roomResult = await supabase.from("chat_rooms").select("*").order("updated_at", { ascending: false });
-        if (roomResult.error) throw roomResult.error;
-        output = roomResult.data || [];
+      const roomIds = uniq(memberResult.data || [], "room_id").map((x) => x.room_id);
+      if (!roomIds.length) {
+        setRooms([]);
+        return;
       }
+
+      const roomResult = await supabase.from("chat_rooms").select("*").in("id", roomIds);
+      if (roomResult.error) throw roomResult.error;
+
+      let members = [];
+      let profiles = new Map();
+
+      const memberAll = await supabase.from("chat_room_members").select("room_id,user_id").in("room_id", roomIds);
+      if (!memberAll.error) {
+        members = memberAll.data || [];
+        const otherIds = uniq(members.filter((x) => x.user_id !== me.id), "user_id").map((x) => x.user_id);
+
+        if (otherIds.length) {
+          const profileResult = await supabase.from("profiles").select("*").in("id", otherIds);
+          if (!profileResult.error) {
+            profiles = new Map((profileResult.data || []).map((p) => [p.id, p]));
+          }
+        }
+      }
+
+      const output = (roomResult.data || []).map((item) => {
+        const other = members.find((m) => m.room_id === item.id && m.user_id !== me.id);
+        const otherProfile = other ? profiles.get(other.user_id) : null;
+        const label = item.name || item.title || displayName(otherProfile) || "대화";
+
+        return { ...item, displayName: label };
+      });
 
       setRooms(
         uniq(output).sort(
@@ -486,16 +529,19 @@ function Chats({ me, room, setRoom }) {
         <button onClick={load}>새로고침</button>
       </div>
 
-      {rooms.map((item) => (
-        <button key={item.id} className={`chatRow ${room?.id === item.id ? "active" : ""}`} onClick={() => setRoom(item)}>
-          <Avatar user={{ nickname: item.name || "대화" }} />
-          <div className="meta">
-            <b>{item.name || "대화방"}</b>
-            <span>{item.last_message || "대화를 시작해보세요"}</span>
-          </div>
-          <small>{fmt(item.updated_at || item.created_at)}</small>
-        </button>
-      ))}
+      {rooms.map((item) => {
+        const label = item.displayName || item.name || item.title || "대화";
+        return (
+          <button key={item.id} className={`chatRow ${room?.id === item.id ? "active" : ""}`} onClick={() => setRoom(item)}>
+            <Avatar user={{ nickname: label }} />
+            <div className="meta">
+              <b>{label}</b>
+              <span>{item.last_message || "대화를 시작해보세요"}</span>
+            </div>
+            <small>{fmt(item.updated_at || item.created_at)}</small>
+          </button>
+        );
+      })}
 
       {!rooms.length && <Empty title="대화방 없음" sub="친구 탭에서 채팅을 시작해줘." />}
       <Notice>{msg}</Notice>
@@ -541,6 +587,7 @@ function Room({ me, room, onBack }) {
 
     try {
       const variants = [
+        { room_id: room.id, sender_id: me.id, content: body, message: body, created_at: now() },
         { room_id: room.id, sender_id: me.id, content: body, created_at: now() },
         { room_id: room.id, sender_id: me.id, message: body, created_at: now() },
       ];
@@ -567,17 +614,20 @@ function Room({ me, room, onBack }) {
     }
   }
 
+  const title = room.displayName || room.name || room.title || "대화";
+  const visibleMessages = messages.filter((message) => String(message.content ?? message.message ?? "").trim());
+
   return (
     <div className="room">
       <div className="roomHeader">
         {onBack && <button onClick={onBack}>‹</button>}
-        <b>{room.name || "대화방"}</b>
-        <small>{messages.length}개</small>
+        <b>{title}</b>
+        <small>{visibleMessages.length}개</small>
       </div>
 
       <div className="messages">
-        {messages.map((message) => {
-          const body = message.content || message.message || "";
+        {visibleMessages.map((message) => {
+          const body = String(message.content ?? message.message ?? "").trim();
           const mine = message.sender_id === me.id;
 
           return (
@@ -646,30 +696,27 @@ function Calendar({ me }) {
     const value = title.trim();
     if (!value) return;
 
-    let lastError = null;
     const columns = ownerColumn === "user_id" ? ["user_id", "owner_id"] : ["owner_id", "user_id"];
+    let lastError = null;
 
     for (const column of columns) {
-      for (const withEnd of [true, false]) {
-        const row = {
-          [column]: me.id,
-          title: value,
-          start_at: `${date}T09:00:00`,
-        };
+      const row = {
+        [column]: me.id,
+        title: value,
+        start_at: `${date}T09:00:00`,
+        end_at: `${date}T10:00:00`,
+      };
 
-        if (withEnd) row.end_at = `${date}T10:00:00`;
+      const { error } = await supabase.from("calendar_events").insert(row);
 
-        const { error } = await supabase.from("calendar_events").insert(row);
-
-        if (!error) {
-          setOwnerColumn(column);
-          setTitle("");
-          load();
-          return;
-        }
-
-        lastError = error;
+      if (!error) {
+        setOwnerColumn(column);
+        setTitle("");
+        load();
+        return;
       }
+
+      lastError = error;
     }
 
     setMsg(errText(lastError));
@@ -841,14 +888,14 @@ EOF
 cat > app/src/styles.css <<'EOF'
 *{box-sizing:border-box}
 html,body,#root{margin:0;width:100%;height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,sans-serif}
-body{background:#f5f6f8;color:#17181c}
+body{background:#f4f6f8;color:#17181c}
 button,input,textarea,select{font:inherit}
 button{border:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
 input,textarea,select{font-size:16px;outline:0}
 img{display:block;max-width:100%}
 
 .loading{height:100dvh;display:grid;place-items:center;color:#69707d}
-.auth,.fatalShell{min-height:100dvh;display:grid;place-items:center;padding:18px;background:#f5f6f8}
+.auth,.fatalShell{min-height:100dvh;display:grid;place-items:center;padding:18px;background:#f4f6f8}
 .authCard,.fatalCard{width:min(420px,100%);background:#fff;border-radius:28px;padding:24px;box-shadow:0 18px 48px rgba(15,23,42,.1);display:grid;gap:11px}
 .authCard h1,.fatalCard h1{margin:0;font-size:36px;letter-spacing:-1px}
 .authCard p,.fatalCard p{margin:0 0 10px;color:#777f8c}
@@ -857,7 +904,7 @@ img{display:block;max-width:100%}
 .ghost{height:42px;background:transparent;color:#777f8c}
 .notice{position:fixed;left:12px;right:12px;bottom:82px;z-index:3000;background:#fff5bf;color:#3a3200;border:1px solid rgba(168,132,0,.2);border-radius:16px;padding:11px 13px;font-size:13px}
 
-.appShell{width:100vw;height:100vh;display:grid;grid-template-columns:76px minmax(0,1fr);background:#f5f6f8}
+.appShell{width:100vw;height:100vh;display:grid;grid-template-columns:76px minmax(0,1fr);background:#f4f6f8}
 .rail{height:100vh;background:#fff;border-right:1px solid #eceef2;display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px 8px}
 .rail>button{width:56px;min-height:56px;border-radius:18px;background:transparent;color:#818894;display:grid;place-items:center;gap:2px;font-weight:800}
 .rail>button.active{background:#fff2a1;color:#17181c}
@@ -884,11 +931,11 @@ img{display:block;max-width:100%}
 
 .myProfile,.row,.chatRow{width:100%;min-height:70px;padding:10px 2px;border-bottom:1px solid #eceef2;display:flex;align-items:center;gap:12px;background:transparent;color:inherit;text-align:left}
 .myProfile{background:#fff;border:0;border-radius:20px;padding:12px;margin-bottom:12px;box-shadow:0 4px 16px rgba(15,23,42,.04)}
-.row:hover,.chatRow:hover,.chatRow.active{background:rgba(254,229,0,.14)}
+.row:hover,.chatRow:hover,.chatRow.active{background:rgba(254,229,0,.08)}
 .meta{min-width:0;flex:1}
 .meta b,.chatRow b{display:block;font-size:17px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .meta span,.chatRow span{display:block;margin-top:5px;font-size:13px;color:#777f8c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.row button{height:34px;border-radius:18px;padding:0 14px;background:#fee500;color:#191919;font-weight:900}
+.row button{height:38px;border-radius:19px;padding:0 16px;background:#272b35;color:#fff;font-weight:900}
 .page h3{margin:14px 0 6px;font-size:14px;color:#777f8c}
 
 .chatRow{cursor:pointer;border-radius:0}
@@ -899,9 +946,9 @@ img{display:block;max-width:100%}
 
 .room{height:100%;display:flex;flex-direction:column;background:#e8eef7}
 .roomHeader{min-height:60px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 14px;background:rgba(255,255,255,.94);border-bottom:1px solid #e1e5ec}
-.roomHeader b{font-size:17px}
+.roomHeader b{font-size:18px}
 .roomHeader small{color:#777f8c}
-.roomHeader button{width:38px;height:38px;border-radius:50%;background:#fff;font-size:25px}
+.roomHeader button{width:42px;height:42px;border-radius:50%;background:#fff;font-size:27px}
 .messages{flex:1;min-height:0;overflow:auto;padding:18px}
 .msg{display:flex;flex-direction:column;align-items:flex-start;margin-bottom:10px}
 .msg.mine{align-items:flex-end}
@@ -909,9 +956,9 @@ img{display:block;max-width:100%}
 .mine .bubble{background:#fee500;color:#191919;border-top-right-radius:7px}
 .other .bubble{border-top-left-radius:7px}
 .msg small{font-size:11px;color:#777f8c;margin-top:3px}
-.composer{display:grid;grid-template-columns:minmax(0,1fr) 58px;gap:7px;min-height:66px;padding:10px;background:#fff;border-top:1px solid #e1e5ec}
-.composer input{height:44px;border-radius:23px;border:1px solid #e1e5ec;padding:0 14px;background:#f7f8fa}
-.composer button{height:44px;border-radius:23px;background:#fee500;color:#191919;font-weight:900}
+.composer{display:grid;grid-template-columns:minmax(0,1fr) 64px;gap:8px;min-height:70px;padding:10px;background:#fff;border-top:1px solid #e1e5ec}
+.composer input{height:48px;border-radius:24px;border:1px solid #e1e5ec;padding:0 16px;background:#f7f8fa}
+.composer button{height:48px;border-radius:24px;background:#fee500;color:#191919;font-weight:900}
 
 .calTop,.addBar{display:flex;gap:8px;margin-bottom:10px}
 .calTop input,.addBar input{flex:1}
@@ -939,21 +986,23 @@ img{display:block;max-width:100%}
 
 .mobileNav,.mobileRoom{display:none}
 
-body.dark{background:#15171d;color:#f3f4f7}
-body.dark .appShell,body.dark .main,body.dark .top,body.dark .page,body.dark .list,body.dark .content{background:#15171d;color:#f3f4f7}
-body.dark .rail,body.dark .moreMenu,body.dark .moreDetail,body.dark .authCard,body.dark .fatalCard,body.dark .event,body.dark .profileCard,body.dark .myProfile,body.dark .soon{background:#20232b;color:#f3f4f7;border-color:rgba(255,255,255,.08)}
-body.dark input,body.dark textarea,body.dark select,body.dark .search,body.dark .composer input,body.dark .row button,body.dark .mobileTop button,body.dark .form button,body.dark .moreMenu button{background:#252933;color:#f3f4f7;border-color:rgba(255,255,255,.09)}
+body.dark{background:#12151b;color:#f3f4f7}
+body.dark .appShell,body.dark .main,body.dark .top,body.dark .page,body.dark .list,body.dark .content{background:#12151b;color:#f3f4f7}
+body.dark .rail,body.dark .moreMenu,body.dark .moreDetail,body.dark .authCard,body.dark .fatalCard,body.dark .event,body.dark .profileCard,body.dark .myProfile,body.dark .soon{background:#1b2029;color:#f3f4f7;border-color:rgba(255,255,255,.08)}
+body.dark input,body.dark textarea,body.dark select,body.dark .search,body.dark .composer input,body.dark .row button,body.dark .mobileTop button,body.dark .form button,body.dark .moreMenu button{background:#242a35;color:#f3f4f7;border-color:rgba(255,255,255,.09)}
+body.dark .row button{background:#fee500;color:#191919}
 body.dark .rail>button{color:#a3a9b4}
-body.dark .rail>button.active{background:#31311f;color:#fee500}
+body.dark .rail>button.active{background:#30321f;color:#fee500}
 body.dark .meta span,body.dark .chatRow span,body.dark .chatRow small,body.dark .empty,body.dark .roomHeader small,body.dark .msg small,body.dark .form p,body.dark .profileCard span,body.dark .soon span{color:#a3a9b4}
-body.dark .detail,body.dark .room,body.dark .messages{background:#202a36}
-body.dark .roomHeader,body.dark .composer{background:#181b22;color:#f3f4f7;border-color:rgba(255,255,255,.08)}
-body.dark .bubble{background:#2b303a;color:#f3f4f7}
+body.dark .detail,body.dark .room,body.dark .messages{background:#202938}
+body.dark .roomHeader,body.dark .composer{background:#171b23;color:#f3f4f7;border-color:rgba(255,255,255,.08)}
+body.dark .bubble{background:#2a303b;color:#f3f4f7}
 body.dark .mine .bubble{background:#fee500;color:#191919}
-body.dark .avatar{background:#2b303a;color:#f3f4f7}
+body.dark .avatar{background:#2a303b;color:#f3f4f7}
+body.dark .empty b{color:#f3f4f7}
 
 @media(max-width:767px){
-  .appShell{display:block;height:100dvh;background:#f5f6f8}
+  .appShell{display:block;height:100dvh;background:#f4f6f8}
   .rail{display:none}
   .main{height:100dvh}
   .main>.top{display:none}
@@ -974,11 +1023,11 @@ body.dark .avatar{background:#2b303a;color:#f3f4f7}
   .mobileNav small{font-size:10.5px}
   .mobileNav button.active{color:#17181c}
   .mobileNav button.active::after{content:"";width:5px;height:5px;border-radius:50%;background:#ff4b42;margin-top:-2px}
-  .mobileRoom{position:fixed;inset:0;z-index:999;display:block;background:#e8eef7}
+  .mobileRoom{position:fixed;inset:0;z-index:999;display:block;background:#202938}
   .mobileRoom .room{height:100dvh}
-  .mobileRoom .roomHeader{min-height:calc(56px + env(safe-area-inset-top));padding-top:env(safe-area-inset-top)}
+  .mobileRoom .roomHeader{min-height:calc(58px + env(safe-area-inset-top));padding-top:env(safe-area-inset-top)}
   .mobileRoom .messages{padding:14px 12px}
-  .mobileRoom .composer{min-height:calc(64px + env(safe-area-inset-bottom));padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+  .mobileRoom .composer{min-height:calc(70px + env(safe-area-inset-bottom));padding-bottom:calc(10px + env(safe-area-inset-bottom))}
   .bubble{max-width:84%}
   .morePage{display:block;height:auto;padding:0}
   .moreMenu{height:auto;padding:0;background:transparent!important;box-shadow:none;border:0}
@@ -987,112 +1036,11 @@ body.dark .avatar{background:#2b303a;color:#f3f4f7}
   .settingsGear{top:0;right:0}
   .calTop,.addBar{gap:6px}
   .auth{padding:14px}
-  body.dark .mobileNav{background:rgba(24,27,34,.96);border-color:rgba(255,255,255,.08)}
+  body.dark .mobileNav{background:rgba(19,22,29,.96);border-color:rgba(255,255,255,.08)}
   body.dark .mobileNav button{color:#a3a9b4}
   body.dark .mobileNav button.active{color:#fee500}
 }
 EOF
 
-cat > app/src/push.js <<'EOF'
-import { supabase } from "./lib/supabase";
-import { VAPID_PUBLIC_KEY } from "./pushConfig";
-
-function keyToBytes(key) {
-  const padding = "=".repeat((4 - (key.length % 4)) % 4);
-  const base64 = (key + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const raw = atob(base64);
-  return Uint8Array.from([...raw].map((char) => char.charCodeAt(0)));
-}
-
-export async function registerWebPush(userId) {
-  if (!userId) throw new Error("로그인 정보 없음");
-  if (!("Notification" in window)) throw new Error("브라우저 알림 미지원");
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) throw new Error("Web Push 미지원");
-  if (!VAPID_PUBLIC_KEY) throw new Error("VAPID 공개키가 비어있음");
-
-  const permission = await Notification.requestPermission();
-  if (permission !== "granted") throw new Error("알림 권한 허용 필요");
-
-  const registration = await navigator.serviceWorker.register("/sw.js", {
-    scope: "/",
-    updateViaCache: "none",
-  });
-
-  await navigator.serviceWorker.ready;
-
-  const old = await registration.pushManager.getSubscription();
-  if (old) await old.unsubscribe().catch(() => {});
-
-  const subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: keyToBytes(VAPID_PUBLIC_KEY),
-  });
-
-  const { error } = await supabase.from("push_subscriptions").upsert(
-    {
-      user_id: userId,
-      endpoint: subscription.endpoint,
-      subscription: subscription.toJSON(),
-      user_agent: navigator.userAgent,
-    },
-    { onConflict: "endpoint" }
-  );
-
-  if (error) throw error;
-  return subscription;
-}
-EOF
-
-if [ ! -f app/src/pushConfig.js ]; then
-  cat > app/src/pushConfig.js <<'EOF'
-export const VAPID_PUBLIC_KEY = "";
-EOF
-fi
-
-cat > app/public/sw.js <<'EOF'
-self.addEventListener("install", () => self.skipWaiting());
-self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
-
-self.addEventListener("push", (event) => {
-  let data = {};
-  try {
-    data = event.data ? event.data.json() : {};
-  } catch {}
-
-  event.waitUntil(
-    self.registration.showNotification(data.title || "새 알림", {
-      body: data.body || "새 메시지가 도착했습니다.",
-      icon: "/icon.svg",
-      badge: "/icon.svg",
-      tag: data.roomId || "chat",
-      data: { url: data.url || "/" },
-    })
-  );
-});
-
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-
-  event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      for (const client of clients) {
-        client.focus();
-        if (client.navigate) client.navigate(event.notification.data?.url || "/");
-        return;
-      }
-
-      return self.clients.openWindow(event.notification.data?.url || "/");
-    })
-  );
-});
-EOF
-
-cat > app/public/icon.svg <<'EOF'
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <rect width="128" height="128" rx="28" fill="#fee500"/>
-  <path d="M28 45c0-12 11-22 25-22h22c14 0 25 10 25 22v18c0 12-11 22-25 22H58l-22 18V84c-5-2-8-9-8-16V45z" fill="#191919"/>
-</svg>
-EOF
-
-echo "=== final baseline files written ==="
+echo "=== v25 files written ==="
 git status --short
