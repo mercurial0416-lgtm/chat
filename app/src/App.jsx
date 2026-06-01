@@ -862,45 +862,253 @@ function Chats({ me, activeRoom, setRoom }) {
   const [selected, setSelected] = useState({});
   const [msg, setMsg] = useState("");
 
+  const roomsRef = useRef([]);
+
   useEffect(() => {
+    let alive = true;
+
     loadAll();
-    const timer = setInterval(loadRooms, 2500);
-    return () => clearInterval(timer);
-  }, []);
+
+    const topic = `chat-list-live-${me.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const channel = supabase
+      .channel(topic)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "chat_messages",
+        },
+        (payload) => {
+          if (!alive || !payload?.new) return;
+          patchRoomFromMessage(payload.new);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "chat_rooms",
+        },
+        (payload) => {
+          if (!alive || !payload?.new) return;
+          patchRoomFromRoom(payload.new);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "chat_rooms",
+        },
+        () => {
+          if (!alive) return;
+          loadRooms();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "chat_room_members",
+        },
+        (payload) => {
+          if (!alive) return;
+
+          const row = payload?.new || payload?.old || {};
+          const affectsMe = row.user_id === me.id;
+          const affectsMyRoom = roomsRef.current.some((item) => item.id === row.room_id);
+
+          if (affectsMe || affectsMyRoom) {
+            loadRooms();
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "profiles",
+        },
+        (payload) => {
+          if (!alive || !payload?.new) return;
+
+          const changedUserId = payload.new.id;
+          const related = roomsRef.current.some((room) => room.other_user_id === changedUserId);
+
+          if (related) {
+            loadRooms();
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (!alive) return;
+
+        if (status === "SUBSCRIBED") {
+          setMsg("");
+        }
+
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          setMsg("대화 목록 실시간 연결 재시도 중...");
+        }
+      });
+
+    const backupTimer = setInterval(() => {
+      if (!alive) return;
+      if (document.visibilityState !== "visible") return;
+      loadRooms();
+    }, 30000);
+
+    return () => {
+      alive = false;
+      clearInterval(backupTimer);
+
+      try {
+        supabase.removeChannel(channel);
+      } catch {}
+    };
+  }, [me.id]);
+
+  function roomTime(room) {
+    return new Date(room?.updated_at || room?.created_at || 0).getTime();
+  }
+
+  function normalizeLastMessage(value) {
+    const raw = String(value || "").trim();
+
+    if (!raw) return "";
+
+    try {
+      const parsed = JSON.parse(raw);
+
+      if (parsed?.type === "image") return "사진을 보냈습니다";
+      if (parsed?.type === "location") return "위치를 보냈습니다";
+      if (parsed?.type === "schedule") return `일정 공유: ${parsed.title || "일정"}`;
+    } catch {}
+
+    if (raw.startsWith("image::")) return "사진을 보냈습니다";
+    if (raw.startsWith("location::")) return "위치를 보냈습니다";
+
+    return raw;
+  }
+
+  function sortRooms(rows) {
+    return uniqBy(rows || []).sort((a, b) => roomTime(b) - roomTime(a));
+  }
+
+  function setSortedRooms(next) {
+    const rows = typeof next === "function" ? next(roomsRef.current) : next;
+    const sorted = sortRooms(rows);
+
+    roomsRef.current = sorted;
+    setRooms(sorted);
+  }
+
+  function patchRoomFromRoom(nextRoom) {
+    if (!nextRoom?.id) return;
+
+    setSortedRooms((prev) => {
+      const exists = prev.some((room) => room.id === nextRoom.id);
+
+      if (!exists) return prev;
+
+      return prev.map((room) => {
+        if (room.id !== nextRoom.id) return room;
+
+        return {
+          ...room,
+          ...nextRoom,
+          displayName: room.displayName,
+          avatar_url: room.avatar_url,
+          is_group: room.is_group,
+          member_count: room.member_count,
+          other_user_id: room.other_user_id,
+          last_message: normalizeLastMessage(nextRoom.last_message || room.last_message),
+          updated_at: nextRoom.updated_at || room.updated_at || nowIso(),
+        };
+      });
+    });
+  }
+
+  function patchRoomFromMessage(message) {
+    if (!message?.room_id) return;
+
+    const text = normalizeLastMessage(message.content ?? message.message);
+
+    setSortedRooms((prev) => {
+      const exists = prev.some((room) => room.id === message.room_id);
+
+      if (!exists) return prev;
+
+      return prev.map((room) => {
+        if (room.id !== message.room_id) return room;
+
+        return {
+          ...room,
+          last_message: text || room.last_message || "",
+          updated_at: message.created_at || nowIso(),
+        };
+      });
+    });
+  }
 
   async function loadAll() {
     await Promise.all([loadRooms(), loadUsers()]);
   }
 
   async function loadUsers() {
-    const { data } = await supabase.from("profiles").select("*").neq("id", me.id).order("nickname");
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .neq("id", me.id)
+      .order("nickname");
+
     setUsers(uniqBy(data || []));
   }
 
   async function loadRooms() {
     try {
-      const memberResult = await supabase.from("chat_room_members").select("room_id").eq("user_id", me.id);
+      const memberResult = await supabase
+        .from("chat_room_members")
+        .select("room_id")
+        .eq("user_id", me.id);
+
       if (memberResult.error) throw memberResult.error;
 
       const roomIds = uniqBy(memberResult.data || [], "room_id").map((item) => item.room_id);
 
       if (!roomIds.length) {
-        setRooms([]);
+        setSortedRooms([]);
         return;
       }
 
-      const roomResult = await supabase.from("chat_rooms").select("*").in("id", roomIds);
+      const roomResult = await supabase
+        .from("chat_rooms")
+        .select("*")
+        .in("id", roomIds);
+
       if (roomResult.error) throw roomResult.error;
 
-      const allMembers = await supabase.from("chat_room_members").select("room_id,user_id").in("room_id", roomIds);
-      const members = allMembers.error ? [] : allMembers.data || [];
+      const allMembers = await supabase
+        .from("chat_room_members")
+        .select("room_id,user_id")
+        .in("room_id", roomIds);
 
+      const members = allMembers.error ? [] : allMembers.data || [];
       const profileIds = uniqBy(members.filter((member) => member.user_id !== me.id), "user_id").map((member) => member.user_id);
 
       let profiles = new Map();
 
       if (profileIds.length) {
-        const profileResult = await supabase.from("profiles").select("*").in("id", profileIds);
+        const profileResult = await supabase
+          .from("profiles")
+          .select("*")
+          .in("id", profileIds);
 
         if (!profileResult.error) {
           profiles = new Map((profileResult.data || []).map((profile) => [profile.id, profile]));
@@ -919,12 +1127,12 @@ function Chats({ me, activeRoom, setRoom }) {
           displayName: isGroup ? room.name || `그룹 ${roomMembers.length}명` : displayName(otherProfile),
           avatar_url: isGroup ? "" : otherProfile?.avatar_url,
           member_count: roomMembers.length,
+          other_user_id: otherMember?.user_id || null,
+          last_message: normalizeLastMessage(room.last_message),
         };
       });
 
-      setRooms(
-        uniqBy(nextRooms).sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0))
-      );
+      setSortedRooms(nextRooms);
     } catch (err) {
       setMsg(safeError(err));
     }
@@ -933,7 +1141,9 @@ function Chats({ me, activeRoom, setRoom }) {
   async function createGroup(event) {
     event.preventDefault();
 
-    const memberIds = Object.entries(selected).filter(([, value]) => value).map(([id]) => id);
+    const memberIds = Object.entries(selected)
+      .filter(([, value]) => value)
+      .map(([id]) => id);
 
     if (!groupName.trim()) {
       setMsg("그룹 이름 입력 필요");
@@ -947,37 +1157,70 @@ function Chats({ me, activeRoom, setRoom }) {
 
     try {
       const variants = [
-        { name: groupName.trim(), room_type: "group", type: "group", created_by: me.id, last_message: "", updated_at: nowIso() },
-        { name: groupName.trim(), created_by: me.id, last_message: "", updated_at: nowIso() },
-        { created_by: me.id },
+        {
+          name: groupName.trim(),
+          room_type: "group",
+          type: "group",
+          created_by: me.id,
+          last_message: "",
+          updated_at: nowIso(),
+        },
+        {
+          name: groupName.trim(),
+          created_by: me.id,
+          last_message: "",
+          updated_at: nowIso(),
+        },
+        {
+          created_by: me.id,
+        },
       ];
 
-      let room = null;
+      let newRoom = null;
       let lastError = null;
 
       for (const row of variants) {
-        const { data, error } = await supabase.from("chat_rooms").insert(row).select("*").single();
+        const { data, error } = await supabase
+          .from("chat_rooms")
+          .insert(row)
+          .select("*")
+          .single();
 
         if (!error && data) {
-          room = data;
+          newRoom = data;
           break;
         }
 
         lastError = error;
       }
 
-      if (!room) throw lastError || new Error("그룹 생성 실패");
+      if (!newRoom) throw lastError || new Error("그룹 생성 실패");
 
-      const rows = [me.id, ...memberIds].map((userId) => ({ room_id: room.id, user_id: userId }));
-      const { error: memberError } = await supabase.from("chat_room_members").insert(rows);
+      const rows = [me.id, ...memberIds].map((userId) => ({
+        room_id: newRoom.id,
+        user_id: userId,
+      }));
 
-      if (memberError && !String(memberError.message || "").includes("duplicate")) throw memberError;
+      const { error: memberError } = await supabase
+        .from("chat_room_members")
+        .insert(rows);
+
+      if (memberError && !String(memberError.message || "").includes("duplicate")) {
+        throw memberError;
+      }
 
       setGroupName("");
       setSelected({});
       setShowCreate(false);
+
       await loadRooms();
-      setRoom({ ...room, displayName: groupName.trim(), is_group: true, member_count: rows.length });
+
+      setRoom({
+        ...newRoom,
+        displayName: groupName.trim(),
+        is_group: true,
+        member_count: rows.length,
+      });
     } catch (err) {
       setMsg(safeError(err));
     }
@@ -988,24 +1231,38 @@ function Chats({ me, activeRoom, setRoom }) {
       <Header
         eyebrow="Messages"
         title="대화"
-        text="1:1 대화와 그룹 대화"
+        text="실시간 채팅"
         right={<button className="pillButton" onClick={() => setShowCreate(true)}>그룹+</button>}
       />
 
-      <div className="list">
+      <div className="chatList">
         {rooms.map((room) => (
-          <button key={room.id} className={`chatCard ${activeRoom?.id === room.id ? "active" : ""}`} onClick={() => setRoom(room)}>
-            <Avatar user={{ nickname: room.is_group ? "그" : room.displayName, avatar_url: room.avatar_url }} size={44} online={!room.is_group} />
+          <article
+            key={room.id}
+            className={`chatListItem ${activeRoom?.id === room.id ? "active" : ""}`}
+            onClick={() => setRoom(room)}
+          >
+            <Avatar
+              user={{ nickname: room.displayName, avatar_url: room.avatar_url }}
+              size={44}
+              online={!room.is_group}
+            />
+
             <div>
               <b>{room.displayName || "대화방"}</b>
-              <p>{room.is_group ? `${room.member_count || 0}명 · ${room.last_message || "그룹 대화"}` : room.last_message || "아직 메시지가 없어요"}</p>
+              <p>
+                {room.is_group
+                  ? `${room.member_count || 0}명 · ${room.last_message || "그룹 대화"}`
+                  : room.last_message || "아직 메시지가 없어요"}
+              </p>
             </div>
-            <time>{dateTime(room.updated_at || room.created_at)}</time>
-          </button>
+
+            <span>{dateTime(room.updated_at || room.created_at)}</span>
+          </article>
         ))}
       </div>
 
-      {!rooms.length && <Empty title="대화방 없음" text="친구를 누르거나 그룹을 만들어줘." />}
+      {!rooms.length && <Empty title="대화방 없음" text="친구 목록에서 대화를 시작하거나 그룹을 만들어줘." />}
 
       {showCreate && (
         <section className="sheet">
@@ -1015,16 +1272,20 @@ function Chats({ me, activeRoom, setRoom }) {
               <button type="button" onClick={() => setShowCreate(false)}>×</button>
             </header>
 
-            <label className="field">
-              <span>방 이름</span>
+            <label>
+              방 이름
               <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="예: 근무조 단톡" />
             </label>
 
-            <div className="memberPick">
+            <div className="checkList">
               {users.map((user) => (
                 <label key={user.id}>
-                  <input type="checkbox" checked={!!selected[user.id]} onChange={(e) => setSelected((prev) => ({ ...prev, [user.id]: e.target.checked }))} />
-                  <Avatar user={user} size={34} online />
+                  <input
+                    type="checkbox"
+                    checked={!!selected[user.id]}
+                    onChange={(e) => setSelected((prev) => ({ ...prev, [user.id]: e.target.checked }))}
+                  />
+                  <Avatar user={user} size={32} />
                   <span>{displayName(user)}</span>
                 </label>
               ))}
@@ -1040,8 +1301,6 @@ function Chats({ me, activeRoom, setRoom }) {
   );
 }
 
-
-
 function Room({ me, room, onBack }) {
   const [messages, setMessages] = useState([]);
   const [members, setMembers] = useState([]);
@@ -1051,54 +1310,189 @@ function Room({ me, room, onBack }) {
   const [msg, setMsg] = useState("");
   const [uploading, setUploading] = useState(false);
   const [showAttach, setShowAttach] = useState(false);
-  const [showScheduleSheet, setShowScheduleSheet] = useState(false);
-  const [scheduleMode, setScheduleMode] = useState("pick");
-  const [shareEvents, setShareEvents] = useState([]);
-  const [shareQuery, setShareQuery] = useState("");
-  const [shareTitle, setShareTitle] = useState("");
-  const [shareDate, setShareDate] = useState(dateKey());
-  const [shareTime, setShareTime] = useState("18:00");
-  const [shareNotify, setShareNotify] = useState("60");
-  const [shareAllDay, setShareAllDay] = useState(false);
 
   const bottom = useRef(null);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
+  const messagesRef = useRef([]);
 
   useEffect(() => {
     if (!room?.id) return undefined;
 
     let alive = true;
 
-    loadMessages();
-    loadMembers();
+    messagesRef.current = [];
+    setMessages([]);
 
-    const topic = `room-${room.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    loadMembers();
+    loadMessages();
+
+    const topic = `room-live-${room.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     const channel = supabase
       .channel(topic)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages", filter: `room_id=eq.${room.id}` }, () => {
-        if (alive) loadMessages();
-      })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_message_reads" }, () => {
-        if (alive) loadReadReceipts(messages);
-      })
-      .subscribe();
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "chat_messages",
+          filter: `room_id=eq.${room.id}`,
+        },
+        (payload) => {
+          if (!alive || !payload?.new) return;
 
-    const timer = setInterval(() => {
-      if (alive) loadMessages();
-    }, 1800);
+          appendRealtimeMessage(payload.new);
+
+          if (payload.new.sender_id !== me.id) {
+            markRead([payload.new]);
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "chat_messages",
+          filter: `room_id=eq.${room.id}`,
+        },
+        (payload) => {
+          if (!alive || !payload?.new) return;
+          replaceRealtimeMessage(payload.new);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "chat_messages",
+          filter: `room_id=eq.${room.id}`,
+        },
+        (payload) => {
+          if (!alive || !payload?.old?.id) return;
+          setSortedMessages((prev) => prev.filter((item) => item.id !== payload.old.id));
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "chat_message_reads",
+        },
+        () => {
+          if (!alive) return;
+          loadReadReceipts(messagesRef.current);
+        }
+      )
+      .subscribe((status) => {
+        if (!alive) return;
+
+        if (status === "SUBSCRIBED") {
+          setMsg("");
+        }
+
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          setMsg("실시간 연결 재시도 중...");
+        }
+      });
+
+    const backupTimer = setInterval(() => {
+      if (!alive) return;
+      if (document.visibilityState !== "visible") return;
+      loadMessages();
+    }, 15000);
 
     return () => {
       alive = false;
-      clearInterval(timer);
-      try { supabase.removeChannel(channel); } catch {}
+      clearInterval(backupTimer);
+
+      try {
+        supabase.removeChannel(channel);
+      } catch {}
     };
   }, [room?.id]);
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: "end" });
   }, [messages.length]);
+
+  function makeClientUuid() {
+    const c = globalThis.crypto;
+
+    if (c?.randomUUID) return c.randomUUID();
+
+    return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (value) =>
+      (
+        Number(value) ^
+        ((c?.getRandomValues?.(new Uint8Array(1))[0] || Math.floor(Math.random() * 256)) & (15 >> (Number(value) / 4)))
+      ).toString(16)
+    );
+  }
+
+  function isDbId(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
+  }
+
+  function messageKey(message) {
+    return message?.id || `${message?.sender_id || "unknown"}-${message?.created_at || ""}-${message?.content || message?.message || ""}`;
+  }
+
+  function sortMessages(rows) {
+    return [...(rows || [])].sort((a, b) => {
+      const at = new Date(a.created_at || 0).getTime();
+      const bt = new Date(b.created_at || 0).getTime();
+
+      return at - bt;
+    });
+  }
+
+  function compactMessages(rows) {
+    const map = new Map();
+
+    for (const item of rows || []) {
+      if (!item) continue;
+
+      const key = messageKey(item);
+      if (!key) continue;
+
+      const prev = map.get(key);
+
+      if (!prev || prev._pending) {
+        map.set(key, item);
+      }
+    }
+
+    return sortMessages([...map.values()]);
+  }
+
+  function setSortedMessages(next) {
+    const rows = typeof next === "function" ? next(messagesRef.current) : next;
+    const sorted = compactMessages(rows);
+
+    messagesRef.current = sorted;
+    setMessages(sorted);
+  }
+
+  function appendRealtimeMessage(message) {
+    if (!message || message.room_id !== room.id) return;
+
+    setSortedMessages((prev) => {
+      const withoutSame = prev.filter((item) => item.id !== message.id);
+      return [...withoutSame, message];
+    });
+  }
+
+  function replaceRealtimeMessage(message) {
+    if (!message || message.room_id !== room.id) return;
+
+    setSortedMessages((prev) => {
+      const withoutSame = prev.filter((item) => item.id !== message.id);
+      return [...withoutSame, message];
+    });
+  }
 
   async function loadMembers() {
     if (!room?.id) return;
@@ -1124,7 +1518,10 @@ function Room({ me, room, onBack }) {
   }
 
   async function loadReadReceipts(sourceMessages) {
-    const ids = (sourceMessages || []).map((item) => item.id).filter(Boolean);
+    const ids = (sourceMessages || [])
+      .map((item) => item.id)
+      .filter((id) => isDbId(id));
+
     if (!ids.length) {
       setReadMap({});
       return;
@@ -1138,6 +1535,7 @@ function Room({ me, room, onBack }) {
     if (error) return;
 
     const next = {};
+
     for (const item of data || []) {
       if (!next[item.message_id]) next[item.message_id] = [];
       next[item.message_id].push(item);
@@ -1148,7 +1546,7 @@ function Room({ me, room, onBack }) {
 
   async function markRead(sourceMessages) {
     const rows = (sourceMessages || [])
-      .filter((item) => item.id && item.sender_id && item.sender_id !== me.id)
+      .filter((item) => isDbId(item.id) && item.sender_id && item.sender_id !== me.id)
       .map((item) => ({
         message_id: item.id,
         user_id: me.id,
@@ -1157,10 +1555,11 @@ function Room({ me, room, onBack }) {
 
     if (!rows.length) return;
 
-    await supabase
-      .from("chat_message_reads")
-      .upsert(rows, { onConflict: "message_id,user_id" })
-      .then(() => {});
+    try {
+      await supabase
+        .from("chat_message_reads")
+        .upsert(rows, { onConflict: "message_id,user_id" });
+    } catch {}
   }
 
   async function loadMessages() {
@@ -1175,8 +1574,9 @@ function Room({ me, room, onBack }) {
 
       if (error) throw error;
 
-      const rows = data || [];
-      setMessages(rows);
+      const rows = compactMessages(data || []);
+
+      setSortedMessages(rows);
       markRead(rows);
       loadReadReceipts(rows);
     } catch (err) {
@@ -1186,65 +1586,151 @@ function Room({ me, room, onBack }) {
 
   function parseMessage(message) {
     const raw = String(message?.content ?? message?.message ?? "").trim();
+
     if (!raw) return { type: "empty", text: "" };
 
     try {
       const parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === "object" && parsed.type) return parsed;
+
+      if (parsed && typeof parsed === "object" && parsed.type) {
+        return parsed;
+      }
     } catch {}
 
-    if (raw.startsWith("image::")) return { type: "image", url: raw.slice(7) };
+    if (raw.startsWith("image::")) {
+      return {
+        type: "image",
+        url: raw.slice(7),
+      };
+    }
 
     if (raw.startsWith("location::")) {
       const [lat, lng] = raw.slice(10).split(",").map(Number);
-      return { type: "location", lat, lng, url: `https://maps.google.com/?q=${lat},${lng}` };
+
+      return {
+        type: "location",
+        lat,
+        lng,
+        url: `https://maps.google.com/?q=${lat},${lng}`,
+      };
     }
 
-    return { type: "text", text: raw };
+    return {
+      type: "text",
+      text: raw,
+    };
   }
 
   async function insertMessage(payload, pushText) {
     const raw = typeof payload === "string" ? payload : JSON.stringify(payload);
+    const clientId = makeClientUuid();
+    const createdAt = nowIso();
+    const tempId = `tmp-${clientId}`;
+
+    const optimistic = {
+      id: tempId,
+      room_id: room.id,
+      sender_id: me.id,
+      content: raw,
+      message: raw,
+      created_at: createdAt,
+      _pending: true,
+    };
+
+    appendRealtimeMessage(optimistic);
 
     const variants = [
-      { room_id: room.id, sender_id: me.id, content: raw, message: raw, created_at: nowIso() },
-      { room_id: room.id, sender_id: me.id, content: raw, created_at: nowIso() },
-      { room_id: room.id, sender_id: me.id, message: raw, created_at: nowIso() },
+      {
+        id: clientId,
+        room_id: room.id,
+        sender_id: me.id,
+        content: raw,
+        message: raw,
+        created_at: createdAt,
+      },
+      {
+        id: clientId,
+        room_id: room.id,
+        sender_id: me.id,
+        content: raw,
+        created_at: createdAt,
+      },
+      {
+        id: clientId,
+        room_id: room.id,
+        sender_id: me.id,
+        message: raw,
+        created_at: createdAt,
+      },
+      {
+        room_id: room.id,
+        sender_id: me.id,
+        content: raw,
+        created_at: createdAt,
+      },
+      {
+        room_id: room.id,
+        sender_id: me.id,
+        message: raw,
+        created_at: createdAt,
+      },
     ];
 
-    let sent = false;
+    let saved = null;
     let lastError = null;
 
     for (const row of variants) {
-      const { error } = await supabase.from("chat_messages").insert(row);
-      if (!error) {
-        sent = true;
+      const result = await supabase
+        .from("chat_messages")
+        .insert(row)
+        .select("*")
+        .single();
+
+      if (!result.error && result.data) {
+        saved = {
+          ...result.data,
+          _pending: false,
+        };
         break;
       }
-      lastError = error;
+
+      lastError = result.error;
     }
 
-    if (!sent) throw lastError || new Error("메시지 저장 실패");
+    if (!saved) {
+      setSortedMessages((prev) => prev.filter((item) => item.id !== tempId));
+      throw lastError || new Error("메시지 저장 실패");
+    }
 
-    await supabase
-      .from("chat_rooms")
-      .update({ last_message: pushText, updated_at: nowIso() })
-      .eq("id", room.id);
+    setSortedMessages((prev) => {
+      const withoutTempAndSaved = prev.filter((item) => item.id !== tempId && item.id !== saved.id);
+      return [...withoutTempAndSaved, saved];
+    });
 
-    await supabase.functions.invoke("send-chat-push", {
-      body: {
-        room_id: room.id,
-        content: pushText,
-        sender_name: me.nickname || me.email || "친구",
-      },
-    }).catch(() => {});
+    Promise.allSettled([
+      supabase
+        .from("chat_rooms")
+        .update({
+          last_message: pushText,
+          updated_at: nowIso(),
+        })
+        .eq("id", room.id),
 
-    loadMessages();
+      supabase.functions.invoke("send-chat-push", {
+        body: {
+          room_id: room.id,
+          content: pushText,
+          sender_name: me.nickname || me.email || "친구",
+        },
+      }),
+    ]);
   }
 
   async function send(event) {
     event.preventDefault();
+
     const value = text.trim();
+
     if (!value) return;
 
     setText("");
@@ -1280,19 +1766,36 @@ function Room({ me, room, onBack }) {
 
       const { error: uploadError } = await supabase.storage
         .from("chat-images")
-        .upload(path, file, { cacheControl: "3600", upsert: false, contentType: file.type });
+        .upload(path, file, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: file.type,
+        });
 
       if (uploadError) throw uploadError;
 
-      const { data } = supabase.storage.from("chat-images").getPublicUrl(path);
+      const { data } = supabase.storage
+        .from("chat-images")
+        .getPublicUrl(path);
+
       const url = data?.publicUrl;
+
       if (!url) throw new Error("사진 URL 생성 실패");
 
-      await insertMessage({ type: "image", url, name: file.name, size: file.size }, "사진을 보냈습니다");
+      await insertMessage(
+        {
+          type: "image",
+          url,
+          name: file.name,
+          size: file.size,
+        },
+        "사진을 보냈습니다"
+      );
     } catch (err) {
       setMsg(`사진 전송 실패: ${safeError(err)}`);
     } finally {
       setUploading(false);
+
       if (fileInputRef.current) fileInputRef.current.value = "";
       if (cameraInputRef.current) cameraInputRef.current.value = "";
     }
@@ -1315,7 +1818,16 @@ function Room({ me, room, onBack }) {
           const lng = Number(position.coords.longitude.toFixed(6));
           const url = `https://maps.google.com/?q=${lat},${lng}`;
 
-          await insertMessage({ type: "location", lat, lng, url }, "위치를 보냈습니다");
+          await insertMessage(
+            {
+              type: "location",
+              lat,
+              lng,
+              url,
+            },
+            "위치를 보냈습니다"
+          );
+
           setMsg("");
         } catch (err) {
           setMsg(`위치 전송 실패: ${safeError(err)}`);
@@ -1327,247 +1839,43 @@ function Room({ me, room, onBack }) {
         setUploading(false);
         setMsg(error.code === 1 ? "위치 권한이 거부됨" : "위치를 가져오지 못함");
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 30000,
+      }
     );
   }
 
-  
-  function scheduleDateOf(item) {
-    return String(item?.start_at || item?.date || dateKey()).slice(0, 10);
-  }
-
-  function scheduleTimeOf(item) {
-    if (item?.is_all_day) return "종일";
-
-    const raw = item?.start_at || "";
-
-    if (raw.includes("T")) return raw.slice(11, 16);
-
-    return item?.time || "09:00";
-  }
-
-  function scheduleDateTimeLabel(item) {
-    return item?.is_all_day ? `${scheduleDateOf(item)} 종일` : `${scheduleDateOf(item)} ${scheduleTimeOf(item)}`;
-  }
-
-  function notifyAtFor(startAt, minutes) {
-    const value = Number(minutes || 0);
-
-    if (!value) return null;
-
-    const d = new Date(startAt);
-    d.setMinutes(d.getMinutes() - value);
-
-    return d.toISOString();
-  }
-
-  function notifyText(minutes) {
-    const value = Number(minutes || 0);
-
-    if (!value) return "알림 없음";
-    if (value === 10) return "10분 전 알림";
-    if (value === 60) return "1시간 전 알림";
-    if (value === 1440) return "하루 전 알림";
-
-    return `${value}분 전 알림`;
-  }
-
-  function eventOwnerName(item) {
-    const id = item?.created_by || item?.user_id || item?.owner_id;
-
-    if (!id) return "등록자";
-    if (id === me.id) return "나";
-
-    const profile = memberProfiles[id];
-
-    return profile?.nickname || profile?.email || "친구";
-  }
-
-  function toSchedulePayload(item, source = "calendar") {
-    return {
-      type: "schedule",
-      source,
-      event_id: item.id || null,
-      title: item.title || "일정",
-      date: scheduleDateOf(item),
-      time: scheduleTimeOf(item),
-      start_at: item.start_at || `${scheduleDateOf(item)}T${scheduleTimeOf(item)}:00`,
-      end_at: item.end_at || null,
-      notify_minutes: Number(item.notify_minutes || 0),
-      is_all_day: !!item.is_all_day,
-      owner: eventOwnerName(item),
-      owner_id: item.created_by || item.user_id || item.owner_id || "",
-      shared_by: me.nickname || me.email || "나",
-    };
-  }
-
-  async function openScheduleShareSheet() {
+  async function shareSchedule() {
     setShowAttach(false);
-    setShowScheduleSheet(true);
-    setScheduleMode("pick");
-    setShareQuery("");
-    setMsg("");
 
-    await loadShareEvents();
-  }
+    const scheduleDate = window.prompt("공유할 날짜", dateKey());
 
-  async function loadShareEvents() {
-    try {
-      const start = `${dateKey()}T00:00:00`;
-      const endDate = new Date();
-      endDate.setDate(endDate.getDate() + 90);
-      const end = `${dateKey(endDate)}T23:59:59`;
+    if (!scheduleDate) return;
 
-      const { data, error } = await supabase
-        .from("calendar_events")
-        .select("*")
-        .gte("start_at", start)
-        .lte("start_at", end)
-        .order("start_at", { ascending: true })
-        .limit(80);
+    const scheduleTitle = window.prompt("공유할 일정 내용", "일정 공유");
 
-      if (error) throw error;
+    if (!scheduleTitle) return;
 
-      setShareEvents(data || []);
-    } catch (err) {
-      setMsg(`공유할 일정 불러오기 실패: ${safeError(err)}`);
-    }
-  }
-
-  async function shareExistingEvent(item) {
-    try {
-      const payload = toSchedulePayload(item, "calendar");
-
-      await insertMessage(payload, `일정 공유: ${payload.title}`);
-
-      setShowScheduleSheet(false);
-      setMsg("일정 공유됨");
-    } catch (err) {
-      setMsg(`일정 공유 실패: ${safeError(err)}`);
-    }
-  }
-
-  async function createAndShareSchedule(event) {
-    event.preventDefault();
-
-    const value = shareTitle.trim();
-
-    if (!value) {
-      setMsg("일정 제목을 입력해줘");
-      return;
-    }
-
-    setUploading(true);
-
-    try {
-      const startAt = shareAllDay ? `${shareDate}T00:00:00` : `${shareDate}T${shareTime || "09:00"}:00`;
-      const end = new Date(startAt);
-
-      if (shareAllDay) {
-        end.setDate(end.getDate() + 1);
-      } else {
-        end.setHours(end.getHours() + 1);
-      }
-
-      const row = {
-        user_id: me.id,
-        owner_id: me.id,
-        created_by: me.id,
-        title: value,
-        start_at: startAt,
-        end_at: end.toISOString(),
-        calendar_type: "shared",
-        notify_minutes: Number(shareNotify || 0),
-        notify_at: notifyAtFor(shareAllDay ? `${shareDate}T09:00:00` : startAt, shareNotify),
-        is_all_day: shareAllDay,
-        updated_at: nowIso(),
-      };
-
-      const { data, error } = await supabase
-        .from("calendar_events")
-        .insert(row)
-        .select("*")
-        .single();
-
-      if (error) throw error;
-
-      const payload = toSchedulePayload(data || row, "new");
-
-      await insertMessage(payload, `일정 공유: ${payload.title}`);
-
-      setShareTitle("");
-      setShowScheduleSheet(false);
-      setMsg("새 일정 만들고 공유됨");
-
-      await supabase.functions.invoke("send-calendar-push", {
-        body: {
-          title: value,
-          date: shareDate,
-          calendar_type: "shared",
-          actor_name: me.nickname || me.email || "친구",
-        },
-      }).catch(() => {});
-    } catch (err) {
-      setMsg(`새 일정 공유 실패: ${safeError(err)}`);
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  async function saveSharedSchedule(parsed) {
-    try {
-      const startAt = parsed.is_all_day
-        ? `${parsed.date || dateKey()}T00:00:00`
-        : parsed.start_at || `${parsed.date || dateKey()}T${parsed.time || "09:00"}:00`;
-
-      const end = new Date(startAt);
-
-      if (parsed.is_all_day) {
-        end.setDate(end.getDate() + 1);
-      } else {
-        end.setHours(end.getHours() + 1);
-      }
-
-      const row = {
-        user_id: me.id,
-        owner_id: me.id,
-        created_by: me.id,
-        title: parsed.title || "공유 일정",
-        start_at: startAt,
-        end_at: parsed.end_at || end.toISOString(),
-        calendar_type: "shared",
-        notify_minutes: Number(parsed.notify_minutes || 0),
-        notify_at: notifyAtFor(parsed.is_all_day ? `${parsed.date || dateKey()}T09:00:00` : startAt, parsed.notify_minutes || 0),
-        is_all_day: !!parsed.is_all_day,
-        updated_at: nowIso(),
-      };
-
-      const { error } = await supabase.from("calendar_events").insert(row);
-
-      if (error) throw error;
-
-      setMsg("내 일정에 저장됨");
-    } catch (err) {
-      setMsg(`일정 저장 실패: ${safeError(err)}`);
-    }
-  }
-
-  function openScheduleDate(parsed) {
-    const targetDate = parsed.date || scheduleDateOf(parsed);
-
-    localStorage.setItem("rift_open_calendar_date", targetDate);
-
-    window.dispatchEvent(
-      new CustomEvent("rift-open-calendar-date", {
-        detail: { date: targetDate },
-      })
+    await insertMessage(
+      {
+        type: "schedule",
+        date: scheduleDate,
+        title: scheduleTitle,
+        owner: me.nickname || me.email || "나",
+      },
+      `일정 공유: ${scheduleTitle}`
     );
   }
 
   function readLabel(message) {
+    if (message._pending) return "전송중";
     if (message.sender_id !== me.id) return "";
+
     const reads = readMap[message.id] || [];
     const otherReads = reads.filter((item) => item.user_id !== me.id);
+
     return otherReads.length ? "읽음" : "안읽음";
   }
 
@@ -1584,7 +1892,12 @@ function Room({ me, room, onBack }) {
 
     if (parsed.type === "location") {
       return (
-        <a className="locationBubble" href={parsed.url || `https://maps.google.com/?q=${parsed.lat},${parsed.lng}`} target="_blank" rel="noreferrer">
+        <a
+          className="locationBubble"
+          href={parsed.url || `https://maps.google.com/?q=${parsed.lat},${parsed.lng}`}
+          target="_blank"
+          rel="noreferrer"
+        >
           <b>📍 위치 공유</b>
           <span>{parsed.lat}, {parsed.lng}</span>
           <em>지도 열기</em>
@@ -1593,41 +1906,30 @@ function Room({ me, room, onBack }) {
     }
 
     if (parsed.type === "schedule") {
-      const mine = parsed.owner_id === me.id || parsed.shared_by === me.nickname || message.sender_id === me.id;
-
       return (
-        <article className="richScheduleCard">
-          <div className="richScheduleTop">
-            <span>📅</span>
-            <div>
-              <b>일정 공유</b>
-              <small>{parsed.source === "new" ? "새 일정" : "캘린더 일정"}</small>
-            </div>
-          </div>
-
-          <strong>{parsed.title || "일정"}</strong>
-
-          <div className="richScheduleMeta">
-            <p><em>날짜</em>{parsed.date || scheduleDateOf(parsed)} {parsed.is_all_day ? "종일" : parsed.time || scheduleTimeOf(parsed)}</p>
-            <p><em>등록자</em>{parsed.owner || "등록자"}</p>
-            <p><em>공유자</em>{parsed.shared_by || "친구"}</p>
-            <p><em>알림</em>{notifyText(parsed.notify_minutes)}</p>
-          </div>
-
-          <div className="richScheduleActions">
-            <button type="button" onClick={() => openScheduleDate(parsed)}>캘린더 보기</button>
-            {!mine && <button type="button" onClick={() => saveSharedSchedule(parsed)}>내 일정에 저장</button>}
-          </div>
-        </article>
+        <div className="scheduleBubble">
+          <b>📅 일정 공유</b>
+          <strong>{parsed.title}</strong>
+          <span>{parsed.date} · {parsed.owner || "등록자"}</span>
+        </div>
       );
     }
 
     return <div className="bubble">{parsed.text}</div>;
   }
 
-  const visibleMessages = messages.filter((message) => parseMessage(message).type !== "empty");
+  const visibleMessages = messages.filter((message) => {
+    const parsed = parseMessage(message);
+    return parsed.type !== "empty";
+  });
+
   const otherProfile = Object.values(memberProfiles).find((profile) => profile.id !== me.id);
-  const roomStatus = room.is_group ? `${members.length || room.member_count || 0}명` : otherProfile ? workSummaryForProfile(otherProfile) : `${visibleMessages.length}개의 메시지`;
+
+  const roomStatus = room.is_group
+    ? `${members.length || room.member_count || 0}명`
+    : otherProfile
+      ? workSummaryForProfile(otherProfile)
+      : `${visibleMessages.length}개의 메시지`;
 
   return (
     <div className="room">
@@ -1635,7 +1937,10 @@ function Room({ me, room, onBack }) {
         {onBack && <button className="iconButton" onClick={onBack}>‹</button>}
 
         <Avatar
-          user={{ nickname: room.is_group ? "그" : room.displayName, avatar_url: room.avatar_url }}
+          user={{
+            nickname: room.is_group ? "그" : room.displayName,
+            avatar_url: room.avatar_url,
+          }}
           size={40}
           online={!room.is_group}
         />
@@ -1651,7 +1956,10 @@ function Room({ me, room, onBack }) {
           const mine = message.sender_id === me.id;
 
           return (
-            <div key={message.id || message.created_at} className={`message ${mine ? "mine" : "other"}`}>
+            <div
+              key={message.id || message.created_at}
+              className={`message ${mine ? "mine" : "other"} ${message._pending ? "pending" : ""}`}
+            >
               {renderMessageBody(message)}
               <span>{timeOnly(message.created_at)} {readLabel(message)}</span>
             </div>
@@ -1661,12 +1969,39 @@ function Room({ me, room, onBack }) {
       </div>
 
       <form className="composer plusComposer" onSubmit={send}>
-        <input ref={fileInputRef} className="hiddenFile" type="file" accept="image/*" onChange={(event) => sendImage(event.target.files?.[0])} />
-        <input ref={cameraInputRef} className="hiddenFile" type="file" accept="image/*" capture="environment" onChange={(event) => sendImage(event.target.files?.[0])} />
+        <input
+          ref={fileInputRef}
+          className="hiddenFile"
+          type="file"
+          accept="image/*"
+          onChange={(event) => sendImage(event.target.files?.[0])}
+        />
 
-        <button type="button" className={`plusButton ${showAttach ? "active" : ""}`} onClick={() => setShowAttach((prev) => !prev)} disabled={uploading}>+</button>
+        <input
+          ref={cameraInputRef}
+          className="hiddenFile"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={(event) => sendImage(event.target.files?.[0])}
+        />
 
-        <input value={text} onChange={(e) => setText(e.target.value)} placeholder={uploading ? "전송 중..." : "메시지 입력"} disabled={uploading} />
+        <button
+          type="button"
+          className={`plusButton ${showAttach ? "active" : ""}`}
+          onClick={() => setShowAttach((prev) => !prev)}
+          disabled={uploading}
+        >
+          +
+        </button>
+
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={uploading ? "전송 중..." : "메시지 입력"}
+          disabled={uploading}
+        />
+
         <button disabled={uploading}>➤</button>
       </form>
 
@@ -1674,124 +2009,45 @@ function Room({ me, room, onBack }) {
         <section className="attachSheet" onClick={() => setShowAttach(false)}>
           <div className="attachPanel" onClick={(event) => event.stopPropagation()}>
             <div className="attachHandle" />
+
             <div className="attachTop">
               <b>보내기</b>
               <button onClick={() => setShowAttach(false)}>×</button>
             </div>
 
             <div className="attachGrid">
-              <button onClick={() => cameraInputRef.current?.click()}><span className="attachIcon camera">📷</span><b>카메라</b><small>바로 촬영</small></button>
-              <button onClick={() => fileInputRef.current?.click()}><span className="attachIcon photo">🖼️</span><b>사진</b><small>앨범 선택</small></button>
-              <button onClick={sendLocation}><span className="attachIcon location">📍</span><b>친구위치</b><small>현재 위치 공유</small></button>
-              <button onClick={openScheduleShareSheet}><span className="attachIcon schedule">📅</span><b>일정공유</b><small>캘린더 연결</small></button>
+              <button onClick={() => cameraInputRef.current?.click()}>
+                <span className="attachIcon camera">📷</span>
+                <b>카메라</b>
+                <small>바로 촬영</small>
+              </button>
+
+              <button onClick={() => fileInputRef.current?.click()}>
+                <span className="attachIcon photo">🖼️</span>
+                <b>사진</b>
+                <small>앨범 선택</small>
+              </button>
+
+              <button onClick={sendLocation}>
+                <span className="attachIcon location">📍</span>
+                <b>친구위치</b>
+                <small>현재 위치 공유</small>
+              </button>
+
+              <button onClick={shareSchedule}>
+                <span className="attachIcon schedule">📅</span>
+                <b>일정공유</b>
+                <small>채팅방에 일정 보내기</small>
+              </button>
             </div>
           </div>
         </section>
       )}
-
-      
-      {showScheduleSheet && (
-        <section className="scheduleShareSheet">
-          <div className="scheduleSharePanel">
-            <div className="attachHandle" />
-
-            <header className="scheduleShareHeader">
-              <div>
-                <b>일정 공유</b>
-                <p>캘린더 일정 선택하거나 새로 만들어서 채팅에 보내기</p>
-              </div>
-              <button onClick={() => setShowScheduleSheet(false)}>×</button>
-            </header>
-
-            <div className="scheduleModeTabs">
-              <button className={scheduleMode === "pick" ? "active" : ""} onClick={() => setScheduleMode("pick")}>기존 일정</button>
-              <button className={scheduleMode === "new" ? "active" : ""} onClick={() => setScheduleMode("new")}>새 일정</button>
-            </div>
-
-            {scheduleMode === "pick" ? (
-              <>
-                <div className="scheduleSearch">
-                  <span>⌕</span>
-                  <input value={shareQuery} onChange={(event) => setShareQuery(event.target.value)} placeholder="일정 검색" />
-                </div>
-
-                <div className="shareEventList">
-                  {shareEvents
-                    .filter((item) => {
-                      const q = shareQuery.trim().toLowerCase();
-                      if (!q) return true;
-                      return `${item.title || ""} ${scheduleDateTimeLabel(item)} ${eventOwnerName(item)}`.toLowerCase().includes(q);
-                    })
-                    .map((item) => (
-                      <article key={item.id} className="shareEventCard">
-                        <div>
-                          <b>{item.title}</b>
-                          <p>{scheduleDateTimeLabel(item)} · 등록자 {eventOwnerName(item)}</p>
-                          <small>{notifyText(item.notify_minutes)}</small>
-                        </div>
-                        <button onClick={() => shareExistingEvent(item)}>공유</button>
-                      </article>
-                    ))}
-
-                  {!shareEvents.length && (
-                    <div className="shareEmpty">
-                      <b>공유할 일정 없음</b>
-                      <p>새 일정 탭에서 바로 만들어서 보낼 수 있음.</p>
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              <form className="newShareForm" onSubmit={createAndShareSchedule}>
-                <label>
-                  일정 제목
-                  <input value={shareTitle} onChange={(event) => setShareTitle(event.target.value)} placeholder="예: 회식, 약속, 근무 변경" />
-                </label>
-
-                <label className={`newShareAllDay ${shareAllDay ? "active" : ""}`}>
-                  <input type="checkbox" checked={shareAllDay} onChange={(event) => setShareAllDay(event.target.checked)} />
-                  <span>종일 일정</span>
-                </label>
-
-                <div className="newShareGrid">
-                  <label>
-                    날짜
-                    <input type="date" value={shareDate} onChange={(event) => setShareDate(event.target.value)} />
-                  </label>
-
-                  {!shareAllDay && (
-                    <label>
-                      시간
-                      <input type="time" value={shareTime} onChange={(event) => setShareTime(event.target.value)} />
-                    </label>
-                  )}
-                </div>
-
-                <label>
-                  알림
-                  <select value={shareNotify} onChange={(event) => setShareNotify(event.target.value)}>
-                    <option value="0">알림 없음</option>
-                    <option value="10">10분 전</option>
-                    <option value="60">1시간 전</option>
-                    <option value="1440">하루 전</option>
-                  </select>
-                </label>
-
-                <button className="primaryButton" disabled={uploading}>
-                  {uploading ? "공유 중..." : "일정 만들고 공유"}
-                </button>
-              </form>
-            )}
-          </div>
-        </section>
-      )}
-
 
       <Toast>{msg}</Toast>
     </div>
   );
 }
-
 
 function Calendar({ me }) {
   const [date, setDate] = useState(() => localStorage.getItem("rift_open_calendar_date") || dateKey());
