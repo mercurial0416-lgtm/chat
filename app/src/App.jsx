@@ -320,6 +320,11 @@ export default function App() {
     document.body.classList.toggle("dark", !!me?.dark_mode);
   }, [me?.dark_mode]);
 
+  useEffect(() => {
+    const savedSize = localStorage.getItem("rift_font_size") || "normal";
+    document.body.dataset.fontSize = savedSize;
+  }, []);
+
   async function loadMe(user) {
     try {
       let { data, error } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
@@ -1045,7 +1050,14 @@ function Location() {
 
 function Settings({ me, reloadMe }) {
   const [dark, setDark] = useState(!!me.dark_mode);
+  const [fontSize, setFontSize] = useState(() => localStorage.getItem("rift_font_size") || "normal");
   const [msg, setMsg] = useState("");
+
+  function changeFontSize(next) {
+    setFontSize(next);
+    localStorage.setItem("rift_font_size", next);
+    document.body.dataset.fontSize = next;
+  }
 
   async function save() {
     try {
@@ -1066,6 +1078,19 @@ function Settings({ me, reloadMe }) {
         <span>다크모드</span>
         <input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} />
       </label>
+
+      <section className="fontControl">
+        <div>
+          <b>글자 크기</b>
+          <p>폰에서 보기 편한 크기로 조절</p>
+        </div>
+
+        <div className="fontButtons">
+          <button className={fontSize === "small" ? "active" : ""} onClick={() => changeFontSize("small")}>작게</button>
+          <button className={fontSize === "normal" ? "active" : ""} onClick={() => changeFontSize("normal")}>보통</button>
+          <button className={fontSize === "large" ? "active" : ""} onClick={() => changeFontSize("large")}>크게</button>
+        </div>
+      </section>
 
       <button className="primaryButton" onClick={save}>저장</button>
       <button className="dangerButton" onClick={() => supabase.auth.signOut().then(() => location.reload())}>로그아웃</button>
