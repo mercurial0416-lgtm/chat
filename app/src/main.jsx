@@ -20,9 +20,9 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.error) {
       return (
-        <div className="fatalShell">
+        <div className="fatalPage">
           <div className="fatalCard">
-            <h1>화면 오류</h1>
+            <b>화면 오류</b>
             <p>아래 오류 문구를 보내줘.</p>
             <pre>{String(this.state.error?.message || this.state.error)}</pre>
             <button onClick={() => location.reload()}>새로고침</button>

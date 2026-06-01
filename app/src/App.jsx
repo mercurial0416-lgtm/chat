@@ -3,26 +3,24 @@ import { supabase } from "./lib/supabase";
 import { registerWebPush } from "./push";
 
 const TABS = [
-  { key: "friends", label: "친구", icon: "친" },
+  { key: "home", label: "홈", icon: "홈" },
   { key: "chats", label: "채팅", icon: "톡" },
   { key: "calendar", label: "캘린더", icon: "일" },
   { key: "more", label: "더보기", icon: "더" },
 ];
 
-const safeText = (err) => err?.message || err?.error_description || err?.error || String(err || "오류");
-const isoNow = () => new Date().toISOString();
+const safeError = (err) => err?.message || err?.error_description || err?.error || String(err || "오류");
+const nowIso = () => new Date().toISOString();
 
-function dateKey(date = new Date()) {
-  const d = new Date(date);
+function toDateKey(value = new Date()) {
+  const d = new Date(value);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function shortTime(value) {
+function timeText(value) {
   if (!value) return "";
   try {
-    return new Date(value).toLocaleString("ko-KR", {
-      month: "numeric",
-      day: "numeric",
+    return new Date(value).toLocaleTimeString("ko-KR", {
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -31,10 +29,12 @@ function shortTime(value) {
   }
 }
 
-function compactTime(value) {
+function dayText(value) {
   if (!value) return "";
   try {
-    return new Date(value).toLocaleTimeString("ko-KR", {
+    return new Date(value).toLocaleString("ko-KR", {
+      month: "numeric",
+      day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -53,18 +53,18 @@ function uniqBy(items, key = "id") {
   });
 }
 
-function nameOf(user) {
+function displayName(user) {
   return user?.nickname || user?.displayName || user?.name || user?.title || user?.email || "상대방";
 }
 
-function firstLetter(user) {
-  return nameOf(user).trim().slice(0, 1).toUpperCase() || "?";
+function initials(user) {
+  return displayName(user).trim().slice(0, 1).toUpperCase() || "?";
 }
 
-function Avatar({ user, size = 48 }) {
+function Avatar({ user, size = 48, glow = false }) {
   return (
-    <div className="avatar" style={{ width: size, height: size }}>
-      {user?.avatar_url ? <img src={user.avatar_url} alt="" /> : <span>{firstLetter(user)}</span>}
+    <div className={`avatar ${glow ? "avatarGlow" : ""}`} style={{ width: size, height: size }}>
+      {user?.avatar_url ? <img src={user.avatar_url} alt="" /> : <span>{initials(user)}</span>}
     </div>
   );
 }
@@ -76,11 +76,23 @@ function Toast({ children }) {
 
 function Empty({ title, text }) {
   return (
-    <div className="empty">
-      <div className="emptyIcon">·</div>
+    <div className="emptyState">
+      <div className="emptyOrb">·</div>
       <b>{title}</b>
       <p>{text}</p>
     </div>
+  );
+}
+
+function TopBar({ title, subtitle, right }) {
+  return (
+    <header className="topBar">
+      <div>
+        <h1>{title}</h1>
+        {subtitle && <p>{subtitle}</p>}
+      </div>
+      {right}
+    </header>
   );
 }
 
@@ -98,18 +110,14 @@ function Auth() {
     setMsg("");
 
     try {
-      if (!email.trim()) throw new Error("이메일 필요");
-      if (password.length < 6) throw new Error("비밀번호 6자 이상 필요");
+      if (!email.trim()) throw new Error("이메일을 입력해줘.");
+      if (password.length < 6) throw new Error("비밀번호는 6자 이상.");
 
       if (mode === "signup") {
         const { error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
-          options: {
-            data: {
-              nickname: nickname.trim() || email.split("@")[0],
-            },
-          },
+          options: { data: { nickname: nickname.trim() || email.split("@")[0] } },
         });
 
         if (error) throw error;
@@ -125,44 +133,56 @@ function Auth() {
         location.reload();
       }
     } catch (err) {
-      setMsg(safeText(err));
+      setMsg(safeError(err));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="authShell">
+    <main className="authPage">
       <form className="authCard" onSubmit={submit}>
-        <div className="logoMark">C</div>
-        <h1>Chat</h1>
-        <p>친구 일정과 대화를 한 화면에서</p>
+        <div className="authLogo">C</div>
+        <div>
+          <h1>Chatly</h1>
+          <p>친구, 일정, 대화를 깔끔하게.</p>
+        </div>
 
         {mode === "signup" && (
-          <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="닉네임" />
+          <label className="field">
+            <span>닉네임</span>
+            <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="형준" />
+          </label>
         )}
 
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="이메일" />
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="비밀번호" />
+        <label className="field">
+          <span>이메일</span>
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" />
+        </label>
 
-        <button className="primary" disabled={busy}>
+        <label className="field">
+          <span>비밀번호</span>
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="6자 이상" />
+        </label>
+
+        <button className="primaryBtn" disabled={busy}>
           {busy ? "처리중..." : mode === "login" ? "로그인" : "가입하기"}
         </button>
 
         <button
           type="button"
-          className="plainBtn"
+          className="textBtn"
           onClick={() => {
             setMsg("");
             setMode(mode === "login" ? "signup" : "login");
           }}
         >
-          {mode === "login" ? "계정 만들기" : "로그인으로 돌아가기"}
+          {mode === "login" ? "새 계정 만들기" : "로그인으로 돌아가기"}
         </button>
 
         <Toast>{msg}</Toast>
       </form>
-    </div>
+    </main>
   );
 }
 
@@ -170,28 +190,25 @@ export default function App() {
   const [booting, setBooting] = useState(true);
   const [session, setSession] = useState(null);
   const [me, setMe] = useState(null);
-  const [tab, setTab] = useState("friends");
+  const [tab, setTab] = useState("home");
   const [room, setRoom] = useState(null);
   const [moreSection, setMoreSection] = useState("profile");
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
-    let mounted = true;
+    let alive = true;
 
     async function boot() {
       try {
         const { data } = await supabase.auth.getSession();
-        if (!mounted) return;
+        if (!alive) return;
 
         setSession(data.session || null);
-
-        if (data.session?.user) {
-          await loadProfile(data.session.user);
-        }
+        if (data.session?.user) await loadMe(data.session.user);
       } catch (err) {
-        setMsg(safeText(err));
+        setMsg(safeError(err));
       } finally {
-        if (mounted) setBooting(false);
+        if (alive) setBooting(false);
       }
     }
 
@@ -199,25 +216,23 @@ export default function App() {
 
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession || null);
-      if (nextSession?.user) loadProfile(nextSession.user);
+      if (nextSession?.user) loadMe(nextSession.user);
       else setMe(null);
     });
 
     return () => {
-      mounted = false;
+      alive = false;
       data?.subscription?.unsubscribe?.();
     };
   }, []);
 
   useEffect(() => {
-    const dark = !!me?.dark_mode;
-    document.body.classList.toggle("dark", dark);
+    document.body.classList.toggle("dark", !!me?.dark_mode);
   }, [me?.dark_mode]);
 
-  async function loadProfile(user) {
+  async function loadMe(user) {
     try {
       let { data, error } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
-
       if (error) throw error;
 
       if (!data) {
@@ -238,13 +253,8 @@ export default function App() {
         email: user.email,
         nickname: user.email?.split("@")[0] || "사용자",
       });
-      setMsg(safeText(err));
+      setMsg(safeError(err));
     }
-  }
-
-  function goTab(nextTab) {
-    setTab(nextTab);
-    setRoom(null);
   }
 
   function openProfile() {
@@ -253,15 +263,20 @@ export default function App() {
     setTab("more");
   }
 
-  if (booting) return <div className="loading">불러오는 중...</div>;
+  function goTab(next) {
+    setTab(next);
+    setRoom(null);
+  }
+
+  if (booting) return <div className="loadingPage">불러오는 중...</div>;
   if (!session) return <Auth />;
-  if (!me) return <div className="loading">프로필 불러오는 중...</div>;
+  if (!me) return <div className="loadingPage">프로필 불러오는 중...</div>;
 
   return (
-    <div className="app">
-      <aside className="desktopNav">
-        <button className="profileDock" onClick={openProfile}>
-          <Avatar user={me} size={42} />
+    <div className="appShell">
+      <aside className="sideRail">
+        <button className="sideProfile" onClick={openProfile}>
+          <Avatar user={me} size={44} glow />
         </button>
 
         {TABS.map((item) => (
@@ -272,18 +287,10 @@ export default function App() {
         ))}
       </aside>
 
-      <main className="screen">
-        <header className="desktopTop">
-          <h1>{TABS.find((item) => item.key === tab)?.label}</h1>
-          <button className="topProfile" onClick={openProfile}>
-            <Avatar user={me} size={34} />
-            <span>{me.nickname}</span>
-          </button>
-        </header>
-
-        <section className={tab === "chats" ? "view chatView" : "view"}>
-          {tab === "friends" && (
-            <Friends
+      <main className="phoneFrame">
+        <section className={tab === "chats" ? "screen chatScreen" : "screen"}>
+          {tab === "home" && (
+            <Home
               me={me}
               openProfile={openProfile}
               openRoom={(nextRoom) => {
@@ -296,15 +303,15 @@ export default function App() {
           {tab === "chats" && (
             <>
               <Chats me={me} activeRoom={room} setRoom={setRoom} />
-              <div className="desktopRoom">
+              <div className="desktopChatPane">
                 {room ? (
                   <Room me={me} room={room} />
                 ) : (
-                  <Empty title="대화방을 선택해줘" text="친구 목록에서 채팅을 시작하거나 대화 목록을 열면 돼." />
+                  <Empty title="대화방을 선택해줘" text="친구 카드에서 채팅을 시작하거나 대화 목록을 열어줘." />
                 )}
               </div>
               {room && (
-                <div className="mobileRoom">
+                <div className="mobileChatPane">
                   <Room me={me} room={room} onBack={() => setRoom(null)} />
                 </div>
               )}
@@ -317,12 +324,12 @@ export default function App() {
               me={me}
               section={moreSection}
               setSection={setMoreSection}
-              reloadMe={() => loadProfile(session.user)}
+              reloadMe={() => loadMe(session.user)}
             />
           )}
         </section>
 
-        <MobileNav tab={tab} setTab={goTab} />
+        <BottomNav tab={tab} setTab={goTab} />
       </main>
 
       <Toast>{msg}</Toast>
@@ -330,9 +337,9 @@ export default function App() {
   );
 }
 
-function MobileNav({ tab, setTab }) {
+function BottomNav({ tab, setTab }) {
   return (
-    <nav className="mobileNav">
+    <nav className="bottomNav">
       {TABS.map((item) => (
         <button key={item.key} className={tab === item.key ? "active" : ""} onClick={() => setTab(item.key)}>
           <b>{item.icon}</b>
@@ -343,7 +350,7 @@ function MobileNav({ tab, setTab }) {
   );
 }
 
-function Friends({ me, openProfile, openRoom }) {
+function Home({ me, openProfile, openRoom }) {
   const [users, setUsers] = useState([]);
   const [query, setQuery] = useState("");
   const [msg, setMsg] = useState("");
@@ -358,16 +365,16 @@ function Friends({ me, openProfile, openRoom }) {
       if (error) throw error;
       setUsers(uniqBy(data || []));
     } catch (err) {
-      setMsg(safeText(err));
+      setMsg(safeError(err));
     }
   }
 
-  async function startChat(user) {
+  async function startDM(user) {
     try {
       const nextRoom = await createDM(me, user);
       openRoom(nextRoom);
     } catch (err) {
-      setMsg(`대화방 생성 실패: ${safeText(err)}`);
+      setMsg(`대화방 생성 실패: ${safeError(err)}`);
     }
   }
 
@@ -377,36 +384,49 @@ function Friends({ me, openProfile, openRoom }) {
   }, [users, query]);
 
   return (
-    <div className="page friendsPage">
-      <div className="mobileHeader">
-        <h1>친구</h1>
-      </div>
+    <div className="page homePage">
+      <TopBar
+        title="홈"
+        subtitle="친구와 빠르게 연결"
+        right={
+          <button className="miniProfile" onClick={openProfile}>
+            <Avatar user={me} size={42} />
+          </button>
+        }
+      />
 
-      <div className="searchWrap">
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="친구/이메일 검색" />
-      </div>
-
-      <button className="myCard" onClick={openProfile}>
-        <Avatar user={me} size={58} />
-        <div>
-          <b>{me.nickname}</b>
-          <span>{me.status_message || "내 프로필 수정"}</span>
+      <button className="heroProfile" onClick={openProfile}>
+        <div className="heroLeft">
+          <Avatar user={me} size={62} glow />
+          <div>
+            <span>내 프로필</span>
+            <b>{me.nickname}</b>
+            <p>{me.status_message || "상태메시지를 설정해보세요"}</p>
+          </div>
         </div>
         <em>수정</em>
       </button>
 
-      <div className="sectionTitle">전체 사용자 {filtered.length}</div>
+      <div className="searchBox">
+        <span>⌕</span>
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="친구 또는 이메일 검색" />
+      </div>
 
-      <div className="cardList">
+      <div className="sectionHead">
+        <b>전체 사용자</b>
+        <span>{filtered.length}명</span>
+      </div>
+
+      <div className="peopleList">
         {filtered.map((user) => (
-          <div className="personCard" key={user.id}>
+          <article className="personItem" key={user.id}>
             <Avatar user={user} size={54} />
-            <div className="personText">
-              <b>{nameOf(user)}</b>
-              <span>{user.status_message || user.email}</span>
+            <div>
+              <b>{displayName(user)}</b>
+              <p>{user.status_message || user.email}</p>
             </div>
-            <button onClick={() => startChat(user)}>채팅</button>
-          </div>
+            <button onClick={() => startDM(user)}>채팅</button>
+          </article>
         ))}
       </div>
 
@@ -417,23 +437,24 @@ function Friends({ me, openProfile, openRoom }) {
 }
 
 async function createDM(me, user) {
-  const label = nameOf(user);
+  const label = displayName(user);
 
   try {
     const { data, error } = await supabase.rpc("get_or_create_dm", { other_user_id: user.id });
+
     if (!error && data) {
       const id = Array.isArray(data) ? data[0]?.id || data[0]?.room_id || data[0] : data;
-      return { id, displayName: label, avatar_url: user.avatar_url, last_message: "", updated_at: isoNow() };
+      return { id, displayName: label, avatar_url: user.avatar_url, last_message: "", updated_at: nowIso() };
     }
   } catch {}
 
   try {
-    const mineResult = await supabase.from("chat_room_members").select("room_id").eq("user_id", me.id);
-    const otherResult = await supabase.from("chat_room_members").select("room_id").eq("user_id", user.id);
+    const mine = await supabase.from("chat_room_members").select("room_id").eq("user_id", me.id);
+    const other = await supabase.from("chat_room_members").select("room_id").eq("user_id", user.id);
 
-    if (!mineResult.error && !otherResult.error) {
-      const mineSet = new Set((mineResult.data || []).map((item) => item.room_id));
-      const existing = (otherResult.data || []).find((item) => mineSet.has(item.room_id));
+    if (!mine.error && !other.error) {
+      const mineSet = new Set((mine.data || []).map((item) => item.room_id));
+      const existing = (other.data || []).find((item) => mineSet.has(item.room_id));
 
       if (existing?.room_id) {
         return {
@@ -441,14 +462,14 @@ async function createDM(me, user) {
           displayName: label,
           avatar_url: user.avatar_url,
           last_message: "",
-          updated_at: isoNow(),
+          updated_at: nowIso(),
         };
       }
     }
   } catch {}
 
   const variants = [
-    { created_by: me.id, last_message: "", updated_at: isoNow() },
+    { created_by: me.id, last_message: "", updated_at: nowIso() },
     { created_by: me.id },
     {},
   ];
@@ -458,10 +479,12 @@ async function createDM(me, user) {
 
   for (const row of variants) {
     const { data, error } = await supabase.from("chat_rooms").insert(row).select("*").single();
+
     if (!error && data) {
       room = data;
       break;
     }
+
     lastError = error;
   }
 
@@ -495,6 +518,7 @@ function Chats({ me, activeRoom, setRoom }) {
       if (memberResult.error) throw memberResult.error;
 
       const roomIds = uniqBy(memberResult.data || [], "room_id").map((item) => item.room_id);
+
       if (!roomIds.length) {
         setRooms([]);
         return;
@@ -505,7 +529,7 @@ function Chats({ me, activeRoom, setRoom }) {
 
       const allMembers = await supabase.from("chat_room_members").select("room_id,user_id").in("room_id", roomIds);
       const members = allMembers.error ? [] : allMembers.data || [];
-      const otherIds = uniqBy(members.filter((m) => m.user_id !== me.id), "user_id").map((m) => m.user_id);
+      const otherIds = uniqBy(members.filter((member) => member.user_id !== me.id), "user_id").map((member) => member.user_id);
 
       let profiles = new Map();
 
@@ -522,7 +546,7 @@ function Chats({ me, activeRoom, setRoom }) {
 
         return {
           ...room,
-          displayName: nameOf(otherProfile),
+          displayName: displayName(otherProfile),
           avatar_url: otherProfile?.avatar_url,
         };
       });
@@ -533,35 +557,36 @@ function Chats({ me, activeRoom, setRoom }) {
         )
       );
     } catch (err) {
-      setMsg(safeText(err));
+      setMsg(safeError(err));
     }
   }
 
   return (
     <div className="page chatListPage">
-      <div className="mobileHeader rowHeader">
-        <h1>채팅</h1>
-        <button onClick={loadRooms}>새로고침</button>
-      </div>
+      <TopBar
+        title="채팅"
+        subtitle="대화 목록"
+        right={<button className="refreshBtn" onClick={loadRooms}>새로고침</button>}
+      />
 
-      <div className="cardList">
+      <div className="chatCards">
         {rooms.map((room) => (
           <button
             key={room.id}
-            className={`chatCard ${activeRoom?.id === room.id ? "active" : ""}`}
+            className={`chatItem ${activeRoom?.id === room.id ? "active" : ""}`}
             onClick={() => setRoom(room)}
           >
             <Avatar user={{ nickname: room.displayName, avatar_url: room.avatar_url }} size={54} />
             <div>
               <b>{room.displayName || "상대방"}</b>
-              <span>{room.last_message || "대화를 시작해보세요"}</span>
+              <p>{room.last_message || "대화를 시작해보세요"}</p>
             </div>
-            <em>{shortTime(room.updated_at || room.created_at)}</em>
+            <time>{dayText(room.updated_at || room.created_at)}</time>
           </button>
         ))}
       </div>
 
-      {!rooms.length && <Empty title="대화방 없음" text="친구 탭에서 채팅을 시작해줘." />}
+      {!rooms.length && <Empty title="대화방 없음" text="홈에서 친구를 선택해 채팅을 시작해줘." />}
       <Toast>{msg}</Toast>
     </div>
   );
@@ -596,7 +621,7 @@ function Room({ me, room, onBack }) {
       if (error) throw error;
       setMessages(data || []);
     } catch (err) {
-      setMsg(safeText(err));
+      setMsg(safeError(err));
     }
   }
 
@@ -610,9 +635,9 @@ function Room({ me, room, onBack }) {
 
     try {
       const variants = [
-        { room_id: room.id, sender_id: me.id, content: value, message: value, created_at: isoNow() },
-        { room_id: room.id, sender_id: me.id, content: value, created_at: isoNow() },
-        { room_id: room.id, sender_id: me.id, message: value, created_at: isoNow() },
+        { room_id: room.id, sender_id: me.id, content: value, message: value, created_at: nowIso() },
+        { room_id: room.id, sender_id: me.id, content: value, created_at: nowIso() },
+        { room_id: room.id, sender_id: me.id, message: value, created_at: nowIso() },
       ];
 
       let sent = false;
@@ -631,11 +656,11 @@ function Room({ me, room, onBack }) {
 
       if (!sent) throw lastError || new Error("메시지 저장 실패");
 
-      await supabase.from("chat_rooms").update({ last_message: value, updated_at: isoNow() }).eq("id", room.id);
+      await supabase.from("chat_rooms").update({ last_message: value, updated_at: nowIso() }).eq("id", room.id);
       loadMessages();
     } catch (err) {
       setText(value);
-      setMsg(safeText(err));
+      setMsg(safeError(err));
     }
   }
 
@@ -643,15 +668,16 @@ function Room({ me, room, onBack }) {
 
   return (
     <div className="room">
-      <header className="roomTop">
-        {onBack && <button className="backBtn" onClick={onBack}>‹</button>}
+      <header className="roomHeader">
+        {onBack && <button className="backButton" onClick={onBack}>‹</button>}
+        <Avatar user={{ nickname: room.displayName, avatar_url: room.avatar_url }} size={42} />
         <div>
           <b>{room.displayName || "상대방"}</b>
-          <span>{visibleMessages.length}개 메시지</span>
+          <p>{visibleMessages.length}개 메시지</p>
         </div>
       </header>
 
-      <div className="messageArea">
+      <div className="messages">
         {visibleMessages.map((message) => {
           const body = String(message.content ?? message.message ?? "").trim();
           const mine = message.sender_id === me.id;
@@ -659,7 +685,7 @@ function Room({ me, room, onBack }) {
           return (
             <div key={message.id || message.created_at} className={`message ${mine ? "mine" : "other"}`}>
               <div className="bubble">{body}</div>
-              <small>{compactTime(message.created_at)}</small>
+              <span>{timeText(message.created_at)}</span>
             </div>
           );
         })}
@@ -677,7 +703,7 @@ function Room({ me, room, onBack }) {
 }
 
 function Calendar({ me }) {
-  const [date, setDate] = useState(dateKey());
+  const [date, setDate] = useState(toDateKey());
   const [ownerColumn, setOwnerColumn] = useState("user_id");
   const [events, setEvents] = useState([]);
   const [title, setTitle] = useState("");
@@ -713,7 +739,7 @@ function Calendar({ me }) {
       lastError = error;
     }
 
-    setMsg(safeText(lastError));
+    setMsg(safeError(lastError));
   }
 
   async function addEvent(event) {
@@ -748,34 +774,38 @@ function Calendar({ me }) {
       }
     }
 
-    setMsg(safeText(lastError));
+    setMsg(safeError(lastError));
   }
 
   return (
     <div className="page calendarPage">
-      <div className="mobileHeader rowHeader">
-        <h1>캘린더</h1>
-        <button onClick={() => setDate(dateKey())}>오늘</button>
-      </div>
+      <TopBar
+        title="캘린더"
+        subtitle="내 일정 관리"
+        right={<button className="refreshBtn" onClick={() => setDate(toDateKey())}>오늘</button>}
+      />
 
       <div className="calendarHero">
         <span>선택 날짜</span>
         <b>{date}</b>
       </div>
 
-      <input className="dateInput" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      <input className="datePicker" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
 
-      <form className="addSchedule" onSubmit={addEvent}>
+      <form className="scheduleForm" onSubmit={addEvent}>
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="일정 추가" />
         <button>추가</button>
       </form>
 
-      <div className="cardList">
+      <div className="eventList">
         {events.map((item) => (
-          <div className="eventCard" key={item.id}>
-            <b>{item.title}</b>
-            <span>{shortTime(item.start_at)}</span>
-          </div>
+          <article className="eventItem" key={item.id}>
+            <div className="eventDot" />
+            <div>
+              <b>{item.title}</b>
+              <p>{dayText(item.start_at)}</p>
+            </div>
+          </article>
         ))}
       </div>
 
@@ -788,27 +818,37 @@ function Calendar({ me }) {
 function More({ me, section, setSection, reloadMe }) {
   return (
     <div className="page morePage">
-      <div className="mobileHeader rowHeader">
-        <h1>더보기</h1>
-        <button onClick={() => setSection("settings")}>⚙</button>
-      </div>
+      <TopBar title="더보기" subtitle="프로필과 설정" />
 
-      <button className="bigProfile" onClick={() => setSection("profile")}>
-        <Avatar user={me} size={64} />
+      <button className="moreProfile" onClick={() => setSection("profile")}>
+        <Avatar user={me} size={66} glow />
         <div>
+          <span>내 계정</span>
           <b>{me.nickname}</b>
-          <span>{me.status_message || "내 프로필 수정"}</span>
+          <p>{me.status_message || "내 프로필 수정"}</p>
         </div>
       </button>
 
-      <div className="moreGrid">
-        <button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}>프로필</button>
-        <button className={section === "notify" ? "active" : ""} onClick={() => setSection("notify")}>알림</button>
-        <button className={section === "location" ? "active" : ""} onClick={() => setSection("location")}>위치공유</button>
-        <button className={section === "settings" ? "active" : ""} onClick={() => setSection("settings")}>설정</button>
+      <div className="menuGrid">
+        <button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}>
+          <b>프로필</b>
+          <span>닉네임 · 사진</span>
+        </button>
+        <button className={section === "notify" ? "active" : ""} onClick={() => setSection("notify")}>
+          <b>알림</b>
+          <span>푸시 설정</span>
+        </button>
+        <button className={section === "location" ? "active" : ""} onClick={() => setSection("location")}>
+          <b>위치공유</b>
+          <span>친구 위치</span>
+        </button>
+        <button className={section === "settings" ? "active" : ""} onClick={() => setSection("settings")}>
+          <b>설정</b>
+          <span>테마 · 로그아웃</span>
+        </button>
       </div>
 
-      <div className="detailPanel">
+      <div className="panel">
         {section === "profile" && <Profile me={me} reloadMe={reloadMe} />}
         {section === "notify" && <Notify me={me} />}
         {section === "location" && <Location />}
@@ -844,7 +884,7 @@ function Profile({ me, reloadMe }) {
       lastError = error;
     }
 
-    setMsg(safeText(lastError));
+    setMsg(safeError(lastError));
   }
 
   return (
@@ -852,18 +892,29 @@ function Profile({ me, reloadMe }) {
       <h2>프로필 수정</h2>
 
       <div className="profilePreview">
-        <Avatar user={{ ...me, nickname, avatar_url: avatar }} size={64} />
+        <Avatar user={{ ...me, nickname, avatar_url: avatar }} size={66} glow />
         <div>
           <b>{nickname || me.email}</b>
-          <span>{status || "상태메시지 없음"}</span>
+          <p>{status || "상태메시지 없음"}</p>
         </div>
       </div>
 
-      <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="닉네임" />
-      <input value={status} onChange={(e) => setStatus(e.target.value)} placeholder="상태메시지" />
-      <input value={avatar} onChange={(e) => setAvatar(e.target.value)} placeholder="프로필 이미지 URL" />
+      <label className="field">
+        <span>닉네임</span>
+        <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="닉네임" />
+      </label>
 
-      <button className="primary" onClick={save}>저장</button>
+      <label className="field">
+        <span>상태메시지</span>
+        <input value={status} onChange={(e) => setStatus(e.target.value)} placeholder="상태메시지" />
+      </label>
+
+      <label className="field">
+        <span>프로필 이미지 URL</span>
+        <input value={avatar} onChange={(e) => setAvatar(e.target.value)} placeholder="https://..." />
+      </label>
+
+      <button className="primaryBtn" onClick={save}>저장</button>
       <Toast>{msg}</Toast>
     </div>
   );
@@ -877,15 +928,15 @@ function Notify({ me }) {
       await registerWebPush(me.id);
       setMsg("알림 등록 완료");
     } catch (err) {
-      setMsg(safeText(err));
+      setMsg(safeError(err));
     }
   }
 
   return (
     <div className="formPanel">
       <h2>알림</h2>
-      <p>PC/모바일 기기마다 한 번씩 켜야 함.</p>
-      <button className="primary" onClick={enable}>백그라운드 알림 켜기</button>
+      <p>PC/모바일 기기마다 한 번씩 켜야 해.</p>
+      <button className="primaryBtn" onClick={enable}>백그라운드 알림 켜기</button>
       <Toast>{msg}</Toast>
     </div>
   );
@@ -895,7 +946,7 @@ function Location() {
   return (
     <div className="formPanel">
       <h2>위치공유</h2>
-      <p>승인형 친구 위치공유는 다음 단계에서 붙일게.</p>
+      <p>승인형 친구 위치공유는 다음 단계에서 붙이면 됨.</p>
     </div>
   );
 }
@@ -911,7 +962,7 @@ function Settings({ me, reloadMe }) {
       setMsg("저장됨");
       reloadMe();
     } catch (err) {
-      setMsg(safeText(err));
+      setMsg(safeError(err));
     }
   }
 
@@ -919,12 +970,12 @@ function Settings({ me, reloadMe }) {
     <div className="formPanel">
       <h2>설정</h2>
 
-      <label className="toggleRow">
+      <label className="switchRow">
         <span>다크모드</span>
         <input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} />
       </label>
 
-      <button className="primary" onClick={save}>저장</button>
+      <button className="primaryBtn" onClick={save}>저장</button>
       <button className="dangerBtn" onClick={() => supabase.auth.signOut().then(() => location.reload())}>로그아웃</button>
       <Toast>{msg}</Toast>
     </div>
