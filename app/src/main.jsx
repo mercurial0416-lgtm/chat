@@ -23,7 +23,7 @@ class ErrorBoundary extends React.Component {
         <div className="fatalShell">
           <div className="fatalCard">
             <h1>화면 오류</h1>
-            <p>앱 실행 중 오류가 발생했어. 아래 문구를 보내주면 바로 고칠 수 있음.</p>
+            <p>아래 오류 문구를 보내줘.</p>
             <pre>{String(this.state.error?.message || this.state.error)}</pre>
             <button onClick={() => location.reload()}>새로고침</button>
           </div>

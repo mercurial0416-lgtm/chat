@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { registerWebPush } from "./push";
 
@@ -9,20 +9,15 @@ const TABS = [
   ["more", "더보기"],
 ];
 
-function errorText(err) {
-  return err?.message || err?.error_description || err?.error || String(err || "오류");
-}
+const errText = (err) => err?.message || err?.error_description || err?.error || String(err || "오류");
+const now = () => new Date().toISOString();
 
-function isoNow() {
-  return new Date().toISOString();
-}
-
-function dayKey(date = new Date()) {
+function todayKey(date = new Date()) {
   const d = new Date(date);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function fmtTime(value) {
+function fmt(value) {
   if (!value) return "";
   try {
     return new Date(value).toLocaleString("ko-KR", {
@@ -36,11 +31,7 @@ function fmtTime(value) {
   }
 }
 
-function initial(profile) {
-  return (profile?.nickname || profile?.email || "?").trim().slice(0, 1).toUpperCase();
-}
-
-function uniqBy(items, key = "id") {
+function uniq(items, key = "id") {
   const seen = new Set();
   return (items || []).filter((item) => {
     const value = typeof key === "function" ? key(item) : item?.[key];
@@ -50,10 +41,11 @@ function uniqBy(items, key = "id") {
   });
 }
 
-function Avatar({ profile, size = 48 }) {
+function Avatar({ user, size = 48 }) {
+  const name = user?.nickname || user?.email || "?";
   return (
     <div className="avatar" style={{ width: size, height: size }}>
-      {profile?.avatar_url ? <img src={profile.avatar_url} alt="" /> : <span>{initial(profile)}</span>}
+      {user?.avatar_url ? <img src={user.avatar_url} alt="" /> : <span>{name.trim().slice(0, 1).toUpperCase()}</span>}
     </div>
   );
 }
@@ -86,9 +78,7 @@ function Auth() {
     setMsg("");
 
     try {
-      if (!email || password.length < 6) {
-        throw new Error("이메일과 비밀번호 6자 이상 필요");
-      }
+      if (!email || password.length < 6) throw new Error("이메일과 비밀번호 6자 이상 필요");
 
       if (mode === "signup") {
         const { error } = await supabase.auth.signUp({
@@ -105,7 +95,7 @@ function Auth() {
         location.reload();
       }
     } catch (err) {
-      setMsg(errorText(err));
+      setMsg(errText(err));
     } finally {
       setBusy(false);
     }
@@ -115,7 +105,7 @@ function Auth() {
     <div className="auth">
       <form className="authCard" onSubmit={submit}>
         <h1>Chat</h1>
-        <p>친구 일정 · 채팅 공유 앱</p>
+        <p>친구 일정 · 채팅 공유</p>
 
         {mode === "signup" && (
           <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="닉네임" />
@@ -155,12 +145,9 @@ export default function App() {
         if (!mounted) return;
 
         setSession(data.session || null);
-
-        if (data.session?.user) {
-          await loadMe(data.session.user);
-        }
+        if (data.session?.user) await loadMe(data.session.user);
       } catch (err) {
-        setMsg(errorText(err));
+        setMsg(errText(err));
       } finally {
         if (mounted) setBooting(false);
       }
@@ -176,7 +163,7 @@ export default function App() {
 
     return () => {
       mounted = false;
-      data.subscription.unsubscribe();
+      data?.subscription?.unsubscribe?.();
     };
   }, []);
 
@@ -189,7 +176,6 @@ export default function App() {
   async function loadMe(user) {
     try {
       let { data, error } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
-
       if (error) throw error;
 
       if (!data) {
@@ -210,55 +196,47 @@ export default function App() {
         email: user.email,
         nickname: user.email?.split("@")[0] || "사용자",
       });
-      setMsg(errorText(err));
+      setMsg(errText(err));
     }
+  }
+
+  function switchTab(next) {
+    setTab(next);
+    setRoom(null);
   }
 
   if (booting) return <div className="loading">불러오는 중...</div>;
   if (!session) return <Auth />;
   if (!me) return <div className="loading">프로필 불러오는 중...</div>;
 
-  const currentTitle = TABS.find(([key]) => key === tab)?.[1] || "";
-
   return (
     <div className="appShell">
       <nav className="rail">
-        <Avatar profile={me} size={42} />
+        <Avatar user={me} size={42} />
         {TABS.map(([key, label]) => (
-          <button
-            key={key}
-            className={tab === key ? "active" : ""}
-            onClick={() => {
-              setTab(key);
-              setRoom(null);
-            }}
-          >
+          <button key={key} className={tab === key ? "active" : ""} onClick={() => switchTab(key)}>
             <span>{label.slice(0, 1)}</span>
             <small>{label}</small>
           </button>
         ))}
-        <button className="logout" onClick={() => supabase.auth.signOut().then(() => location.reload())}>
-          <span>↩</span>
-          <small>로그아웃</small>
-        </button>
       </nav>
 
       <main className="main">
         <header className="top">
-          <h1>{currentTitle}</h1>
+          <h1>{TABS.find(([key]) => key === tab)?.[1]}</h1>
           <div className="topMe">
-            <Avatar profile={me} size={32} />
+            <Avatar user={me} size={32} />
             <span>{me.nickname}</span>
           </div>
         </header>
 
         <div className={tab === "chats" ? "content split" : "content"}>
-          {tab === "friends" && <Friends me={me} openRoom={(r) => { setRoom(r); setTab("chats"); }} />}
+          {tab === "friends" && <Friends me={me} openRoom={(nextRoom) => { setRoom(nextRoom); setTab("chats"); }} />}
           {tab === "chats" && (
             <>
               <Chats me={me} room={room} setRoom={setRoom} />
               <section className="detail">
-                {room ? <Room me={me} room={room} /> : <Empty title="대화방 선택" sub="채팅 목록에서 대화를 열 수 있어." />}
+                {room ? <Room me={me} room={room} /> : <Empty title="대화방 선택" sub="채팅 목록에서 대화를 열어줘." />}
               </section>
               {room && (
                 <div className="mobileRoom">
@@ -271,13 +249,7 @@ export default function App() {
           {tab === "more" && <More me={me} reloadMe={() => loadMe(session.user)} />}
         </div>
 
-        <MobileNav
-          tab={tab}
-          setTab={(next) => {
-            setTab(next);
-            setRoom(null);
-          }}
-        />
+        <MobileNav tab={tab} setTab={switchTab} />
       </main>
 
       <Notice>{msg}</Notice>
@@ -309,32 +281,24 @@ function Friends({ me, openRoom }) {
 
   async function load() {
     try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .neq("id", me.id)
-        .order("nickname", { ascending: true });
-
+      const { data, error } = await supabase.from("profiles").select("*").neq("id", me.id).order("nickname");
       if (error) throw error;
-      setUsers(uniqBy(data || []));
+      setUsers(uniq(data || []));
     } catch (err) {
-      setMsg(errorText(err));
+      setMsg(errText(err));
     }
   }
 
   async function startDM(user) {
     try {
-      const room = await createDM(me, user);
-      openRoom(room);
+      const nextRoom = await createDM(me, user);
+      openRoom(nextRoom);
     } catch (err) {
-      setMsg(errorText(err));
+      setMsg(errText(err));
     }
   }
 
-  const list = users.filter((user) => {
-    const text = `${user.nickname || ""} ${user.email || ""}`.toLowerCase();
-    return text.includes(query.toLowerCase());
-  });
+  const filtered = users.filter((user) => `${user.nickname || ""} ${user.email || ""}`.toLowerCase().includes(query.toLowerCase()));
 
   return (
     <section className="page">
@@ -342,18 +306,18 @@ function Friends({ me, openRoom }) {
       <input className="search" placeholder="친구/이메일 검색" value={query} onChange={(e) => setQuery(e.target.value)} />
 
       <div className="myProfile">
-        <Avatar profile={me} />
+        <Avatar user={me} />
         <div className="meta">
           <b>{me.nickname}</b>
           <span>{me.status_message || me.email}</span>
         </div>
       </div>
 
-      <h3>친구 {list.length}</h3>
+      <h3>전체 사용자 {filtered.length}</h3>
 
-      {list.map((user) => (
+      {filtered.map((user) => (
         <div className="row" key={user.id}>
-          <Avatar profile={user} />
+          <Avatar user={user} />
           <div className="meta">
             <b>{user.nickname || user.email}</b>
             <span>{user.status_message || user.email}</span>
@@ -362,7 +326,7 @@ function Friends({ me, openRoom }) {
         </div>
       ))}
 
-      {!list.length && <Empty title="친구 없음" sub="가입한 사용자가 여기에 표시돼." />}
+      {!filtered.length && <Empty title="사용자 없음" sub="가입한 사용자가 여기에 표시돼." />}
       <Notice>{msg}</Notice>
     </section>
   );
@@ -374,20 +338,23 @@ async function createDM(me, user) {
   try {
     const { data, error } = await supabase.rpc("get_or_create_dm", { other_user_id: user.id });
     if (!error && data) {
-      const id = Array.isArray(data) ? data[0]?.id || data[0]?.room_id : data;
-      return { id, name };
+      const id = Array.isArray(data) ? data[0]?.id || data[0]?.room_id || data[0] : data;
+      return { id, name, updated_at: now(), last_message: "" };
     }
   } catch {
-    // fallback
+    // fallback below
   }
 
-  let room = null;
   const variants = [
-    { name, room_type: "dm", created_by: me.id, last_message: "", updated_at: isoNow() },
-    { name, type: "dm", created_by: me.id, last_message: "", updated_at: isoNow() },
-    { name, created_by: me.id, last_message: "", updated_at: isoNow() },
+    { name, room_type: "dm", type: "dm", created_by: me.id, last_message: "", updated_at: now() },
+    { name, room_type: "dm", created_by: me.id, last_message: "", updated_at: now() },
+    { name, type: "dm", created_by: me.id, last_message: "", updated_at: now() },
+    { name, created_by: me.id, last_message: "", updated_at: now() },
     { name },
   ];
+
+  let room = null;
+  let lastError = null;
 
   for (const row of variants) {
     const { data, error } = await supabase.from("chat_rooms").insert(row).select("*").single();
@@ -395,16 +362,15 @@ async function createDM(me, user) {
       room = data;
       break;
     }
+    lastError = error;
   }
 
-  if (!room) throw new Error("대화방 생성 실패");
+  if (!room) throw new Error(`대화방 생성 실패: ${errText(lastError)}`);
 
-  await Promise.resolve(
-    supabase.from("chat_room_members").insert([
-      { room_id: room.id, user_id: me.id },
-      { room_id: room.id, user_id: user.id },
-    ])
-  ).catch(() => {});
+  await supabase.from("chat_room_members").insert([
+    { room_id: room.id, user_id: me.id },
+    { room_id: room.id, user_id: user.id },
+  ]);
 
   return { ...room, name };
 }
@@ -423,10 +389,7 @@ function Chats({ me, room, setRoom }) {
     try {
       let output = [];
 
-      const memberResult = await supabase
-        .from("chat_room_members")
-        .select("room_id, chat_rooms(*)")
-        .eq("user_id", me.id);
+      const memberResult = await supabase.from("chat_room_members").select("room_id, chat_rooms(*)").eq("user_id", me.id);
 
       if (!memberResult.error && memberResult.data) {
         output = memberResult.data.map((item) => item.chat_rooms).filter(Boolean);
@@ -437,12 +400,12 @@ function Chats({ me, room, setRoom }) {
       }
 
       setRooms(
-        uniqBy(output).sort(
+        uniq(output).sort(
           (a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0)
         )
       );
     } catch (err) {
-      setMsg(errorText(err));
+      setMsg(errText(err));
     }
   }
 
@@ -455,12 +418,12 @@ function Chats({ me, room, setRoom }) {
 
       {rooms.map((item) => (
         <button key={item.id} className={`chatRow ${room?.id === item.id ? "active" : ""}`} onClick={() => setRoom(item)}>
-          <Avatar profile={{ nickname: item.name || "대화" }} />
+          <Avatar user={{ nickname: item.name || "대화" }} />
           <div className="meta">
             <b>{item.name || "대화방"}</b>
             <span>{item.last_message || "대화를 시작해보세요"}</span>
           </div>
-          <small>{fmtTime(item.updated_at || item.created_at)}</small>
+          <small>{fmt(item.updated_at || item.created_at)}</small>
         </button>
       ))}
 
@@ -487,17 +450,14 @@ function Room({ me, room, onBack }) {
   }, [messages.length]);
 
   async function load() {
-    try {
-      const { data, error } = await supabase
-        .from("chat_messages")
-        .select("*")
-        .eq("room_id", room.id)
-        .order("created_at", { ascending: true });
+    if (!room?.id) return;
 
+    try {
+      const { data, error } = await supabase.from("chat_messages").select("*").eq("room_id", room.id).order("created_at");
       if (error) throw error;
       setMessages(data || []);
     } catch (err) {
-      setMsg(errorText(err));
+      setMsg(errText(err));
     }
   }
 
@@ -511,11 +471,12 @@ function Room({ me, room, onBack }) {
 
     try {
       const variants = [
-        { room_id: room.id, sender_id: me.id, content: body, created_at: isoNow() },
-        { room_id: room.id, sender_id: me.id, message: body, created_at: isoNow() },
+        { room_id: room.id, sender_id: me.id, content: body, created_at: now() },
+        { room_id: room.id, sender_id: me.id, message: body, created_at: now() },
       ];
 
       let ok = false;
+      let lastError = null;
 
       for (const row of variants) {
         const { error } = await supabase.from("chat_messages").insert(row);
@@ -523,17 +484,15 @@ function Room({ me, room, onBack }) {
           ok = true;
           break;
         }
+        lastError = error;
       }
 
-      if (!ok) throw new Error("메시지 저장 실패");
+      if (!ok) throw lastError || new Error("메시지 저장 실패");
 
-      await Promise.resolve(
-        supabase.from("chat_rooms").update({ last_message: body, updated_at: isoNow() }).eq("id", room.id)
-      ).catch(() => {});
-
+      await supabase.from("chat_rooms").update({ last_message: body, updated_at: now() }).eq("id", room.id);
       load();
     } catch (err) {
-      setMsg(errorText(err));
+      setMsg(errText(err));
       setText(body);
     }
   }
@@ -543,7 +502,7 @@ function Room({ me, room, onBack }) {
       <div className="roomHeader">
         {onBack && <button onClick={onBack}>‹</button>}
         <b>{room.name || "대화방"}</b>
-        <small>{messages.length}개 메시지</small>
+        <small>{messages.length}개</small>
       </div>
 
       <div className="messages">
@@ -554,7 +513,7 @@ function Room({ me, room, onBack }) {
           return (
             <div key={message.id || message.created_at} className={`msg ${mine ? "mine" : "other"}`}>
               <div className="bubble">{body}</div>
-              <small>{fmtTime(message.created_at)}</small>
+              <small>{fmt(message.created_at)}</small>
             </div>
           );
         })}
@@ -572,7 +531,8 @@ function Room({ me, room, onBack }) {
 }
 
 function Calendar({ me }) {
-  const [date, setDate] = useState(dayKey());
+  const [date, setDate] = useState(todayKey());
+  const [ownerColumn, setOwnerColumn] = useState("user_id");
   const [events, setEvents] = useState([]);
   const [title, setTitle] = useState("");
   const [msg, setMsg] = useState("");
@@ -581,41 +541,68 @@ function Calendar({ me }) {
     load();
   }, [date]);
 
-  async function load() {
-    try {
-      const { data, error } = await supabase
-        .from("calendar_events")
-        .select("*")
-        .eq("user_id", me.id)
-        .gte("start_at", `${date}T00:00:00`)
-        .lt("start_at", `${date}T23:59:59`)
-        .order("start_at", { ascending: true });
+  async function queryBy(column) {
+    return supabase
+      .from("calendar_events")
+      .select("*")
+      .eq(column, me.id)
+      .gte("start_at", `${date}T00:00:00`)
+      .lt("start_at", `${date}T23:59:59`)
+      .order("start_at");
+  }
 
-      if (error) throw error;
-      setEvents(data || []);
-    } catch (err) {
-      setMsg(errorText(err));
+  async function load() {
+    let lastError = null;
+
+    for (const column of ["user_id", "owner_id"]) {
+      const { data, error } = await queryBy(column);
+
+      if (!error) {
+        setOwnerColumn(column);
+        setEvents(data || []);
+        setMsg("");
+        return;
+      }
+
+      lastError = error;
     }
+
+    setMsg(errText(lastError));
   }
 
   async function add(event) {
     event.preventDefault();
-    if (!title.trim()) return;
 
-    try {
-      const { error } = await supabase.from("calendar_events").insert({
-        user_id: me.id,
-        title: title.trim(),
-        start_at: `${date}T09:00:00`,
-        end_at: `${date}T10:00:00`,
-      });
+    const value = title.trim();
+    if (!value) return;
 
-      if (error) throw error;
-      setTitle("");
-      load();
-    } catch (err) {
-      setMsg(errorText(err));
+    let lastError = null;
+    const columns = ownerColumn === "user_id" ? ["user_id", "owner_id"] : ["owner_id", "user_id"];
+
+    for (const column of columns) {
+      for (const withEnd of [true, false]) {
+        const row = {
+          [column]: me.id,
+          title: value,
+          start_at: `${date}T09:00:00`,
+        };
+
+        if (withEnd) row.end_at = `${date}T10:00:00`;
+
+        const { error } = await supabase.from("calendar_events").insert(row);
+
+        if (!error) {
+          setOwnerColumn(column);
+          setTitle("");
+          load();
+          return;
+        }
+
+        lastError = error;
+      }
     }
+
+    setMsg(errText(lastError));
   }
 
   return (
@@ -624,7 +611,7 @@ function Calendar({ me }) {
 
       <div className="calTop">
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        <button onClick={() => setDate(dayKey())}>오늘</button>
+        <button onClick={() => setDate(todayKey())}>오늘</button>
       </div>
 
       <form className="addBar" onSubmit={add}>
@@ -635,7 +622,7 @@ function Calendar({ me }) {
       {events.map((item) => (
         <div className="event" key={item.id}>
           <b>{item.title}</b>
-          <span>{fmtTime(item.start_at)}</span>
+          <span>{fmt(item.start_at)}</span>
         </div>
       ))}
 
@@ -652,22 +639,16 @@ function More({ me, reloadMe }) {
     <section className="morePage">
       <div className="moreMenu">
         <div className="profileCard" onClick={() => setSection("profile")}>
-          <Avatar profile={me} />
+          <Avatar user={me} />
           <div>
             <b>{me.nickname}</b>
             <span>{me.status_message || me.email}</span>
           </div>
         </div>
 
-        <button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}>
-          프로필
-        </button>
-        <button className={section === "notify" ? "active" : ""} onClick={() => setSection("notify")}>
-          알림
-        </button>
-        <button className={section === "location" ? "active" : ""} onClick={() => setSection("location")}>
-          위치공유
-        </button>
+        <button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}>프로필</button>
+        <button className={section === "notify" ? "active" : ""} onClick={() => setSection("notify")}>알림</button>
+        <button className={section === "location" ? "active" : ""} onClick={() => setSection("location")}>위치공유</button>
 
         <div className="soon">
           <b>추가 예정</b>
@@ -675,9 +656,7 @@ function More({ me, reloadMe }) {
         </div>
       </div>
 
-      <button className="settingsGear" onClick={() => setSection("settings")} title="설정">
-        ⚙
-      </button>
+      <button className="settingsGear" onClick={() => setSection("settings")}>⚙</button>
 
       <div className="moreDetail">
         {section === "profile" && <Profile me={me} reloadMe={reloadMe} />}
@@ -696,18 +675,24 @@ function Profile({ me, reloadMe }) {
   const [msg, setMsg] = useState("");
 
   async function save() {
-    try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ nickname, status_message: status, avatar_url: avatar })
-        .eq("id", me.id);
+    const rows = [
+      { nickname, status_message: status, avatar_url: avatar },
+      { nickname },
+    ];
 
-      if (error) throw error;
-      setMsg("저장됨");
-      reloadMe();
-    } catch (err) {
-      setMsg(errorText(err));
+    let lastError = null;
+
+    for (const row of rows) {
+      const { error } = await supabase.from("profiles").update(row).eq("id", me.id);
+      if (!error) {
+        setMsg("저장됨");
+        reloadMe();
+        return;
+      }
+      lastError = error;
     }
+
+    setMsg(errText(lastError));
   }
 
   return (
@@ -730,7 +715,7 @@ function Notify({ me }) {
       await registerWebPush(me.id);
       setMsg("알림 등록 완료");
     } catch (err) {
-      setMsg(errorText(err));
+      setMsg(errText(err));
     }
   }
 
@@ -748,7 +733,7 @@ function Location() {
   return (
     <div className="form">
       <h2>위치공유</h2>
-      <p>승인형 친구 위치공유 기능은 다음 단계에서 안정화해서 붙일 예정.</p>
+      <p>승인형 친구 위치공유는 다음 단계에서 붙일게.</p>
     </div>
   );
 }
@@ -764,7 +749,7 @@ function Settings({ me, reloadMe }) {
       setMsg("저장됨");
       reloadMe();
     } catch (err) {
-      setMsg(errorText(err));
+      setMsg(errText(err));
     }
   }
 
