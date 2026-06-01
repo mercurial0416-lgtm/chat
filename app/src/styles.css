@@ -2417,3 +2417,98 @@ body.dark .notifyLogo{background:#163524}
 .notifyList span{display:block;margin-top:5px;color:var(--muted);font-size:11px;font-weight:800}
 .notifyEmpty{min-height:160px;display:grid;place-items:center;text-align:center;color:var(--sub)}
 .notifyEmpty b{color:var(--text)}
+
+/* ===== v50 simple calendar + restored chat ===== */
+
+.calendarTabs{
+  display:none !important;
+}
+
+.ttBars span,
+.ttBars small{
+  background:#22c55e !important;
+  color:#fff !important;
+}
+
+.ttEvent{
+  background:#22c55e !important;
+  color:#fff !important;
+}
+
+.sheet{
+  position:fixed;
+  inset:0;
+  z-index:6000;
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  background:rgba(0,0,0,.42);
+  backdrop-filter:blur(8px);
+}
+
+.sheetPanel{
+  width:min(520px,100%);
+  max-height:84dvh;
+  overflow:auto;
+  border-radius:26px 26px 0 0;
+  background:var(--surface);
+  border:1px solid var(--line);
+  box-shadow:0 -18px 44px rgba(0,0,0,.25);
+  padding:16px;
+}
+
+.sheetPanel header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:14px;
+}
+
+.sheetPanel header b{
+  font-size:20px;
+  color:var(--text);
+}
+
+.sheetPanel header button{
+  width:38px;
+  height:38px;
+  border-radius:16px;
+  background:var(--surface2);
+  color:var(--text);
+  font-size:24px;
+  font-weight:800;
+}
+
+.memberPick{
+  display:grid;
+  gap:8px;
+  margin:12px 0;
+}
+
+.memberPick label{
+  min-height:48px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px;
+  border-radius:16px;
+  background:var(--surface2);
+  color:var(--text);
+  font-weight:900;
+}
+
+.memberPick input{
+  width:18px;
+  height:18px;
+}
+
+@media(max-width:767px){
+  .calendarTabs{
+    display:none !important;
+  }
+
+  .sheetPanel{
+    border-radius:26px 26px 0 0;
+    padding-bottom:calc(16px + env(safe-area-inset-bottom));
+  }
+}

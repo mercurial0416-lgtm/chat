@@ -4,7 +4,7 @@ import { registerWebPush } from "./push";
 
 const TABS = [
   { key: "home", label: "홈", icon: "home" },
-  { key: "chats", label: "채팅", icon: "chat" },
+  { key: "chats", label: "대화", icon: "chat" },
   { key: "calendar", label: "캘린더", icon: "calendar" },
   { key: "more", label: "더보기", icon: "settings" },
 ];
@@ -529,9 +529,17 @@ async function createDM(me, user) {
 
   try {
     const { data, error } = await supabase.rpc("get_or_create_dm", { other_user_id: user.id });
+
     if (!error && data) {
       const id = Array.isArray(data) ? data[0]?.id || data[0]?.room_id || data[0] : data;
-      return { id, displayName: label, avatar_url: user.avatar_url, last_message: "", updated_at: nowIso() };
+      return {
+        id,
+        displayName: label,
+        avatar_url: user.avatar_url,
+        is_group: false,
+        last_message: "",
+        updated_at: nowIso(),
+      };
     }
   } catch {}
 
@@ -548,6 +556,7 @@ async function createDM(me, user) {
           id: existing.room_id,
           displayName: label,
           avatar_url: user.avatar_url,
+          is_group: false,
           last_message: "",
           updated_at: nowIso(),
         };
@@ -556,7 +565,8 @@ async function createDM(me, user) {
   } catch {}
 
   const variants = [
-    { created_by: me.id, last_message: "", updated_at: nowIso() },
+    { name: label, room_type: "dm", type: "dm", created_by: me.id, last_message: "", updated_at: nowIso() },
+    { room_type: "dm", type: "dm", created_by: me.id, last_message: "", updated_at: nowIso() },
     { created_by: me.id },
     {},
   ];
@@ -586,18 +596,33 @@ async function createDM(me, user) {
     throw insertMembers.error;
   }
 
-  return { ...room, displayName: label, avatar_url: user.avatar_url, last_message: "" };
+  return { ...room, displayName: label, avatar_url: user.avatar_url, is_group: false, last_message: "" };
 }
+
+
 
 function Chats({ me, activeRoom, setRoom }) {
   const [rooms, setRooms] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [showCreate, setShowCreate] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [selected, setSelected] = useState({});
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
-    loadRooms();
+    loadAll();
     const timer = setInterval(loadRooms, 2500);
     return () => clearInterval(timer);
   }, []);
+
+  async function loadAll() {
+    await Promise.all([loadRooms(), loadUsers()]);
+  }
+
+  async function loadUsers() {
+    const { data } = await supabase.from("profiles").select("*").neq("id", me.id).order("nickname");
+    setUsers(uniqBy(data || []));
+  }
 
   async function loadRooms() {
     try {
@@ -616,33 +641,90 @@ function Chats({ me, activeRoom, setRoom }) {
 
       const allMembers = await supabase.from("chat_room_members").select("room_id,user_id").in("room_id", roomIds);
       const members = allMembers.error ? [] : allMembers.data || [];
-      const otherIds = uniqBy(members.filter((member) => member.user_id !== me.id), "user_id").map((member) => member.user_id);
+
+      const profileIds = uniqBy(members.filter((member) => member.user_id !== me.id), "user_id").map((member) => member.user_id);
 
       let profiles = new Map();
 
-      if (otherIds.length) {
-        const profileResult = await supabase.from("profiles").select("*").in("id", otherIds);
+      if (profileIds.length) {
+        const profileResult = await supabase.from("profiles").select("*").in("id", profileIds);
+
         if (!profileResult.error) {
           profiles = new Map((profileResult.data || []).map((profile) => [profile.id, profile]));
         }
       }
 
       const nextRooms = (roomResult.data || []).map((room) => {
-        const otherMember = members.find((member) => member.room_id === room.id && member.user_id !== me.id);
+        const roomMembers = members.filter((member) => member.room_id === room.id);
+        const isGroup = room.room_type === "group" || room.type === "group" || roomMembers.length > 2;
+        const otherMember = roomMembers.find((member) => member.user_id !== me.id);
         const otherProfile = otherMember ? profiles.get(otherMember.user_id) : null;
 
         return {
           ...room,
-          displayName: displayName(otherProfile),
-          avatar_url: otherProfile?.avatar_url,
+          is_group: isGroup,
+          displayName: isGroup ? room.name || `그룹 ${roomMembers.length}명` : displayName(otherProfile),
+          avatar_url: isGroup ? "" : otherProfile?.avatar_url,
+          member_count: roomMembers.length,
         };
       });
 
       setRooms(
-        uniqBy(nextRooms).sort(
-          (a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0)
-        )
+        uniqBy(nextRooms).sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0))
       );
+    } catch (err) {
+      setMsg(safeError(err));
+    }
+  }
+
+  async function createGroup(event) {
+    event.preventDefault();
+
+    const memberIds = Object.entries(selected).filter(([, value]) => value).map(([id]) => id);
+
+    if (!groupName.trim()) {
+      setMsg("그룹 이름 입력 필요");
+      return;
+    }
+
+    if (!memberIds.length) {
+      setMsg("초대할 사람 선택 필요");
+      return;
+    }
+
+    try {
+      const variants = [
+        { name: groupName.trim(), room_type: "group", type: "group", created_by: me.id, last_message: "", updated_at: nowIso() },
+        { name: groupName.trim(), created_by: me.id, last_message: "", updated_at: nowIso() },
+        { created_by: me.id },
+      ];
+
+      let room = null;
+      let lastError = null;
+
+      for (const row of variants) {
+        const { data, error } = await supabase.from("chat_rooms").insert(row).select("*").single();
+
+        if (!error && data) {
+          room = data;
+          break;
+        }
+
+        lastError = error;
+      }
+
+      if (!room) throw lastError || new Error("그룹 생성 실패");
+
+      const rows = [me.id, ...memberIds].map((userId) => ({ room_id: room.id, user_id: userId }));
+      const { error: memberError } = await supabase.from("chat_room_members").insert(rows);
+
+      if (memberError && !String(memberError.message || "").includes("duplicate")) throw memberError;
+
+      setGroupName("");
+      setSelected({});
+      setShowCreate(false);
+      await loadRooms();
+      setRoom({ ...room, displayName: groupName.trim(), is_group: true, member_count: rows.length });
     } catch (err) {
       setMsg(safeError(err));
     }
@@ -652,49 +734,95 @@ function Chats({ me, activeRoom, setRoom }) {
     <section className="page chats">
       <Header
         eyebrow="Messages"
-        title="채팅"
-        text="최근 대화"
-        right={<button className="pillButton" onClick={loadRooms}>새로고침</button>}
+        title="대화"
+        text="1:1 대화와 그룹 대화"
+        right={<button className="pillButton" onClick={() => setShowCreate(true)}>그룹+</button>}
       />
 
       <div className="list">
         {rooms.map((room) => (
-          <button
-            key={room.id}
-            className={`chatCard ${activeRoom?.id === room.id ? "active" : ""}`}
-            onClick={() => setRoom(room)}
-          >
-            <Avatar user={{ nickname: room.displayName, avatar_url: room.avatar_url }} size={54} online />
+          <button key={room.id} className={`chatCard ${activeRoom?.id === room.id ? "active" : ""}`} onClick={() => setRoom(room)}>
+            <Avatar user={{ nickname: room.is_group ? "그" : room.displayName, avatar_url: room.avatar_url }} size={44} online={!room.is_group} />
             <div>
-              <b>{room.displayName || "상대방"}</b>
-              <p>{room.last_message || "아직 메시지가 없어요"}</p>
+              <b>{room.displayName || "대화방"}</b>
+              <p>{room.is_group ? `${room.member_count || 0}명 · ${room.last_message || "그룹 대화"}` : room.last_message || "아직 메시지가 없어요"}</p>
             </div>
             <time>{dateTime(room.updated_at || room.created_at)}</time>
           </button>
         ))}
       </div>
 
-      {!rooms.length && <Empty title="대화방 없음" text="홈에서 친구를 선택해 채팅을 시작해줘." />}
+      {!rooms.length && <Empty title="대화방 없음" text="친구를 누르거나 그룹을 만들어줘." />}
+
+      {showCreate && (
+        <section className="sheet">
+          <form className="sheetPanel" onSubmit={createGroup}>
+            <header>
+              <b>그룹 대화 만들기</b>
+              <button type="button" onClick={() => setShowCreate(false)}>×</button>
+            </header>
+
+            <label className="field">
+              <span>방 이름</span>
+              <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="예: 근무조 단톡" />
+            </label>
+
+            <div className="memberPick">
+              {users.map((user) => (
+                <label key={user.id}>
+                  <input type="checkbox" checked={!!selected[user.id]} onChange={(e) => setSelected((prev) => ({ ...prev, [user.id]: e.target.checked }))} />
+                  <Avatar user={user} size={34} online />
+                  <span>{displayName(user)}</span>
+                </label>
+              ))}
+            </div>
+
+            <button className="primaryButton">만들기</button>
+          </form>
+        </section>
+      )}
+
       <Toast>{msg}</Toast>
     </section>
   );
 }
 
+
+
 function Room({ me, room, onBack }) {
   const [messages, setMessages] = useState([]);
+  const [members, setMembers] = useState([]);
   const [text, setText] = useState("");
   const [msg, setMsg] = useState("");
   const bottom = useRef(null);
 
   useEffect(() => {
     loadMessages();
-    const timer = setInterval(loadMessages, 900);
-    return () => clearInterval(timer);
+    loadMembers();
+
+    const channel = supabase
+      .channel(`room-${room?.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages", filter: `room_id=eq.${room?.id}` }, () => loadMessages())
+      .subscribe();
+
+    const timer = setInterval(loadMessages, 1200);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(timer);
+    };
   }, [room?.id]);
 
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: "end" });
   }, [messages.length]);
+
+  async function loadMembers() {
+    if (!room?.id) return;
+
+    const { data } = await supabase.from("chat_room_members").select("user_id").eq("room_id", room.id);
+    setMembers(data || []);
+  }
 
   async function loadMessages() {
     if (!room?.id) return;
@@ -745,6 +873,11 @@ function Room({ me, room, onBack }) {
       if (!sent) throw lastError || new Error("메시지 저장 실패");
 
       await supabase.from("chat_rooms").update({ last_message: value, updated_at: nowIso() }).eq("id", room.id);
+
+      await supabase.functions.invoke("send-chat-push", {
+        body: { room_id: room.id, content: value, sender_name: me.nickname || me.email || "친구" },
+      }).catch(() => {});
+
       loadMessages();
     } catch (err) {
       setText(value);
@@ -757,17 +890,11 @@ function Room({ me, room, onBack }) {
   return (
     <div className="room">
       <header className="roomHeader">
-        {onBack && (
-          <button className="iconButton" onClick={onBack}>
-            <Icon name="back" size={24} />
-          </button>
-        )}
-
-        <Avatar user={{ nickname: room.displayName, avatar_url: room.avatar_url }} size={44} online />
-
+        {onBack && <button className="iconButton" onClick={onBack}>‹</button>}
+        <Avatar user={{ nickname: room.is_group ? "그" : room.displayName, avatar_url: room.avatar_url }} size={40} online={!room.is_group} />
         <div>
-          <b>{room.displayName || "상대방"}</b>
-          <p>{visibleMessages.length}개의 메시지</p>
+          <b>{room.displayName || "대화방"}</b>
+          <p>{room.is_group ? `${members.length || room.member_count || 0}명` : `${visibleMessages.length}개의 메시지`}</p>
         </div>
       </header>
 
@@ -788,15 +915,15 @@ function Room({ me, room, onBack }) {
 
       <form className="composer" onSubmit={send}>
         <input value={text} onChange={(e) => setText(e.target.value)} placeholder="메시지 입력" />
-        <button>
-          <Icon name="send" size={19} />
-        </button>
+        <button>➤</button>
       </form>
 
       <Toast>{msg}</Toast>
     </div>
   );
 }
+
+
 
 function Calendar({ me }) {
   const [date, setDate] = useState(dateKey());
@@ -806,7 +933,7 @@ function Calendar({ me }) {
   });
   const [mode, setMode] = useState(() => localStorage.getItem("rift_calendar_mode") || "shift");
   const [team, setTeam] = useState(() => localStorage.getItem("rift_shift_team") || "1");
-  const [calendarTab, setCalendarTab] = useState(() => localStorage.getItem("rift_calendar_tab") || "family");
+  const calendarTab = "shared";
   const [showNotify, setShowNotify] = useState(false);
   const [events, setEvents] = useState([]);
   const [title, setTitle] = useState("");
@@ -850,12 +977,7 @@ function Calendar({ me }) {
     "2026-10-09": "한글날",
     "2026-12-25": "성탄절",
   };
-
-  const calendarTabs = [
-    { key: "family", label: "가족", color: "green" },
-    { key: "work", label: "업무 일정", color: "blue" },
-    { key: "personal", label: "개인", color: "purple" },
-  ];
+  const calendarTabs = [];
 
   const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -985,16 +1107,12 @@ function Calendar({ me }) {
       return d;
     });
   }
-
   function currentTab() {
-    return calendarTabs.find((item) => item.key === calendarTab) || calendarTabs[0];
+    return { key: "shared", label: "공유" };
   }
 
-  function eventColorClass(index = 0, type = calendarTab) {
-    if (type === "family") return "eventGreen";
-    if (type === "work") return "eventBlue";
-    if (type === "personal") return "eventPurple";
-    return ["eventGreen", "eventBlue", "eventPurple", "eventRed"][index % 4];
+  function eventColorClass() {
+    return "eventGreen";
   }
 
   async function loadEvents() {
@@ -1060,7 +1178,7 @@ function Calendar({ me }) {
       body: {
         title: value,
         date: targetDate,
-        calendar_type: calendarTab,
+        calendar_type: "shared",
         actor_name: me.nickname || me.email || "친구",
       },
     }).catch(() => {});
@@ -1080,7 +1198,7 @@ function Calendar({ me }) {
         title: value,
         start_at: `${date}T09:00:00`,
         end_at: `${date}T10:00:00`,
-        calendar_type: calendarTab,
+        calendar_type: "shared",
       };
 
       const { error } = await supabase.from("calendar_events").insert(row);
@@ -1161,20 +1279,6 @@ function Calendar({ me }) {
           </button>
         </div>
       </header>
-
-      <section className="calendarTabs">
-        {calendarTabs.map((item) => (
-          <button
-            key={item.key}
-            className={`${calendarTab === item.key ? "active" : ""} ${item.color}`}
-            onClick={() => setCalendarTab(item.key)}
-          >
-            <span>{item.label.slice(0, 1)}</span>
-            {item.label}
-          </button>
-        ))}
-      </section>
-
       <section className="calendarMode slim">
         <button className={mode === "shift" ? "active" : ""} onClick={() => setMode("shift")}>4조 3교대</button>
         <button className={mode === "normal" ? "active" : ""} onClick={() => setMode("normal")}>통상근무</button>
@@ -1278,7 +1382,7 @@ function Calendar({ me }) {
       </section>
 
       <form className="ttAddForm" onSubmit={addEvent}>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`${currentTab().label} 캘린더에 일정 추가`} />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`${date} 일정 추가`} />
         <button>추가</button>
       </form>
 
