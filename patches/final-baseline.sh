@@ -1,17 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== v44 monthly shift calendar + UI refine ==="
+echo "=== v45 real 6work 2off 4team shift calendar ==="
 
 python3 - <<'PY'
 from pathlib import Path
 
 p = Path("app/src/App.jsx")
 s = p.read_text()
-
-# 탭 이름 복구
-s = s.replace('{ key: "calendar", label: "일정", icon: "calendar" }', '{ key: "calendar", label: "캘린더", icon: "calendar" }')
-s = s.replace('{ key: "more", label: "설정", icon: "settings" }', '{ key: "more", label: "더보기", icon: "settings" }')
 
 start = s.find("function Calendar({ me }) {")
 end = s.find("\nfunction More", start)
@@ -25,16 +21,36 @@ calendar = r'''function Calendar({ me }) {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), 1);
   });
+
   const [ownerColumn, setOwnerColumn] = useState("user_id");
   const [events, setEvents] = useState([]);
   const [title, setTitle] = useState("");
   const [msg, setMsg] = useState("");
 
   const [team, setTeam] = useState(() => localStorage.getItem("rift_shift_team") || "1");
-  const [anchorDate, setAnchorDate] = useState(() => localStorage.getItem("rift_shift_anchor") || "2026-06-01");
-  const [anchorShift, setAnchorShift] = useState(() => localStorage.getItem("rift_shift_anchor_shift") || "A");
 
-  const shifts = ["A", "B", "C", "휴"];
+  const [anchors, setAnchors] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("rift_shift_anchors") || "") || {};
+    } catch {
+      return {};
+    }
+  });
+
+  const defaultAnchors = {
+    "1": "2026-06-08",
+    "2": "2026-06-02",
+    "3": "2026-06-20",
+    "4": "2026-06-14",
+  };
+
+  const finalAnchors = {
+    "1": anchors["1"] || defaultAnchors["1"],
+    "2": anchors["2"] || defaultAnchors["2"],
+    "3": anchors["3"] || defaultAnchors["3"],
+    "4": anchors["4"] || defaultAnchors["4"],
+  };
+
   const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
 
   useEffect(() => {
@@ -42,12 +58,8 @@ calendar = r'''function Calendar({ me }) {
   }, [team]);
 
   useEffect(() => {
-    localStorage.setItem("rift_shift_anchor", anchorDate);
-  }, [anchorDate]);
-
-  useEffect(() => {
-    localStorage.setItem("rift_shift_anchor_shift", anchorShift);
-  }, [anchorShift]);
+    localStorage.setItem("rift_shift_anchors", JSON.stringify(finalAnchors));
+  }, [anchors]);
 
   useEffect(() => {
     loadEvents();
@@ -70,12 +82,32 @@ calendar = r'''function Calendar({ me }) {
     return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
   }
 
+  function cycleIndex(teamNo, key) {
+    const anchor = finalAnchors[String(teamNo)] || defaultAnchors[String(teamNo)];
+    const diff = dayNumber(key) - dayNumber(anchor);
+    return ((diff % 24) + 24) % 24;
+  }
+
   function shiftFor(teamNo, key) {
-    const baseIndex = Math.max(0, shifts.indexOf(anchorShift));
-    const delta = dayNumber(key) - dayNumber(anchorDate || "2026-06-01");
-    const offset = Number(teamNo || 1) - 1;
-    const index = ((baseIndex + delta + offset) % 4 + 4) % 4;
-    return shifts[index];
+    const i = cycleIndex(teamNo, key);
+
+    if (i >= 0 && i <= 5) return "A";
+    if (i >= 6 && i <= 7) return "휴";
+    if (i >= 8 && i <= 13) return "B";
+    if (i >= 14 && i <= 15) return "휴";
+    if (i >= 16 && i <= 21) return "C";
+    return "휴";
+  }
+
+  function shiftDayLabel(teamNo, key) {
+    const i = cycleIndex(teamNo, key);
+
+    if (i <= 5) return `${i + 1}일차`;
+    if (i <= 7) return `휴${i - 5}`;
+    if (i <= 13) return `${i - 7}일차`;
+    if (i <= 15) return `휴${i - 13}`;
+    if (i <= 21) return `${i - 15}일차`;
+    return `휴${i - 21}`;
   }
 
   function shiftClass(value) {
@@ -98,6 +130,7 @@ calendar = r'''function Calendar({ me }) {
   function buildMonthDays() {
     const first = new Date(month.getFullYear(), month.getMonth(), 1);
     const startDay = new Date(month.getFullYear(), month.getMonth(), 1 - first.getDay());
+
     return Array.from({ length: 42 }, (_, i) => {
       const d = new Date(startDay);
       d.setDate(startDay.getDate() + i);
@@ -188,25 +221,37 @@ calendar = r'''function Calendar({ me }) {
     setMonth(new Date(day.getFullYear(), day.getMonth(), 1));
   }
 
+  function updateAnchor(teamNo, value) {
+    setAnchors((prev) => ({
+      ...prev,
+      [teamNo]: value,
+    }));
+  }
+
   const monthDays = buildMonthDays();
   const selectedShift = shiftFor(team, date);
+  const selectedShiftDay = shiftDayLabel(team, date);
+
   const selectedEvents = events.filter((item) => String(item.start_at || "").slice(0, 10) === date);
+
   const eventCountByDate = events.reduce((acc, item) => {
     const key = String(item.start_at || "").slice(0, 10);
     if (key) acc[key] = (acc[key] || 0) + 1;
     return acc;
   }, {});
+
   const allTeamShifts = ["1", "2", "3", "4"].map((teamNo) => ({
     team: teamNo,
     shift: shiftFor(teamNo, date),
+    dayLabel: shiftDayLabel(teamNo, date),
   }));
 
   return (
     <section className="page calendar calendarPro">
       <Header
-        eyebrow="4조 3교대"
+        eyebrow="6근무 2휴무"
         title="캘린더"
-        text="월간 근무표와 개인 일정을 같이 관리"
+        text="A 6일 · 휴 2일 · B 6일 · 휴 2일 · C 6일 · 휴 2일"
         right={<button className="pillButton" onClick={goToday}>오늘</button>}
       />
 
@@ -214,7 +259,7 @@ calendar = r'''function Calendar({ me }) {
         <div>
           <span>선택 조</span>
           <b>{team}조 · {selectedShift}</b>
-          <p>{date} 기준 근무</p>
+          <p>{date} · {selectedShiftDay}</p>
         </div>
 
         <div className={`bigShift ${shiftClass(selectedShift)}`}>
@@ -234,20 +279,17 @@ calendar = r'''function Calendar({ me }) {
         ))}
       </section>
 
-      <section className="shiftSettings">
-        <label>
-          <span>기준일</span>
-          <input type="date" value={anchorDate} onChange={(e) => setAnchorDate(e.target.value)} />
-        </label>
-
-        <label>
-          <span>기준 근무</span>
-          <select value={anchorShift} onChange={(e) => setAnchorShift(e.target.value)}>
-            {shifts.map((item) => (
-              <option key={item} value={item}>{item}</option>
-            ))}
-          </select>
-        </label>
+      <section className="anchorGrid">
+        {["1", "2", "3", "4"].map((teamNo) => (
+          <label key={teamNo}>
+            <span>{teamNo}조 A 첫날</span>
+            <input
+              type="date"
+              value={finalAnchors[teamNo]}
+              onChange={(e) => updateAnchor(teamNo, e.target.value)}
+            />
+          </label>
+        ))}
       </section>
 
       <section className="monthCard">
@@ -306,6 +348,7 @@ calendar = r'''function Calendar({ me }) {
             <div key={item.team} className={item.team === team ? "active" : ""}>
               <span>{item.team}조</span>
               <b className={shiftClass(item.shift)}>{item.shift}</b>
+              <small>{item.dayLabel}</small>
             </div>
           ))}
         </div>
@@ -341,475 +384,72 @@ PY
 
 cat >> app/src/styles.css <<'EOF'
 
-/* ===== v44: real monthly 4-team shift calendar ===== */
+/* ===== v45: actual 6work 2off shift logic UI ===== */
 
-.calendarPro{
-  max-width:920px !important;
-}
-
-.shiftHero{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:14px;
-  padding:18px;
-  margin-bottom:12px;
-  border-radius:28px;
-  background:
-    linear-gradient(135deg,rgba(52,120,246,.12),rgba(109,93,252,.09)),
-    var(--surface);
-  border:1px solid var(--line);
-  box-shadow:var(--shadow);
-}
-
-.shiftHero span{
-  display:block;
-  color:var(--sub);
-  font-size:12px;
-  font-weight:1000;
-}
-
-.shiftHero b{
-  display:block;
-  margin-top:4px;
-  color:var(--text);
-  font-size:24px;
-  line-height:1.1;
-  letter-spacing:-.8px;
-}
-
-.shiftHero p{
-  margin:6px 0 0;
-  color:var(--sub);
-  font-size:13px;
-  font-weight:760;
-}
-
-.bigShift{
-  width:68px;
-  height:68px;
-  border-radius:24px;
+.anchorGrid{
   display:grid;
-  place-items:center;
-  color:#fff;
-  font-size:22px;
-  font-weight:1000;
-  box-shadow:0 14px 30px rgba(0,0,0,.16);
-}
-
-.shiftA{
-  background:#3478f6 !important;
-  color:#fff !important;
-}
-
-.shiftB{
-  background:#7c3aed !important;
-  color:#fff !important;
-}
-
-.shiftC{
-  background:#06b6d4 !important;
-  color:#fff !important;
-}
-
-.shiftOff{
-  background:#e5e7eb !important;
-  color:#374151 !important;
-}
-
-body.dark .shiftOff{
-  background:#334155 !important;
-  color:#e5e7eb !important;
-}
-
-.teamPicker{
-  display:grid;
-  grid-template-columns:repeat(4,1fr);
-  gap:8px;
-  margin-bottom:10px;
-}
-
-.teamPicker button{
-  height:42px;
-  border-radius:18px;
-  background:var(--surface);
-  color:var(--sub);
-  border:1px solid var(--line);
-  box-shadow:var(--shadow2);
-  font-weight:1000;
-}
-
-.teamPicker button.active{
-  background:var(--primary);
-  color:#fff;
-  border-color:transparent;
-}
-
-.shiftSettings{
-  display:grid;
-  grid-template-columns:1fr 120px;
+  grid-template-columns:repeat(2,minmax(0,1fr));
   gap:8px;
   margin-bottom:12px;
 }
 
-.shiftSettings label{
+.anchorGrid label{
   display:grid;
   gap:6px;
 }
 
-.shiftSettings span{
+.anchorGrid span{
   color:var(--sub);
   font-size:11px;
   font-weight:1000;
 }
 
-.shiftSettings input,
-.shiftSettings select{
+.anchorGrid input{
   width:100%;
   height:42px;
   border-radius:17px;
   border:1px solid var(--line);
   background:var(--surface);
   color:var(--text);
-  padding:0 12px;
+  padding:0 11px;
   font:inherit;
-  font-size:14px;
+  font-size:13px;
   outline:0;
 }
 
-.monthCard{
-  padding:12px;
-  margin-bottom:12px;
-  border-radius:28px;
-  background:var(--surface);
-  border:1px solid var(--line);
-  box-shadow:var(--shadow);
-}
-
-.monthTop{
-  height:42px;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  margin-bottom:8px;
-}
-
-.monthTop b{
-  color:var(--text);
-  font-size:18px;
-  font-weight:1000;
-  letter-spacing:-.5px;
-}
-
-.monthTop button{
-  width:38px;
-  height:38px;
-  border-radius:16px;
-  background:var(--surface2);
-  color:var(--text);
-  font-size:24px;
-  font-weight:800;
-}
-
-.monthGrid{
-  display:grid;
-  grid-template-columns:repeat(7,1fr);
-  gap:6px;
-}
-
-.weekCell{
-  height:26px;
-  display:grid;
-  place-items:center;
-  color:var(--muted);
-  font-size:11px;
-  font-weight:1000;
-}
-
-.weekCell.sun{
-  color:#ef4444;
-}
-
-.weekCell.sat{
-  color:#3478f6;
-}
-
-.dayCell{
-  position:relative;
-  min-width:0;
-  height:58px;
-  padding:6px;
-  display:flex;
-  flex-direction:column;
-  align-items:flex-start;
-  justify-content:space-between;
-  border-radius:16px;
-  background:var(--surface2);
-  color:var(--text);
-  border:1px solid transparent;
-  text-align:left;
-}
-
-.dayCell span{
-  font-size:12px;
-  font-weight:1000;
-}
-
-.dayCell em{
-  min-width:28px;
-  height:19px;
-  padding:0 6px;
-  display:grid;
-  place-items:center;
-  border-radius:999px;
-  font-style:normal;
+.allTeamShift small{
+  color:var(--sub);
   font-size:10px;
-  font-weight:1000;
+  font-weight:900;
 }
 
-.dayCell i{
-  position:absolute;
-  right:5px;
-  top:5px;
-  min-width:15px;
-  height:15px;
-  padding:0 4px;
-  display:grid;
-  place-items:center;
-  border-radius:999px;
-  background:#ef4444;
-  color:#fff;
-  font-size:9px;
-  font-style:normal;
-  font-weight:1000;
-}
-
-.dayCell.muted{
-  opacity:.36;
-}
-
-.dayCell.today{
-  border-color:rgba(52,120,246,.45);
-}
-
-.dayCell.selected{
-  background:rgba(52,120,246,.12);
-  border-color:var(--primary);
-  box-shadow:0 0 0 2px rgba(52,120,246,.1) inset;
-}
-
-.selectedDayCard{
-  padding:14px;
-  margin-bottom:10px;
-  border-radius:24px;
-  background:var(--surface);
-  border:1px solid var(--line);
-  box-shadow:var(--shadow2);
-}
-
-.selectedDayTop{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  margin-bottom:12px;
-}
-
-.selectedDayTop span{
-  color:var(--sub);
-  font-size:11px;
-  font-weight:1000;
-}
-
-.selectedDayTop b{
-  display:block;
-  margin-top:3px;
-  color:var(--text);
-  font-size:17px;
-  font-weight:1000;
-}
-
-.selectedDayTop em{
-  min-width:70px;
-  height:34px;
-  padding:0 12px;
-  display:grid;
-  place-items:center;
-  border-radius:17px;
-  font-style:normal;
-  font-size:13px;
-  font-weight:1000;
-}
-
-.allTeamShift{
-  display:grid;
-  grid-template-columns:repeat(4,1fr);
-  gap:7px;
-}
-
-.allTeamShift div{
-  min-height:54px;
-  display:grid;
-  place-items:center;
-  gap:4px;
-  border-radius:18px;
-  background:var(--surface2);
-  border:1px solid transparent;
-}
-
-.allTeamShift div.active{
-  border-color:var(--primary);
-  background:rgba(52,120,246,.09);
-}
-
-.allTeamShift span{
-  color:var(--sub);
-  font-size:11px;
-  font-weight:1000;
-}
-
-.allTeamShift b{
-  min-width:32px;
-  height:22px;
-  padding:0 8px;
-  display:grid;
-  place-items:center;
-  border-radius:999px;
-  color:#fff;
-  font-size:11px;
-  font-weight:1000;
-}
-
-/* 캘린더 전용 모바일 정리 */
 @media(max-width:767px){
-  .calendarPro{
-    max-width:none !important;
-  }
-
-  .shiftHero{
-    padding:14px !important;
-    border-radius:24px !important;
-    margin-bottom:10px !important;
-    box-shadow:var(--shadow2) !important;
-  }
-
-  .shiftHero b{
-    font-size:calc(20px * var(--font-scale, 1)) !important;
-  }
-
-  .shiftHero p{
-    font-size:calc(12px * var(--font-scale, 1)) !important;
-  }
-
-  .bigShift{
-    width:56px !important;
-    height:56px !important;
-    border-radius:20px !important;
-    font-size:18px !important;
-  }
-
-  .teamPicker{
-    gap:7px !important;
-  }
-
-  .teamPicker button{
-    height:38px !important;
-    border-radius:16px !important;
-    font-size:13px !important;
-  }
-
-  .shiftSettings{
-    grid-template-columns:1fr 104px !important;
+  .anchorGrid{
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
     gap:7px !important;
     margin-bottom:10px !important;
   }
 
-  .shiftSettings input,
-  .shiftSettings select{
-    height:38px !important;
-    border-radius:15px !important;
-    font-size:13px !important;
-  }
-
-  .monthCard{
-    padding:10px !important;
-    border-radius:24px !important;
-    margin-bottom:10px !important;
-    box-shadow:var(--shadow2) !important;
-  }
-
-  .monthTop{
-    height:36px !important;
-    margin-bottom:7px !important;
-  }
-
-  .monthTop b{
-    font-size:16px !important;
-  }
-
-  .monthTop button{
-    width:34px !important;
-    height:34px !important;
-    border-radius:14px !important;
-    font-size:21px !important;
-  }
-
-  .monthGrid{
-    gap:5px !important;
-  }
-
-  .weekCell{
-    height:22px !important;
+  .anchorGrid span{
     font-size:10px !important;
   }
 
-  .dayCell{
-    height:50px !important;
-    padding:5px !important;
-    border-radius:13px !important;
-  }
-
-  .dayCell span{
-    font-size:11px !important;
-  }
-
-  .dayCell em{
-    min-width:24px !important;
-    height:17px !important;
-    padding:0 5px !important;
-    font-size:9px !important;
-  }
-
-  .selectedDayCard{
-    padding:12px !important;
-    border-radius:21px !important;
-  }
-
-  .selectedDayTop{
-    margin-bottom:10px !important;
-  }
-
-  .selectedDayTop b{
-    font-size:15px !important;
-  }
-
-  .selectedDayTop em{
-    min-width:64px !important;
-    height:30px !important;
-    border-radius:15px !important;
+  .anchorGrid input{
+    height:36px !important;
+    border-radius:14px !important;
+    padding:0 9px !important;
     font-size:12px !important;
   }
 
-  .allTeamShift{
-    gap:6px !important;
+  .allTeamShift div{
+    min-height:52px !important;
   }
 
-  .allTeamShift div{
-    min-height:48px !important;
-    border-radius:16px !important;
+  .allTeamShift small{
+    font-size:9px !important;
   }
 }
 EOF
 
-echo "=== v44 calendar done ==="
+echo "=== v45 real shift calendar done ==="
 git status --short
