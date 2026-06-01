@@ -2512,3 +2512,25 @@ body.dark .notifyLogo{background:#163524}
     padding-bottom:calc(16px + env(safe-area-inset-bottom));
   }
 }
+
+/* ===== v52 calendar owner display ===== */
+
+.ttBars span{
+  background:#22c55e !important;
+}
+
+.ttEvent p{
+  color:rgba(255,255,255,.9) !important;
+  font-weight:850 !important;
+}
+
+.ttEvent b::before{
+  content:"일정 ";
+  opacity:.7;
+  font-size:11px;
+  margin-right:3px;
+}
+
+.toast{
+  white-space:pre-line;
+}

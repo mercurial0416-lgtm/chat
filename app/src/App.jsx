@@ -967,9 +967,9 @@ function Calendar({ me }) {
   });
   const [mode, setMode] = useState(() => localStorage.getItem("rift_calendar_mode") || "shift");
   const [team, setTeam] = useState(() => localStorage.getItem("rift_shift_team") || "1");
-  const calendarTab = "shared";
   const [showNotify, setShowNotify] = useState(false);
   const [events, setEvents] = useState([]);
+  const [profilesById, setProfilesById] = useState({});
   const [title, setTitle] = useState("");
   const [msg, setMsg] = useState("");
   const [notifications, setNotifications] = useState(() => {
@@ -1011,7 +1011,6 @@ function Calendar({ me }) {
     "2026-10-09": "한글날",
     "2026-12-25": "성탄절",
   };
-  const calendarTabs = [];
 
   const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -1022,10 +1021,6 @@ function Calendar({ me }) {
   useEffect(() => {
     localStorage.setItem("rift_shift_team", team);
   }, [team]);
-
-  useEffect(() => {
-    localStorage.setItem("rift_calendar_tab", calendarTab);
-  }, [calendarTab]);
 
   useEffect(() => {
     localStorage.setItem("rift_notifications", JSON.stringify(notifications.slice(0, 80)));
@@ -1040,17 +1035,11 @@ function Calendar({ me }) {
       .channel("calendar-events-watch")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "calendar_events" }, (payload) => {
         const row = payload.new || {};
-        const actor = row.created_by || row.user_id || row.owner_id;
+        const actor = eventOwnerId(row);
 
         if (actor === me.id) return;
 
-        addNotification(
-          row.title || "새 일정",
-          String(row.start_at || "").slice(0, 10),
-          row.calendar_type || "family",
-          "친구"
-        );
-
+        addNotification(row.title || "새 일정", String(row.start_at || "").slice(0, 10), "친구");
         loadEvents();
       })
       .subscribe();
@@ -1061,10 +1050,8 @@ function Calendar({ me }) {
   }, [me.id]);
 
   function keyOf(day) {
-    const y = day.getFullYear();
-    const m = String(day.getMonth() + 1).padStart(2, "0");
-    const d = String(day.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
+    const d = new Date(day);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }
 
   function parseKey(key) {
@@ -1072,14 +1059,13 @@ function Calendar({ me }) {
     return new Date(y, m - 1, d);
   }
 
-  function dayNumber(key) {
+  function dayNo(key) {
     const d = parseKey(key);
     return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
   }
 
   function cycleIndex(teamNo, key) {
-    const anchor = teamAnchors[String(teamNo)] || teamAnchors["1"];
-    const diff = dayNumber(key) - dayNumber(anchor);
+    const diff = dayNo(key) - dayNo(teamAnchors[String(teamNo)] || teamAnchors["1"]);
     return ((diff % 24) + 24) % 24;
   }
 
@@ -1141,12 +1127,25 @@ function Calendar({ me }) {
       return d;
     });
   }
-  function currentTab() {
-    return { key: "shared", label: "공유" };
+
+  function eventOwnerId(item) {
+    return item?.created_by || item?.user_id || item?.owner_id || "";
   }
 
-  function eventColorClass() {
-    return "eventGreen";
+  function ownerName(item) {
+    const id = eventOwnerId(item);
+
+    if (!id) return "등록자 미상";
+    if (id === me.id) return "나";
+
+    const profile = profilesById[id];
+    return profile?.nickname || profile?.email || "친구";
+  }
+
+  function ownerShort(item) {
+    const name = ownerName(item);
+    if (name === "나") return "나";
+    return name.slice(0, 3);
   }
 
   async function loadEvents() {
@@ -1162,83 +1161,159 @@ function Calendar({ me }) {
 
       if (error) throw error;
 
-      setEvents(data || []);
+      const rows = data || [];
+      setEvents(rows);
+
+      const ids = [...new Set(rows.map(eventOwnerId).filter(Boolean))];
+
+      if (ids.length) {
+        const { data: profiles, error: profileError } = await supabase
+          .from("profiles")
+          .select("id,nickname,email,avatar_url")
+          .in("id", ids);
+
+        if (!profileError) {
+          setProfilesById(
+            Object.fromEntries((profiles || []).map((profile) => [profile.id, profile]))
+          );
+        }
+      }
+
       setMsg("");
     } catch (err) {
-      setMsg(safeError(err));
+      setMsg(`일정 불러오기 실패: ${safeError(err)}`);
     }
+  }
+
+  async function showAppNotification(titleText, bodyText) {
+    try {
+      if (!("Notification" in window)) return;
+      if (Notification.permission !== "granted") return;
+      if (!("serviceWorker" in navigator)) return;
+
+      const registration =
+        (await navigator.serviceWorker.getRegistration("/")) ||
+        (await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise((resolve) => setTimeout(() => resolve(null), 1200)),
+        ]));
+
+      if (registration?.showNotification) {
+        await registration.showNotification(titleText, {
+          body: bodyText,
+          icon: "/icon.svg",
+          badge: "/icon.svg",
+          tag: "calendar_event",
+          data: { url: "/" },
+        });
+      }
+    } catch {}
   }
 
   async function requestNotifyPermission() {
     try {
       await registerWebPush(me.id);
       setMsg("백그라운드 알림 등록 완료");
-
-      if ("Notification" in window && Notification.permission === "granted") {
-        showBrowserNotification("Rift 알림 설정 완료", { body: "친구가 일정을 등록하면 백그라운드 알림이 와요." });
-      }
+      showAppNotification("Rift 알림 설정 완료", "친구가 일정이나 채팅을 등록하면 알림이 와요.");
     } catch (err) {
       setMsg(safeError(err));
     }
   }
 
-  function addNotification(body, targetDate, type = calendarTab, actor = me.nickname || "사용자") {
-    const tabLabel = calendarTabs.find((item) => item.key === type)?.label || "공유";
-
+  function addNotification(body, targetDate, actor = me.nickname || "사용자") {
     const item = {
       id: `${Date.now()}-${Math.random()}`,
       title: `${actor}님이 일정을 등록했습니다`,
-      body: `${tabLabel} 캘린더 · ${body} · ${targetDate}`,
+      body: `${body}${targetDate ? " · " + targetDate : ""}`,
       created_at: new Date().toISOString(),
       read: false,
-      tab: type,
     };
 
     setNotifications((prev) => [item, ...prev].slice(0, 80));
-
-    if ("Notification" in window && Notification.permission === "granted") {
-      showBrowserNotification(item.title, { body: item.body });
-    }
+    showAppNotification(item.title, item.body);
   }
 
   async function sendBackgroundPush(value, targetDate) {
-    await supabase.functions.invoke("send-calendar-push", {
-      body: {
-        title: value,
-        date: targetDate,
-        calendar_type: "shared",
-        actor_name: me.nickname || me.email || "친구",
-      },
-    }).catch(() => {});
+    try {
+      await supabase.functions.invoke("send-calendar-push", {
+        body: {
+          title: value,
+          date: targetDate,
+          calendar_type: "shared",
+          actor_name: me.nickname || me.email || "친구",
+        },
+      });
+    } catch {}
   }
 
   async function addEvent(event) {
     event.preventDefault();
 
     const value = title.trim();
-    if (!value) return;
+    if (!value) {
+      setMsg("일정 내용을 입력해줘");
+      return;
+    }
 
-    try {
-      const row = {
+    const startAt = `${date}T09:00:00`;
+    const endAt = `${date}T10:00:00`;
+
+    const variants = [
+      {
         user_id: me.id,
         owner_id: me.id,
         created_by: me.id,
         title: value,
-        start_at: `${date}T09:00:00`,
-        end_at: `${date}T10:00:00`,
+        start_at: startAt,
+        end_at: endAt,
         calendar_type: "shared",
-      };
+        updated_at: new Date().toISOString(),
+      },
+      {
+        user_id: me.id,
+        owner_id: me.id,
+        created_by: me.id,
+        title: value,
+        start_at: startAt,
+        end_at: endAt,
+      },
+      {
+        user_id: me.id,
+        title: value,
+        start_at: startAt,
+        end_at: endAt,
+      },
+      {
+        owner_id: me.id,
+        title: value,
+        start_at: startAt,
+        end_at: endAt,
+      },
+      {
+        created_by: me.id,
+        title: value,
+        start_at: startAt,
+      },
+    ];
 
+    let lastError = null;
+
+    for (const row of variants) {
       const { error } = await supabase.from("calendar_events").insert(row);
-      if (error) throw error;
 
-      setTitle("");
-      addNotification(value, date, calendarTab, me.nickname || "나");
-      sendBackgroundPush(value, date);
-      loadEvents();
-    } catch (err) {
-      setMsg(safeError(err));
+      if (!error) {
+        setTitle("");
+        setMsg("일정 추가됨");
+        addNotification(value, date, me.nickname || "나");
+        sendBackgroundPush(value, date);
+        loadEvents();
+        return;
+      }
+
+      lastError = error;
     }
+
+    setMsg(`일정 추가 실패: ${safeError(lastError)}`);
   }
 
   function changeMonth(diff) {
@@ -1247,8 +1322,7 @@ function Calendar({ me }) {
 
   function goToday() {
     const today = new Date();
-    const key = keyOf(today);
-    setDate(key);
+    setDate(keyOf(today));
     setMonth(new Date(today.getFullYear(), today.getMonth(), 1));
   }
 
@@ -1270,7 +1344,6 @@ function Calendar({ me }) {
   const selectedShift = shiftFor(team, date);
   const selectedNormal = normalWorkFor(date);
   const unreadCount = notifications.filter((item) => !item.read).length;
-
   const selectedEvents = events.filter((item) => String(item.start_at || "").slice(0, 10) === date);
 
   const eventMap = events.reduce((acc, item) => {
@@ -1291,22 +1364,15 @@ function Calendar({ me }) {
     <section className="page calendar timetreeCalendar">
       <header className="ttHeader">
         <div>
-          <button className="monthSelect" onClick={goToday}>
-            {monthTitle()} <span>⌄</span>
-          </button>
+          <button className="monthSelect" onClick={goToday}>{monthTitle()} <span>⌄</span></button>
           <p>{mode === "shift" ? "4조 3교대 공유 캘린더" : "통상근무 공유 캘린더"}</p>
         </div>
-
         <div className="ttActions">
-          <button className="ttIconButton" onClick={() => setShowNotify(true)}>
-            ☆
-            {unreadCount > 0 && <i>{unreadCount}</i>}
-          </button>
-          <button className="ttIconButton" onClick={requestNotifyPermission}>
-            ≡
-          </button>
+          <button className="ttIconButton" onClick={() => setShowNotify(true)}>🔔{unreadCount > 0 && <i>{unreadCount}</i>}</button>
+          <button className="ttIconButton" onClick={requestNotifyPermission}>⚙</button>
         </div>
       </header>
+
       <section className="calendarMode slim">
         <button className={mode === "shift" ? "active" : ""} onClick={() => setMode("shift")}>4조 3교대</button>
         <button className={mode === "normal" ? "active" : ""} onClick={() => setMode("normal")}>통상근무</button>
@@ -1315,9 +1381,7 @@ function Calendar({ me }) {
       {mode === "shift" && (
         <section className="teamPicker slimTeam">
           {["1", "2", "3", "4"].map((teamNo) => (
-            <button key={teamNo} className={team === teamNo ? "active" : ""} onClick={() => setTeam(teamNo)}>
-              {teamNo}조
-            </button>
+            <button key={teamNo} className={team === teamNo ? "active" : ""} onClick={() => setTeam(teamNo)}>{teamNo}조</button>
           ))}
         </section>
       )}
@@ -1331,9 +1395,7 @@ function Calendar({ me }) {
 
         <div className="ttMonthGrid">
           {weekdays.map((day) => (
-            <div key={day} className={`ttWeek ${day === "일" ? "sun" : day === "토" ? "sat" : ""}`}>
-              {day}
-            </div>
+            <div key={day} className={`ttWeek ${day === "일" ? "sun" : day === "토" ? "sat" : ""}`}>{day}</div>
           ))}
 
           {monthDays.map((day) => {
@@ -1359,18 +1421,11 @@ function Calendar({ me }) {
                 onClick={() => selectDay(day)}
               >
                 <strong>{day.getDate()}</strong>
-
-                {isShiftMode ? (
-                  <em className={shiftClass(shift)}>{shift}</em>
-                ) : (
-                  <em className={normal.className}>{normal.label}</em>
-                )}
+                {isShiftMode ? <em className={shiftClass(shift)}>{shift}</em> : <em className={normal.className}>{normal.label}</em>}
 
                 <div className="ttBars">
                   {dayEvents.slice(0, 2).map((item, index) => (
-                    <span key={item.id || index} className={eventColorClass(index, item.calendar_type)}>
-                      {item.title}
-                    </span>
+                    <span key={item.id || index}>{ownerShort(item)} · {item.title}</span>
                   ))}
                   {dayEvents.length > 2 && <small>+{dayEvents.length - 2}</small>}
                 </div>
@@ -1382,16 +1437,8 @@ function Calendar({ me }) {
 
       <section className="ttSelected">
         <div className="ttSelectedTop">
-          <div>
-            <span>선택 날짜</span>
-            <b>{date}</b>
-          </div>
-
-          {mode === "shift" ? (
-            <em className={shiftClass(selectedShift)}>{team}조 {selectedShift}</em>
-          ) : (
-            <em className={selectedNormal.className}>{selectedNormal.label}</em>
-          )}
+          <div><span>선택 날짜</span><b>{date}</b></div>
+          {mode === "shift" ? <em className={shiftClass(selectedShift)}>{team}조 {selectedShift}</em> : <em className={selectedNormal.className}>{selectedNormal.label}</em>}
         </div>
 
         {mode === "shift" ? (
@@ -1415,11 +1462,11 @@ function Calendar({ me }) {
       </form>
 
       <section className="ttEventList">
-        {selectedEvents.map((item, index) => (
-          <article className={`ttEvent ${eventColorClass(index, item.calendar_type)}`} key={item.id}>
+        {selectedEvents.map((item) => (
+          <article className="ttEvent" key={item.id}>
             <div>
               <b>{item.title}</b>
-              <p>{dateTime(item.start_at)}</p>
+              <p>{dateTime(item.start_at)} · 등록자 {ownerName(item)}</p>
             </div>
           </article>
         ))}
@@ -1428,40 +1475,25 @@ function Calendar({ me }) {
       {!selectedEvents.length && <Empty title="선택 날짜 일정 없음" text="날짜를 누르고 일정을 추가해줘." />}
 
       {showNotify && (
-        <section className="notifyOverlay">
-          <div className="notifyPanel">
+        <section className="sheet">
+          <div className="sheetPanel notifyPanel">
             <header>
-              <div>
-                <b>알림</b>
-                <p>일정 등록 및 캘린더 알림</p>
-              </div>
+              <div><b>알림</b><p>일정 등록 알림</p></div>
               <button onClick={() => setShowNotify(false)}>×</button>
             </header>
-
             <div className="notifyTools">
               <button onClick={requestNotifyPermission}>백그라운드 알림 켜기</button>
               <button onClick={markAllRead}>모두 읽음</button>
               <button onClick={clearNotifications}>비우기</button>
             </div>
-
             <div className="notifyList">
               {notifications.map((item) => (
                 <article key={item.id} className={item.read ? "read" : ""}>
                   <div className="notifyLogo">✣</div>
-                  <div>
-                    <b>{item.title}</b>
-                    <p>{item.body}</p>
-                    <span>{dateTime(item.created_at)}</span>
-                  </div>
+                  <div><b>{item.title}</b><p>{item.body}</p><span>{dateTime(item.created_at)}</span></div>
                 </article>
               ))}
-
-              {!notifications.length && (
-                <div className="notifyEmpty">
-                  <b>알림 없음</b>
-                  <p>일정을 추가하면 여기에 기록돼.</p>
-                </div>
-              )}
+              {!notifications.length && <div className="notifyEmpty"><b>알림 없음</b><p>일정을 추가하면 여기에 기록돼.</p></div>}
             </div>
           </div>
         </section>
