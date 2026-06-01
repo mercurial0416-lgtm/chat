@@ -1059,6 +1059,7 @@ function Room({ me, room, onBack }) {
   const [shareDate, setShareDate] = useState(dateKey());
   const [shareTime, setShareTime] = useState("18:00");
   const [shareNotify, setShareNotify] = useState("60");
+  const [shareAllDay, setShareAllDay] = useState(false);
 
   const bottom = useRef(null);
   const fileInputRef = useRef(null);
@@ -1336,6 +1337,8 @@ function Room({ me, room, onBack }) {
   }
 
   function scheduleTimeOf(item) {
+    if (item?.is_all_day) return "종일";
+
     const raw = item?.start_at || "";
 
     if (raw.includes("T")) return raw.slice(11, 16);
@@ -1344,7 +1347,7 @@ function Room({ me, room, onBack }) {
   }
 
   function scheduleDateTimeLabel(item) {
-    return `${scheduleDateOf(item)} ${scheduleTimeOf(item)}`;
+    return item?.is_all_day ? `${scheduleDateOf(item)} 종일` : `${scheduleDateOf(item)} ${scheduleTimeOf(item)}`;
   }
 
   function notifyAtFor(startAt, minutes) {
@@ -1391,6 +1394,7 @@ function Room({ me, room, onBack }) {
       start_at: item.start_at || `${scheduleDateOf(item)}T${scheduleTimeOf(item)}:00`,
       end_at: item.end_at || null,
       notify_minutes: Number(item.notify_minutes || 0),
+      is_all_day: !!item.is_all_day,
       owner: eventOwnerName(item),
       owner_id: item.created_by || item.user_id || item.owner_id || "",
       shared_by: me.nickname || me.email || "나",
@@ -1456,9 +1460,14 @@ function Room({ me, room, onBack }) {
     setUploading(true);
 
     try {
-      const startAt = `${shareDate}T${shareTime || "09:00"}:00`;
+      const startAt = shareAllDay ? `${shareDate}T00:00:00` : `${shareDate}T${shareTime || "09:00"}:00`;
       const end = new Date(startAt);
-      end.setHours(end.getHours() + 1);
+
+      if (shareAllDay) {
+        end.setDate(end.getDate() + 1);
+      } else {
+        end.setHours(end.getHours() + 1);
+      }
 
       const row = {
         user_id: me.id,
@@ -1469,7 +1478,8 @@ function Room({ me, room, onBack }) {
         end_at: end.toISOString(),
         calendar_type: "shared",
         notify_minutes: Number(shareNotify || 0),
-        notify_at: notifyAtFor(startAt, shareNotify),
+        notify_at: notifyAtFor(shareAllDay ? `${shareDate}T09:00:00` : startAt, shareNotify),
+        is_all_day: shareAllDay,
         updated_at: nowIso(),
       };
 
@@ -1506,9 +1516,17 @@ function Room({ me, room, onBack }) {
 
   async function saveSharedSchedule(parsed) {
     try {
-      const startAt = parsed.start_at || `${parsed.date || dateKey()}T${parsed.time || "09:00"}:00`;
+      const startAt = parsed.is_all_day
+        ? `${parsed.date || dateKey()}T00:00:00`
+        : parsed.start_at || `${parsed.date || dateKey()}T${parsed.time || "09:00"}:00`;
+
       const end = new Date(startAt);
-      end.setHours(end.getHours() + 1);
+
+      if (parsed.is_all_day) {
+        end.setDate(end.getDate() + 1);
+      } else {
+        end.setHours(end.getHours() + 1);
+      }
 
       const row = {
         user_id: me.id,
@@ -1519,7 +1537,8 @@ function Room({ me, room, onBack }) {
         end_at: parsed.end_at || end.toISOString(),
         calendar_type: "shared",
         notify_minutes: Number(parsed.notify_minutes || 0),
-        notify_at: notifyAtFor(startAt, parsed.notify_minutes || 0),
+        notify_at: notifyAtFor(parsed.is_all_day ? `${parsed.date || dateKey()}T09:00:00` : startAt, parsed.notify_minutes || 0),
+        is_all_day: !!parsed.is_all_day,
         updated_at: nowIso(),
       };
 
@@ -1589,7 +1608,7 @@ function Room({ me, room, onBack }) {
           <strong>{parsed.title || "일정"}</strong>
 
           <div className="richScheduleMeta">
-            <p><em>날짜</em>{parsed.date || scheduleDateOf(parsed)} {parsed.time || scheduleTimeOf(parsed)}</p>
+            <p><em>날짜</em>{parsed.date || scheduleDateOf(parsed)} {parsed.is_all_day ? "종일" : parsed.time || scheduleTimeOf(parsed)}</p>
             <p><em>등록자</em>{parsed.owner || "등록자"}</p>
             <p><em>공유자</em>{parsed.shared_by || "친구"}</p>
             <p><em>알림</em>{notifyText(parsed.notify_minutes)}</p>
@@ -1729,16 +1748,23 @@ function Room({ me, room, onBack }) {
                   <input value={shareTitle} onChange={(event) => setShareTitle(event.target.value)} placeholder="예: 회식, 약속, 근무 변경" />
                 </label>
 
+                <label className={`newShareAllDay ${shareAllDay ? "active" : ""}`}>
+                  <input type="checkbox" checked={shareAllDay} onChange={(event) => setShareAllDay(event.target.checked)} />
+                  <span>종일 일정</span>
+                </label>
+
                 <div className="newShareGrid">
                   <label>
                     날짜
                     <input type="date" value={shareDate} onChange={(event) => setShareDate(event.target.value)} />
                   </label>
 
-                  <label>
-                    시간
-                    <input type="time" value={shareTime} onChange={(event) => setShareTime(event.target.value)} />
-                  </label>
+                  {!shareAllDay && (
+                    <label>
+                      시간
+                      <input type="time" value={shareTime} onChange={(event) => setShareTime(event.target.value)} />
+                    </label>
+                  )}
                 </div>
 
                 <label>
@@ -1779,6 +1805,7 @@ function Calendar({ me }) {
   const [editingEvent, setEditingEvent] = useState(null);
   const [title, setTitle] = useState("");
   const [notifyMinutes, setNotifyMinutes] = useState("0");
+  const [allDay, setAllDay] = useState(false);
   const [msg, setMsg] = useState("");
   const [notifications, setNotifications] = useState(() => {
     try { return JSON.parse(localStorage.getItem("rift_notifications") || "[]"); } catch { return []; }
@@ -1812,7 +1839,7 @@ function Calendar({ me }) {
         if (Number.isFinite(t) && t <= now && now - t < 65000) {
           fired[item.id] = true;
           showBrowserNotification(`일정 알림 · ${item.title}`, {
-            body: `${dateTime(item.start_at)} · 등록자 ${ownerName(item)}`,
+            body: `${item.is_all_day ? "종일" : dateTime(item.start_at)} · 등록자 ${ownerName(item)}`,
             tag: `calendar-reminder-${item.id}`,
           });
         }
@@ -1987,9 +2014,18 @@ function Calendar({ me }) {
       return;
     }
 
-    const startAt = `${date}T09:00:00`;
-    const endAt = `${date}T10:00:00`;
-    const notifyAt = notifyAtFor(startAt, notifyMinutes);
+    const startAt = allDay ? `${date}T00:00:00` : `${date}T09:00:00`;
+
+    const endDate = new Date(startAt);
+    if (allDay) {
+      endDate.setDate(endDate.getDate() + 1);
+    } else {
+      endDate.setHours(endDate.getHours() + 1);
+    }
+
+    const endAt = endDate.toISOString();
+    const notifyBaseAt = allDay ? `${date}T09:00:00` : startAt;
+    const notifyAt = notifyAtFor(notifyBaseAt, notifyMinutes);
 
     const row = {
       user_id: me.id,
@@ -2001,6 +2037,7 @@ function Calendar({ me }) {
       calendar_type: "shared",
       notify_minutes: Number(notifyMinutes || 0),
       notify_at: notifyAt,
+      is_all_day: allDay,
       updated_at: new Date().toISOString(),
     };
 
@@ -2203,14 +2240,21 @@ function Calendar({ me }) {
         )}
       </section>
 
-      <form className="ttAddForm reminderForm" onSubmit={addEvent}>
+      <form className="ttAddForm reminderForm allDayForm" onSubmit={addEvent}>
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`${date} 일정 추가`} />
+
+        <label className={`allDayToggle ${allDay ? "active" : ""}`}>
+          <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
+          <span>종일</span>
+        </label>
+
         <select value={notifyMinutes} onChange={(e) => setNotifyMinutes(e.target.value)}>
           <option value="0">알림 없음</option>
           <option value="10">10분 전</option>
           <option value="60">1시간 전</option>
           <option value="1440">하루 전</option>
         </select>
+
         <button>추가</button>
       </form>
 
@@ -2219,7 +2263,7 @@ function Calendar({ me }) {
           <article className={`ttEvent ${ownerClass(item)}`} key={item.id}>
             <div onClick={() => setEditingEvent(item)}>
               <b>{item.title}</b>
-              <p>{dateTime(item.start_at)} · 등록자 {ownerName(item)} · {reminderText(item)}</p>
+              <p>{item.is_all_day ? "종일" : dateTime(item.start_at)} · 등록자 {ownerName(item)} · {reminderText(item)}</p>
             </div>
             <div className="eventActions">
               <button onClick={() => setEditingEvent(item)}>수정</button>
@@ -2240,7 +2284,7 @@ function Calendar({ me }) {
             </header>
             <div className="eventDetailBox">
               <b>{editingEvent.title}</b>
-              <p>{dateTime(editingEvent.start_at)}</p>
+              <p>{editingEvent.is_all_day ? "종일 일정" : dateTime(editingEvent.start_at)}</p>
               <p>등록자 {ownerName(editingEvent)}</p>
               <p>{reminderText(editingEvent)}</p>
             </div>

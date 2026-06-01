@@ -3779,3 +3779,65 @@ body.dark .notifyLogo{background:#163524}
     max-width:300px;
   }
 }
+
+
+/* ===== v61 all-day events ===== */
+
+.allDayForm{
+  grid-template-columns:minmax(0,1fr) 58px 92px 58px!important;
+}
+
+.allDayToggle,
+.newShareAllDay{
+  min-height:40px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  padding:0 10px;
+  border-radius:16px;
+  background:var(--surface);
+  color:var(--sub);
+  border:1px solid var(--line);
+  font-size:12px;
+  font-weight:1000;
+  box-shadow:var(--shadow2);
+  user-select:none;
+}
+
+.allDayToggle input,
+.newShareAllDay input{
+  display:none;
+}
+
+.allDayToggle.active,
+.newShareAllDay.active{
+  background:var(--primary);
+  color:#fff;
+  border-color:transparent;
+}
+
+.newShareAllDay{
+  justify-content:flex-start;
+  height:44px;
+  background:var(--surface2);
+  box-shadow:none;
+}
+
+.newShareGrid:has(label:only-child){
+  grid-template-columns:1fr;
+}
+
+@media(max-width:767px){
+  .allDayForm{
+    grid-template-columns:minmax(0,1fr) 52px 80px 52px!important;
+    gap:6px!important;
+  }
+
+  .allDayToggle{
+    min-height:40px;
+    padding:0 8px;
+    border-radius:15px;
+    font-size:11px;
+  }
+}
