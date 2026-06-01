@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== v65 restore rich schedule share + time + realtime chat ==="
+echo "=== v65.2 restore rich schedule share + realtime chat ==="
 
 python3 - <<'PY'
 from pathlib import Path
@@ -30,7 +30,6 @@ def replace_block(source, start_marker, end_marker, replacement):
 
     return source[:start] + replacement + "\n\n" + source[end:]
 
-# App에 채팅 일정카드 → 캘린더 이동 이벤트 추가
 if "rift-open-calendar-date" not in s:
     s = s.replace(
         "async function loadMe",
@@ -1295,7 +1294,6 @@ room = r'''function Room({ me, room, onBack }) {
 s = replace_block(s, "function Chats(", "function Room(", chats)
 s = replace_block(s, "function Room(", "function Calendar(", room)
 
-# 캘린더 일정 추가: 시간 + 종일 보강
 cal_start = s.find("function Calendar(")
 cal_end = s.find("function More(", cal_start)
 
@@ -1338,7 +1336,7 @@ if cal_start != -1 and cal_end != -1:
         )
 
     cal = re.sub(
-        r'<form className="ttAddForm reminderForm(?: allDayForm)?" onSubmit=\{addEvent\}>.*?<button>추가</button>\s*</form>',
+        r'<form className="ttAddForm reminderForm(?: allDayForm| calendarTimeForm)?" onSubmit=\{addEvent\}>.*?<button>추가</button>\s*</form>',
         r'''<form className="ttAddForm reminderForm calendarTimeForm" onSubmit={addEvent}>
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`${date} 일정 추가`} />
 
@@ -1382,10 +1380,10 @@ p.write_text(s)
 cssp = Path("app/src/styles.css")
 css = cssp.read_text()
 
-if "v65 restore rich schedule share" not in css:
+if "v65.2 restore rich schedule share" not in css:
     cssp.write_text(css + r'''
 
-/* ===== v65 restore rich schedule share + realtime ===== */
+/* ===== v65.2 restore rich schedule share + realtime ===== */
 
 .chatListItem{transition:transform .12s ease, background .12s ease}
 .chatListItem:active{transform:scale(.985)}
@@ -1575,5 +1573,5 @@ if "v65 restore rich schedule share" not in css:
 ''')
 PY
 
-echo "=== v65 done ==="
+echo "=== v65.2 done ==="
 git status --short
