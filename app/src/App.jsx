@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {useEffect, useMemo, useRef, useState} from "react";
 import { supabase } from "./lib/supabase";
 import { registerWebPush } from "./push";
 
@@ -829,8 +829,11 @@ function Room({ me, room, onBack }) {
   const [text, setText] = useState("");
   const [msg, setMsg] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [showAttach, setShowAttach] = useState(false);
+
   const bottom = useRef(null);
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   useEffect(() => {
     if (!room?.id) return undefined;
@@ -844,9 +847,18 @@ function Room({ me, room, onBack }) {
 
     const channel = supabase
       .channel(topic)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages", filter: `room_id=eq.${room.id}` }, () => {
-        if (alive) loadMessages();
-      })
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "chat_messages",
+          filter: `room_id=eq.${room.id}`,
+        },
+        () => {
+          if (alive) loadMessages();
+        }
+      )
       .subscribe();
 
     const timer = setInterval(() => {
@@ -910,7 +922,10 @@ function Room({ me, room, onBack }) {
     } catch {}
 
     if (raw.startsWith("image::")) {
-      return { type: "image", url: raw.slice(7) };
+      return {
+        type: "image",
+        url: raw.slice(7),
+      };
     }
 
     if (raw.startsWith("location::")) {
@@ -925,16 +940,35 @@ function Room({ me, room, onBack }) {
       };
     }
 
-    return { type: "text", text: raw };
+    return {
+      type: "text",
+      text: raw,
+    };
   }
 
   async function insertMessage(payload, pushText) {
     const raw = typeof payload === "string" ? payload : JSON.stringify(payload);
 
     const variants = [
-      { room_id: room.id, sender_id: me.id, content: raw, message: raw, created_at: nowIso() },
-      { room_id: room.id, sender_id: me.id, content: raw, created_at: nowIso() },
-      { room_id: room.id, sender_id: me.id, message: raw, created_at: nowIso() },
+      {
+        room_id: room.id,
+        sender_id: me.id,
+        content: raw,
+        message: raw,
+        created_at: nowIso(),
+      },
+      {
+        room_id: room.id,
+        sender_id: me.id,
+        content: raw,
+        created_at: nowIso(),
+      },
+      {
+        room_id: room.id,
+        sender_id: me.id,
+        message: raw,
+        created_at: nowIso(),
+      },
     ];
 
     let sent = false;
@@ -955,7 +989,10 @@ function Room({ me, room, onBack }) {
 
     await supabase
       .from("chat_rooms")
-      .update({ last_message: pushText, updated_at: nowIso() })
+      .update({
+        last_message: pushText,
+        updated_at: nowIso(),
+      })
       .eq("id", room.id);
 
     await supabase.functions.invoke("send-chat-push", {
@@ -999,10 +1036,14 @@ function Room({ me, room, onBack }) {
     }
 
     setUploading(true);
+    setShowAttach(false);
     setMsg("");
 
     try {
-      const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+      const ext = (file.name.split(".").pop() || "jpg")
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "") || "jpg";
+
       const path = `${me.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
@@ -1037,9 +1078,8 @@ function Room({ me, room, onBack }) {
     } finally {
       setUploading(false);
 
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (cameraInputRef.current) cameraInputRef.current.value = "";
     }
   }
 
@@ -1050,6 +1090,7 @@ function Room({ me, room, onBack }) {
     }
 
     setUploading(true);
+    setShowAttach(false);
     setMsg("위치 확인 중...");
 
     navigator.geolocation.getCurrentPosition(
@@ -1106,7 +1147,12 @@ function Room({ me, room, onBack }) {
 
     if (parsed.type === "location") {
       return (
-        <a className="locationBubble" href={parsed.url || `https://maps.google.com/?q=${parsed.lat},${parsed.lng}`} target="_blank" rel="noreferrer">
+        <a
+          className="locationBubble"
+          href={parsed.url || `https://maps.google.com/?q=${parsed.lat},${parsed.lng}`}
+          target="_blank"
+          rel="noreferrer"
+        >
           <b>📍 위치 공유</b>
           <span>{parsed.lat}, {parsed.lng}</span>
           <em>지도 열기</em>
@@ -1127,11 +1173,22 @@ function Room({ me, room, onBack }) {
       <header className="roomHeader">
         {onBack && <button className="iconButton" onClick={onBack}>‹</button>}
 
-        <Avatar user={{ nickname: room.is_group ? "그" : room.displayName, avatar_url: room.avatar_url }} size={40} online={!room.is_group} />
+        <Avatar
+          user={{
+            nickname: room.is_group ? "그" : room.displayName,
+            avatar_url: room.avatar_url,
+          }}
+          size={40}
+          online={!room.is_group}
+        />
 
         <div>
           <b>{room.displayName || "대화방"}</b>
-          <p>{room.is_group ? `${members.length || room.member_count || 0}명` : `${visibleMessages.length}개의 메시지`}</p>
+          <p>
+            {room.is_group
+              ? `${members.length || room.member_count || 0}명`
+              : `${visibleMessages.length}개의 메시지`}
+          </p>
         </div>
       </header>
 
@@ -1149,7 +1206,7 @@ function Room({ me, room, onBack }) {
         <div ref={bottom} />
       </div>
 
-      <form className="composer mediaComposer" onSubmit={send}>
+      <form className="composer plusComposer" onSubmit={send}>
         <input
           ref={fileInputRef}
           className="hiddenFile"
@@ -1158,18 +1215,66 @@ function Room({ me, room, onBack }) {
           onChange={(event) => sendImage(event.target.files?.[0])}
         />
 
-        <button type="button" className="mediaButton" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-          사진
+        <input
+          ref={cameraInputRef}
+          className="hiddenFile"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={(event) => sendImage(event.target.files?.[0])}
+        />
+
+        <button
+          type="button"
+          className={`plusButton ${showAttach ? "active" : ""}`}
+          onClick={() => setShowAttach((prev) => !prev)}
+          disabled={uploading}
+        >
+          +
         </button>
 
-        <button type="button" className="mediaButton" onClick={sendLocation} disabled={uploading}>
-          위치
-        </button>
-
-        <input value={text} onChange={(e) => setText(e.target.value)} placeholder={uploading ? "전송 중..." : "메시지 입력"} disabled={uploading} />
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={uploading ? "전송 중..." : "메시지 입력"}
+          disabled={uploading}
+        />
 
         <button disabled={uploading}>➤</button>
       </form>
+
+      {showAttach && (
+        <section className="attachSheet" onClick={() => setShowAttach(false)}>
+          <div className="attachPanel" onClick={(event) => event.stopPropagation()}>
+            <div className="attachHandle" />
+
+            <div className="attachTop">
+              <b>보내기</b>
+              <button onClick={() => setShowAttach(false)}>×</button>
+            </div>
+
+            <div className="attachGrid">
+              <button onClick={() => cameraInputRef.current?.click()}>
+                <span className="attachIcon camera">📷</span>
+                <b>카메라</b>
+                <small>바로 촬영</small>
+              </button>
+
+              <button onClick={() => fileInputRef.current?.click()}>
+                <span className="attachIcon photo">🖼️</span>
+                <b>사진</b>
+                <small>앨범에서 선택</small>
+              </button>
+
+              <button onClick={sendLocation}>
+                <span className="attachIcon location">📍</span>
+                <b>친구위치</b>
+                <small>현재 위치 공유</small>
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <Toast>{msg}</Toast>
     </div>

@@ -2645,3 +2645,244 @@ body.dark .notifyLogo{background:#163524}
     max-width:74vw;
   }
 }
+
+/* ===== v56 plus attachment sheet ===== */
+
+.hiddenFile{
+  display:none !important;
+}
+
+.plusComposer{
+  grid-template-columns:46px minmax(0,1fr) 50px !important;
+}
+
+.plusButton{
+  height:48px;
+  border-radius:18px;
+  display:grid;
+  place-items:center;
+  background:var(--surface2);
+  color:var(--text);
+  border:1px solid var(--line);
+  font-size:28px;
+  font-weight:650;
+  line-height:1;
+  transition:transform .16s ease, background .16s ease;
+}
+
+.plusButton.active{
+  transform:rotate(45deg);
+  background:var(--primary);
+  color:#fff;
+  border-color:transparent;
+}
+
+.imageBubble{
+  display:block;
+  max-width:min(260px,78vw);
+  border-radius:18px;
+  overflow:hidden;
+  border:1px solid var(--line);
+  background:var(--surface);
+  box-shadow:0 3px 12px rgba(0,0,0,.08);
+}
+
+.imageBubble img{
+  width:100%;
+  max-height:320px;
+  object-fit:cover;
+  display:block;
+}
+
+.locationBubble{
+  width:min(260px,78vw);
+  display:grid;
+  gap:6px;
+  padding:13px;
+  border-radius:18px;
+  text-decoration:none;
+  background:var(--surface);
+  color:var(--text);
+  border:1px solid var(--line);
+  box-shadow:0 3px 12px rgba(0,0,0,.08);
+}
+
+.mine .locationBubble{
+  background:linear-gradient(135deg,var(--primary),var(--primary2));
+  color:#fff;
+  border-color:transparent;
+}
+
+.locationBubble b{
+  font-size:15px;
+  font-weight:1000;
+}
+
+.locationBubble span{
+  color:inherit;
+  opacity:.82;
+  font-size:12px;
+  font-weight:800;
+}
+
+.locationBubble em{
+  width:max-content;
+  min-height:26px;
+  padding:5px 10px;
+  border-radius:999px;
+  background:rgba(255,255,255,.18);
+  color:inherit;
+  font-size:12px;
+  font-style:normal;
+  font-weight:1000;
+}
+
+.attachSheet{
+  position:fixed;
+  inset:0;
+  z-index:7200;
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  background:rgba(0,0,0,.32);
+  backdrop-filter:blur(6px);
+}
+
+.attachPanel{
+  width:min(560px,100%);
+  padding:10px 18px calc(22px + env(safe-area-inset-bottom));
+  border-radius:30px 30px 0 0;
+  background:var(--surface);
+  border:1px solid var(--line);
+  box-shadow:0 -20px 54px rgba(0,0,0,.28);
+}
+
+.attachHandle{
+  width:48px;
+  height:5px;
+  margin:6px auto 18px;
+  border-radius:999px;
+  background:var(--line);
+}
+
+.attachTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:16px;
+}
+
+.attachTop b{
+  color:var(--text);
+  font-size:22px;
+  font-weight:1000;
+  letter-spacing:-.5px;
+}
+
+.attachTop button{
+  width:40px;
+  height:40px;
+  border-radius:18px;
+  background:var(--surface2);
+  color:var(--text);
+  font-size:24px;
+  font-weight:800;
+}
+
+.attachGrid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+}
+
+.attachGrid button{
+  min-height:116px;
+  display:grid;
+  place-items:center;
+  align-content:center;
+  gap:7px;
+  padding:14px 8px;
+  border-radius:24px;
+  background:var(--surface2);
+  color:var(--text);
+  border:1px solid var(--line);
+}
+
+.attachGrid b{
+  font-size:15px;
+  font-weight:1000;
+}
+
+.attachGrid small{
+  color:var(--sub);
+  font-size:11px;
+  font-weight:850;
+}
+
+.attachIcon{
+  width:48px;
+  height:48px;
+  display:grid;
+  place-items:center;
+  border-radius:18px;
+  color:#fff;
+  font-size:24px;
+}
+
+.attachIcon.camera{
+  background:#94a3b8;
+}
+
+.attachIcon.photo{
+  background:#22c55e;
+}
+
+.attachIcon.location{
+  background:#3b82f6;
+}
+
+@media(max-width:767px){
+  .plusComposer{
+    grid-template-columns:44px minmax(0,1fr) 48px !important;
+    gap:7px !important;
+  }
+
+  .plusButton{
+    height:46px !important;
+    border-radius:17px !important;
+    font-size:27px !important;
+  }
+
+  .attachPanel{
+    border-radius:28px 28px 0 0;
+    padding:10px 16px calc(20px + env(safe-area-inset-bottom));
+  }
+
+  .attachGrid{
+    gap:9px;
+  }
+
+  .attachGrid button{
+    min-height:104px;
+    border-radius:22px;
+  }
+
+  .attachIcon{
+    width:44px;
+    height:44px;
+    border-radius:16px;
+    font-size:22px;
+  }
+
+  .imageBubble{
+    max-width:74vw;
+  }
+
+  .imageBubble img{
+    max-height:280px;
+  }
+
+  .locationBubble{
+    max-width:74vw;
+  }
+}
