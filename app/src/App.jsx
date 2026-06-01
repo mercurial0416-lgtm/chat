@@ -831,19 +831,33 @@ function Room({ me, room, onBack }) {
   const bottom = useRef(null);
 
   useEffect(() => {
+    if (!room?.id) return undefined;
+
+    let alive = true;
+
     loadMessages();
     loadMembers();
 
+    const topic = `room-${room.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
     const channel = supabase
-      .channel(`room-${room?.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages", filter: `room_id=eq.${room?.id}` }, () => loadMessages())
+      .channel(topic)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages", filter: `room_id=eq.${room.id}` }, () => {
+        if (alive) loadMessages();
+      })
       .subscribe();
 
-    const timer = setInterval(loadMessages, 1200);
+    const timer = setInterval(() => {
+      if (alive) loadMessages();
+    }, 1200);
 
     return () => {
-      supabase.removeChannel(channel);
+      alive = false;
       clearInterval(timer);
+
+      try {
+        supabase.removeChannel(channel);
+      } catch {}
     };
   }, [room?.id]);
 
@@ -1032,7 +1046,7 @@ function Calendar({ me }) {
 
   useEffect(() => {
     const channel = supabase
-      .channel("calendar-events-watch")
+      .channel(`calendar-events-watch-${me.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "calendar_events" }, (payload) => {
         const row = payload.new || {};
         const actor = eventOwnerId(row);
