@@ -2886,3 +2886,96 @@ body.dark .notifyLogo{background:#163524}
     max-width:74vw;
   }
 }
+
+/* ===== v57 back button exit confirm ===== */
+
+.backExitOverlay{
+  position:fixed;
+  inset:0;
+  z-index:9000;
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+  padding:18px;
+  background:rgba(0,0,0,.46);
+  backdrop-filter:blur(8px);
+}
+
+.backExitPanel{
+  width:min(420px,100%);
+  padding:22px;
+  border-radius:28px;
+  background:var(--surface);
+  color:var(--text);
+  border:1px solid var(--line);
+  box-shadow:0 24px 70px rgba(0,0,0,.35);
+  text-align:center;
+}
+
+.backExitIcon{
+  width:52px;
+  height:52px;
+  margin:0 auto 12px;
+  display:grid;
+  place-items:center;
+  border-radius:20px;
+  background:var(--surface2);
+  color:var(--primary);
+  font-size:28px;
+  font-weight:1000;
+}
+
+.backExitPanel b{
+  display:block;
+  color:var(--text);
+  font-size:22px;
+  font-weight:1000;
+  letter-spacing:-.5px;
+}
+
+.backExitPanel p{
+  margin:8px 0 18px;
+  color:var(--sub);
+  font-size:14px;
+  line-height:1.45;
+  font-weight:800;
+}
+
+.backExitActions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:9px;
+}
+
+.backExitActions button{
+  height:48px;
+  border-radius:18px;
+  background:var(--surface2);
+  color:var(--text);
+  font-size:14px;
+  font-weight:1000;
+}
+
+.backExitActions button.danger{
+  background:#ef4444;
+  color:#fff;
+}
+
+@media(max-width:767px){
+  .backExitOverlay{
+    padding:14px 14px calc(14px + env(safe-area-inset-bottom));
+  }
+
+  .backExitPanel{
+    border-radius:26px;
+    padding:20px;
+  }
+
+  .backExitPanel b{
+    font-size:20px;
+  }
+
+  .backExitPanel p{
+    font-size:13px;
+  }
+}

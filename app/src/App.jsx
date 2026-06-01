@@ -402,6 +402,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <BackExitGuard />
       <aside className="rail">
         <button className="railProfile" onClick={openProfile}>
           <Avatar user={me} size={44} online />
@@ -457,6 +458,100 @@ export default function App() {
 
       <Toast>{msg}</Toast>
     </div>
+  );
+}
+
+
+function BackExitGuard() {
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const allowExitRef = useRef(false);
+
+  useEffect(() => {
+    const guardState = {
+      riftBackGuard: true,
+      t: Date.now(),
+    };
+
+    try {
+      window.history.replaceState(
+        {
+          ...(window.history.state || {}),
+          riftRoot: true,
+        },
+        "",
+        window.location.href
+      );
+
+      window.history.pushState(guardState, "", window.location.href);
+    } catch {}
+
+    function onPopState() {
+      if (allowExitRef.current) return;
+
+      setShowExitConfirm(true);
+
+      setTimeout(() => {
+        try {
+          window.history.pushState(
+            {
+              riftBackGuard: true,
+              t: Date.now(),
+            },
+            "",
+            window.location.href
+          );
+        } catch {}
+      }, 0);
+    }
+
+    function onBeforeUnload(event) {
+      if (allowExitRef.current) return;
+
+      event.preventDefault();
+      event.returnValue = "";
+    }
+
+    window.addEventListener("popstate", onPopState);
+    window.addEventListener("beforeunload", onBeforeUnload);
+
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
+  }, []);
+
+  function stay() {
+    setShowExitConfirm(false);
+  }
+
+  function exitApp() {
+    allowExitRef.current = true;
+    setShowExitConfirm(false);
+
+    try {
+      window.history.go(-2);
+    } catch {
+      try {
+        window.history.back();
+      } catch {}
+    }
+  }
+
+  if (!showExitConfirm) return null;
+
+  return (
+    <section className="backExitOverlay">
+      <div className="backExitPanel">
+        <div className="backExitIcon">↩</div>
+        <b>앱을 나갈까요?</b>
+        <p>뒤로가기를 한 번 더 누른 것처럼 앱을 종료하거나 이전 화면으로 이동합니다.</p>
+
+        <div className="backExitActions">
+          <button onClick={stay}>계속 사용</button>
+          <button className="danger" onClick={exitApp}>나가기</button>
+        </div>
+      </div>
+    </section>
   );
 }
 
