@@ -1497,6 +1497,30 @@ function Calendar({ me }) {
   }, [events, profilesById]);
 
   function keyOf(day) { return dateKey(day); }
+
+  async function saveMyWork(nextMode = mode, nextTeam = team) {
+    setMode(nextMode);
+    setTeam(String(nextTeam));
+
+    localStorage.setItem("rift_calendar_mode", nextMode);
+    localStorage.setItem("rift_shift_team", String(nextTeam));
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        work_mode: nextMode,
+        shift_team: String(nextTeam),
+        updated_at: nowIso(),
+      })
+      .eq("id", me.id);
+
+    if (error) {
+      setMsg(`내 조 저장 실패: ${safeError(error)}`);
+      return;
+    }
+
+    setMsg(nextMode === "shift" ? `내 근무표 ${nextTeam}조로 저장됨` : "내 근무표 통상근무로 저장됨");
+  }
   function shiftFor(teamNo, key) { return shiftForTeam(teamNo, key); }
   function shiftDayLabel(teamNo, key) { return shiftDayForTeam(teamNo, key); }
   function shiftClass(value) { if (value === "A") return "shiftA"; if (value === "B") return "shiftB"; if (value === "C") return "shiftC"; return "shiftOff"; }
@@ -1760,17 +1784,26 @@ function Calendar({ me }) {
       </header>
 
       <section className="calendarMode slim">
-        <button className={mode === "shift" ? "active" : ""} onClick={() => setMode("shift")}>4조 3교대</button>
-        <button className={mode === "normal" ? "active" : ""} onClick={() => setMode("normal")}>통상근무</button>
+        <button className={mode === "shift" ? "active" : ""} onClick={() => saveMyWork("shift", team)}>4조 3교대</button>
+        <button className={mode === "normal" ? "active" : ""} onClick={() => saveMyWork("normal", team)}>통상근무</button>
       </section>
 
       {mode === "shift" && (
         <section className="teamPicker slimTeam">
           {["1", "2", "3", "4"].map((teamNo) => (
-            <button key={teamNo} className={team === teamNo ? "active" : ""} onClick={() => setTeam(teamNo)}>{teamNo}조</button>
+            <button key={teamNo} className={team === teamNo ? "active" : ""} onClick={() => saveMyWork("shift", teamNo)}>{teamNo}조</button>
           ))}
         </section>
       )}
+
+      <section className="myWorkSaveHint">
+        <b>내 근무표 설정</b>
+        <p>
+          {mode === "shift"
+            ? `${team}조 · 오늘 ${shiftFor(team, dateKey())} · 버튼 누르면 내 프로필에 바로 저장됨`
+            : "통상근무 · 내 프로필에 저장됨"}
+        </p>
+      </section>
 
       <section className="ownerFilter">
         {ownerOptions.map((item) => (
