@@ -1,154 +1,162 @@
 *{box-sizing:border-box}
 html,body,#root{margin:0;width:100%;height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,sans-serif}
-body{background:#f4f6f8;color:#17181c}
+body{background:#f4f6f8;color:#15171d}
 button,input,textarea,select{font:inherit}
 button{border:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
 input,textarea,select{font-size:16px;outline:0}
 img{display:block;max-width:100%}
 
-.loading{height:100dvh;display:grid;place-items:center;color:#69707d}
-.auth,.fatalShell{min-height:100dvh;display:grid;place-items:center;padding:18px;background:#f4f6f8}
-.authCard,.fatalCard{width:min(420px,100%);background:#fff;border-radius:28px;padding:24px;box-shadow:0 18px 48px rgba(15,23,42,.1);display:grid;gap:11px}
-.authCard h1,.fatalCard h1{margin:0;font-size:36px;letter-spacing:-1px}
-.authCard p,.fatalCard p{margin:0 0 10px;color:#777f8c}
-.authCard input,.form input,.search,.calTop input,.addBar input{height:46px;border-radius:18px;border:1px solid #e7e9ee;background:#fff;color:#17181c;padding:0 15px}
-.primary,.authCard .primary{height:46px;border-radius:18px;background:#fee500;color:#191919;font-weight:900}
-.ghost{height:42px;background:transparent;color:#777f8c}
-.notice{position:fixed;left:12px;right:12px;bottom:82px;z-index:3000;background:#fff5bf;color:#3a3200;border:1px solid rgba(168,132,0,.2);border-radius:16px;padding:11px 13px;font-size:13px}
+.loading{height:100dvh;display:grid;place-items:center;color:#7b8491}
+.auth,.fatalShell{min-height:100dvh;display:grid;place-items:center;padding:18px;background:linear-gradient(180deg,#f9fafb,#eef2f7)}
+.authCard,.fatalCard{width:min(420px,100%);background:#fff;border-radius:30px;padding:24px;box-shadow:0 18px 55px rgba(15,23,42,.12);display:grid;gap:11px}
+.brandBadge{width:54px;height:54px;border-radius:18px;background:#fee500;color:#191919;display:grid;place-items:center;font-weight:1000;font-size:24px}
+.authCard h1,.fatalCard h1{margin:0;font-size:36px;letter-spacing:-1.2px}
+.authCard p,.fatalCard p{margin:0 0 10px;color:#7b8491}
+.authCard input,.form input,.search,.calTop input,.addBar input{height:48px;border-radius:18px;border:1px solid rgba(20,24,32,.09);background:#fff;color:#15171d;padding:0 16px}
+.primary,.authCard .primary{height:48px;border-radius:18px;background:#fee500;color:#191919;font-weight:950}
+.ghost{height:42px;background:transparent;color:#7b8491}
+.notice{position:fixed;left:14px;right:14px;bottom:84px;z-index:3000;background:#fff4bc;color:#3a3200;border:1px solid rgba(168,132,0,.22);border-radius:18px;padding:12px 14px;font-size:13px;box-shadow:0 10px 28px rgba(0,0,0,.1)}
 
-.appShell{width:100vw;height:100vh;display:grid;grid-template-columns:76px minmax(0,1fr);background:#f4f6f8}
-.rail{height:100vh;background:#fff;border-right:1px solid #eceef2;display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px 8px}
-.rail>button{width:56px;min-height:56px;border-radius:18px;background:transparent;color:#818894;display:grid;place-items:center;gap:2px;font-weight:800}
-.rail>button.active{background:#fff2a1;color:#17181c}
-.rail span{font-size:14px;font-weight:900}
+.appShell{width:100vw;height:100vh;display:grid;grid-template-columns:78px minmax(0,1fr);background:#f4f6f8}
+.rail{height:100vh;background:#fff;border-right:1px solid #e9edf2;display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px 8px}
+.rail>button{width:58px;min-height:58px;border-radius:20px;background:transparent;color:#838b97;display:grid;place-items:center;gap:2px;font-weight:850}
+.rail>button.active{background:#fff3a6;color:#15171d}
+.railProfile{padding:0;margin-bottom:8px}
+.rail span{font-size:14px;font-weight:950}
 .rail small{font-size:10px}
 
 .main{height:100vh;min-width:0;display:flex;flex-direction:column;overflow:hidden}
-.top{height:64px;min-height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 24px}
-.top h1{margin:0;font-size:29px;letter-spacing:-1px}
-.topMe{display:flex;align-items:center;gap:8px;color:#777f8c}
+.top{height:66px;min-height:66px;display:flex;align-items:center;justify-content:space-between;padding:0 26px}
+.top h1{margin:0;font-size:30px;letter-spacing:-1.1px}
+.topMe{display:flex;align-items:center;gap:8px;color:#747d8a;background:transparent}
 .content{flex:1;min-height:0;overflow:hidden}
 .content.split{display:grid;grid-template-columns:390px minmax(0,1fr)}
 .page,.list{height:100%;overflow:auto;padding:0 18px 22px}
 .detail{min-width:0;min-height:0;overflow:hidden;background:#e8eef7}
 
-.avatar{border-radius:18px;background:#e8edf3;display:grid;place-items:center;overflow:hidden;color:#17181c;font-weight:900;flex:0 0 auto}
+.avatar{border-radius:18px;background:#e8edf3;display:grid;place-items:center;overflow:hidden;color:#15171d;font-weight:950;flex:0 0 auto}
 .avatar img{width:100%;height:100%;object-fit:cover}
 
-.search{width:100%;margin:0 0 14px}
+.search{width:100%;margin:0 0 16px;background:#fff}
 .mobileTitle{display:none}
-.mobileTop{height:42px;display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.mobileTop b{font-size:28px;letter-spacing:-1px}
-.mobileTop button{height:34px;border-radius:18px;background:#fff;color:#17181c;padding:0 12px;box-shadow:0 2px 10px rgba(15,23,42,.04)}
+.mobileTop{height:44px;display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.mobileTop b{font-size:30px;letter-spacing:-1.2px}
+.mobileTop button{height:36px;border-radius:18px;background:#fff;color:#15171d;padding:0 13px;box-shadow:0 4px 14px rgba(15,23,42,.06);font-weight:850}
 
-.myProfile,.row,.chatRow{width:100%;min-height:70px;padding:10px 2px;border-bottom:1px solid #eceef2;display:flex;align-items:center;gap:12px;background:transparent;color:inherit;text-align:left}
-.myProfile{background:#fff;border:0;border-radius:20px;padding:12px;margin-bottom:12px;box-shadow:0 4px 16px rgba(15,23,42,.04)}
-.row:hover,.chatRow:hover,.chatRow.active{background:rgba(254,229,0,.08)}
+.myProfile,.row,.chatRow{width:100%;min-height:72px;padding:10px 4px;border-bottom:1px solid #eaedf2;display:flex;align-items:center;gap:12px;background:transparent;color:inherit;text-align:left}
+.myProfile{background:#fff;border:0;border-radius:22px;padding:14px;margin-bottom:14px;box-shadow:0 8px 24px rgba(15,23,42,.06)}
+.myProfile em{font-style:normal;color:#9aa2ae;font-size:13px}
+.row:hover,.chatRow:hover,.chatRow.active{background:rgba(254,229,0,.1)}
 .meta{min-width:0;flex:1}
 .meta b,.chatRow b{display:block;font-size:17px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.meta span,.chatRow span{display:block;margin-top:5px;font-size:13px;color:#777f8c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.row button{height:38px;border-radius:19px;padding:0 16px;background:#272b35;color:#fff;font-weight:900}
-.page h3{margin:14px 0 6px;font-size:14px;color:#777f8c}
+.meta span,.chatRow span{display:block;margin-top:5px;font-size:13px;color:#77818e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row button{height:38px;border-radius:20px;padding:0 17px;background:#262b35;color:#fff;font-weight:950}
+.page h3{margin:14px 0 7px;font-size:14px;color:#77818e}
 
 .chatRow{cursor:pointer;border-radius:0}
 .chatRow small{color:#9098a4;font-size:12px;margin-left:8px}
-.empty{min-height:190px;display:grid;place-items:center;text-align:center;color:#777f8c;padding:24px}
-.empty b{display:block;color:#17181c;font-size:18px}
+.empty{min-height:190px;display:grid;place-items:center;text-align:center;color:#77818e;padding:24px}
+.empty b{display:block;color:#15171d;font-size:18px}
 .empty p{margin:6px 0 0}
 
 .room{height:100%;display:flex;flex-direction:column;background:#e8eef7}
-.roomHeader{min-height:60px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 14px;background:rgba(255,255,255,.94);border-bottom:1px solid #e1e5ec}
+.roomHeader{min-height:62px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 16px;background:rgba(255,255,255,.95);border-bottom:1px solid #e0e5ec}
 .roomHeader b{font-size:18px}
-.roomHeader small{color:#777f8c}
+.roomHeader small{color:#77818e}
 .roomHeader button{width:42px;height:42px;border-radius:50%;background:#fff;font-size:27px}
 .messages{flex:1;min-height:0;overflow:auto;padding:18px}
 .msg{display:flex;flex-direction:column;align-items:flex-start;margin-bottom:10px}
 .msg.mine{align-items:flex-end}
-.bubble{max-width:min(72%,640px);padding:10px 13px;border-radius:19px;background:#fff;line-height:1.45;word-break:break-word;white-space:pre-wrap;box-shadow:0 2px 10px rgba(15,23,42,.04)}
+.bubble{max-width:min(72%,640px);padding:11px 14px;border-radius:20px;background:#fff;line-height:1.45;word-break:break-word;white-space:pre-wrap;box-shadow:0 4px 14px rgba(15,23,42,.05)}
 .mine .bubble{background:#fee500;color:#191919;border-top-right-radius:7px}
 .other .bubble{border-top-left-radius:7px}
-.msg small{font-size:11px;color:#777f8c;margin-top:3px}
-.composer{display:grid;grid-template-columns:minmax(0,1fr) 64px;gap:8px;min-height:70px;padding:10px;background:#fff;border-top:1px solid #e1e5ec}
-.composer input{height:48px;border-radius:24px;border:1px solid #e1e5ec;padding:0 16px;background:#f7f8fa}
-.composer button{height:48px;border-radius:24px;background:#fee500;color:#191919;font-weight:900}
+.msg small{font-size:11px;color:#77818e;margin-top:4px}
+.composer{display:grid;grid-template-columns:minmax(0,1fr) 66px;gap:8px;min-height:72px;padding:10px;background:#fff;border-top:1px solid #e0e5ec}
+.composer input{height:50px;border-radius:25px;border:1px solid #e0e5ec;padding:0 17px;background:#f7f8fa}
+.composer button{height:50px;border-radius:25px;background:#fee500;color:#191919;font-weight:950}
 
+.calHero{background:#fff;border-radius:24px;padding:18px;margin-bottom:12px;box-shadow:0 8px 24px rgba(15,23,42,.06);display:flex;align-items:center;justify-content:space-between}
+.calHero b{font-size:22px;letter-spacing:-.7px}
+.calHero button,.calTop button,.addBar button{height:46px;border-radius:18px;background:#fee500;color:#191919;font-weight:950;padding:0 15px}
 .calTop,.addBar{display:flex;gap:8px;margin-bottom:10px}
 .calTop input,.addBar input{flex:1}
-.calTop button,.addBar button{height:46px;border-radius:18px;background:#fee500;color:#191919;font-weight:900;padding:0 14px}
-.event{background:#fff;border-radius:18px;padding:14px;margin-bottom:9px;box-shadow:0 4px 16px rgba(15,23,42,.05)}
+.event{background:#fff;border-radius:20px;padding:15px;margin-bottom:10px;box-shadow:0 7px 22px rgba(15,23,42,.06)}
 .event b{display:block}
-.event span{display:block;margin-top:4px;color:#777f8c;font-size:13px}
+.event span{display:block;margin-top:4px;color:#77818e;font-size:13px}
 
 .morePage{height:100%;display:grid;grid-template-columns:340px minmax(0,1fr);gap:16px;padding:0 20px 20px;position:relative}
-.moreMenu{height:100%;overflow:auto;background:#fff;border-radius:22px;padding:16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 4px 18px rgba(15,23,42,.04)}
-.profileCard{display:flex;align-items:center;gap:12px;padding:12px;border-radius:20px;background:#f7f8fa;cursor:pointer}
+.moreMenu{height:100%;overflow:auto;background:#fff;border-radius:24px;padding:16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 8px 24px rgba(15,23,42,.05)}
+.profileCard{display:flex;align-items:center;gap:12px;padding:14px;border-radius:22px;background:#f7f8fa;cursor:pointer;text-align:left;color:inherit}
 .profileCard b{display:block}
-.profileCard span,.soon span{display:block;margin-top:4px;color:#777f8c;font-size:13px}
-.moreMenu button{min-height:56px;border-radius:18px;padding:0 15px;text-align:left;background:#fff;border:1px solid #eceef2;font-weight:900;color:#17181c}
+.profileCard span,.soon span{display:block;margin-top:4px;color:#77818e;font-size:13px}
+.moreMenu button:not(.profileCard){min-height:56px;border-radius:18px;padding:0 15px;text-align:left;background:#fff;border:1px solid #eaedf2;font-weight:950;color:#15171d}
 .moreMenu button.active{background:#fff2a1;border-color:#fee500}
-.soon{padding:13px;border-radius:18px;background:#f7f8fa;margin-top:auto}
-.moreDetail{height:100%;overflow:auto;background:#fff;border-radius:22px;padding:22px;box-shadow:0 4px 18px rgba(15,23,42,.04)}
-.settingsGear{position:absolute;right:22px;top:-50px;width:40px;height:40px;border-radius:14px;background:#fff;font-size:23px;box-shadow:0 4px 14px rgba(15,23,42,.06)}
-.form{display:grid;gap:10px}
-.form h2{margin:0 0 8px;font-size:24px}
-.form p{color:#777f8c}
-.form button{height:44px;border-radius:17px;background:#fff;border:1px solid #eceef2;font-weight:900}
+.soon{padding:14px;border-radius:20px;background:#f7f8fa;margin-top:auto}
+.moreDetail{height:100%;overflow:auto;background:#fff;border-radius:24px;padding:22px;box-shadow:0 8px 24px rgba(15,23,42,.05)}
+.settingsGear{position:absolute;right:22px;top:-52px;width:42px;height:42px;border-radius:15px;background:#fff;font-size:24px;box-shadow:0 6px 18px rgba(15,23,42,.08)}
+.form{display:grid;gap:11px}
+.form h2{margin:0 0 8px;font-size:25px;letter-spacing:-.7px}
+.form p{color:#77818e}
+.form button{height:46px;border-radius:18px;background:#fff;border:1px solid #eaedf2;font-weight:950}
+.profilePreview{display:flex;align-items:center;gap:13px;background:#f7f8fa;border-radius:22px;padding:14px}
+.profilePreview b{display:block}
+.profilePreview span{display:block;margin-top:4px;color:#77818e;font-size:13px}
 .check{display:flex;align-items:center;gap:9px}
 .check input{width:18px;height:18px}
 
 .mobileNav,.mobileRoom{display:none}
 
-body.dark{background:#12151b;color:#f3f4f7}
-body.dark .appShell,body.dark .main,body.dark .top,body.dark .page,body.dark .list,body.dark .content{background:#12151b;color:#f3f4f7}
-body.dark .rail,body.dark .moreMenu,body.dark .moreDetail,body.dark .authCard,body.dark .fatalCard,body.dark .event,body.dark .profileCard,body.dark .myProfile,body.dark .soon{background:#1b2029;color:#f3f4f7;border-color:rgba(255,255,255,.08)}
-body.dark input,body.dark textarea,body.dark select,body.dark .search,body.dark .composer input,body.dark .row button,body.dark .mobileTop button,body.dark .form button,body.dark .moreMenu button{background:#242a35;color:#f3f4f7;border-color:rgba(255,255,255,.09)}
+body.dark{background:#11151c;color:#f3f4f7}
+body.dark .appShell,body.dark .main,body.dark .top,body.dark .page,body.dark .list,body.dark .content{background:#11151c;color:#f3f4f7}
+body.dark .rail,body.dark .moreMenu,body.dark .moreDetail,body.dark .authCard,body.dark .fatalCard,body.dark .event,body.dark .profileCard,body.dark .myProfile,body.dark .soon,body.dark .calHero,body.dark .profilePreview{background:#1a202b;color:#f3f4f7;border-color:rgba(255,255,255,.08)}
+body.dark input,body.dark textarea,body.dark select,body.dark .search,body.dark .composer input,body.dark .mobileTop button,body.dark .form button,body.dark .moreMenu button:not(.profileCard){background:#242b37;color:#f3f4f7;border-color:rgba(255,255,255,.09)}
 body.dark .row button{background:#fee500;color:#191919}
 body.dark .rail>button{color:#a3a9b4}
 body.dark .rail>button.active{background:#30321f;color:#fee500}
-body.dark .meta span,body.dark .chatRow span,body.dark .chatRow small,body.dark .empty,body.dark .roomHeader small,body.dark .msg small,body.dark .form p,body.dark .profileCard span,body.dark .soon span{color:#a3a9b4}
+body.dark .meta span,body.dark .chatRow span,body.dark .chatRow small,body.dark .empty,body.dark .roomHeader small,body.dark .msg small,body.dark .form p,body.dark .profileCard span,body.dark .soon span,body.dark .profilePreview span{color:#a3a9b4}
 body.dark .detail,body.dark .room,body.dark .messages{background:#202938}
-body.dark .roomHeader,body.dark .composer{background:#171b23;color:#f3f4f7;border-color:rgba(255,255,255,.08)}
-body.dark .bubble{background:#2a303b;color:#f3f4f7}
+body.dark .roomHeader,body.dark .composer{background:#171c25;color:#f3f4f7;border-color:rgba(255,255,255,.08)}
+body.dark .bubble{background:#2a313d;color:#f3f4f7}
 body.dark .mine .bubble{background:#fee500;color:#191919}
-body.dark .avatar{background:#2a303b;color:#f3f4f7}
+body.dark .avatar{background:#2a313d;color:#f3f4f7}
 body.dark .empty b{color:#f3f4f7}
+body.dark .mobileNav{background:rgba(17,21,28,.96);border-color:rgba(255,255,255,.08)}
+body.dark .mobileNav button{color:#a3a9b4}
+body.dark .mobileNav button.active{color:#fee500}
 
 @media(max-width:767px){
   .appShell{display:block;height:100dvh;background:#f4f6f8}
   .rail{display:none}
   .main{height:100dvh}
   .main>.top{display:none}
-  .content{height:100dvh;overflow:auto;padding:calc(12px + env(safe-area-inset-top)) 14px calc(76px + env(safe-area-inset-bottom))}
+  .content{height:100dvh;overflow:auto;padding:calc(14px + env(safe-area-inset-top)) 16px calc(78px + env(safe-area-inset-bottom))}
   .content.split{display:block}
   .page,.list{height:auto;padding:0}
   .detail{display:none}
-  .mobileTitle{display:block;font-size:30px;line-height:1;margin:0 0 14px;letter-spacing:-1px}
+  .mobileTitle{display:block;font-size:34px;line-height:1;margin:0 0 18px;letter-spacing:-1.4px;font-weight:950}
   .mobileTop{display:flex}
-  .avatar{width:48px!important;height:48px!important;border-radius:17px!important}
-  .myProfile,.row,.chatRow{min-height:68px;padding:9px 0}
-  .myProfile{padding:12px}
-  .meta b,.chatRow b{font-size:17px}
+  .avatar{width:50px!important;height:50px!important;border-radius:18px!important}
+  .myProfile,.row,.chatRow{min-height:72px;padding:10px 0}
+  .myProfile{padding:14px;border-radius:24px}
+  .meta b,.chatRow b{font-size:18px}
   .meta span,.chatRow span{font-size:13px}
-  .mobileNav{position:fixed;left:0;right:0;bottom:0;z-index:700;height:calc(64px + env(safe-area-inset-bottom));padding:6px 8px calc(6px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(4,1fr);background:rgba(255,255,255,.96);border-top:1px solid #eceef2;backdrop-filter:blur(14px)}
-  .mobileNav button{height:52px;border-radius:16px;background:transparent;color:#8a909a;display:grid;place-items:center;gap:2px;font-weight:800}
+  .mobileNav{position:fixed;left:0;right:0;bottom:0;z-index:700;height:calc(66px + env(safe-area-inset-bottom));padding:7px 10px calc(7px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(4,1fr);background:rgba(255,255,255,.96);border-top:1px solid #eaedf2;backdrop-filter:blur(16px)}
+  .mobileNav button{height:52px;border-radius:17px;background:transparent;color:#8a929f;display:grid;place-items:center;gap:2px;font-weight:900}
   .mobileNav span{font-size:0}
-  .mobileNav small{font-size:10.5px}
-  .mobileNav button.active{color:#17181c}
+  .mobileNav small{font-size:11px}
+  .mobileNav button.active{color:#15171d}
   .mobileNav button.active::after{content:"";width:5px;height:5px;border-radius:50%;background:#ff4b42;margin-top:-2px}
   .mobileRoom{position:fixed;inset:0;z-index:999;display:block;background:#202938}
   .mobileRoom .room{height:100dvh}
-  .mobileRoom .roomHeader{min-height:calc(58px + env(safe-area-inset-top));padding-top:env(safe-area-inset-top)}
+  .mobileRoom .roomHeader{min-height:calc(60px + env(safe-area-inset-top));padding-top:env(safe-area-inset-top)}
   .mobileRoom .messages{padding:14px 12px}
-  .mobileRoom .composer{min-height:calc(70px + env(safe-area-inset-bottom));padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+  .mobileRoom .composer{min-height:calc(72px + env(safe-area-inset-bottom));padding-bottom:calc(10px + env(safe-area-inset-bottom))}
   .bubble{max-width:84%}
   .morePage{display:block;height:auto;padding:0}
   .moreMenu{height:auto;padding:0;background:transparent!important;box-shadow:none;border:0}
-  .moreMenu button{min-height:54px}
-  .moreDetail{height:auto;margin-top:10px;padding:16px;border-radius:22px}
+  .moreMenu button:not(.profileCard){min-height:56px}
+  .moreDetail{height:auto;margin-top:12px;padding:18px;border-radius:26px}
   .settingsGear{top:0;right:0}
-  .calTop,.addBar{gap:6px}
+  .calTop,.addBar{gap:7px}
   .auth{padding:14px}
-  body.dark .mobileNav{background:rgba(19,22,29,.96);border-color:rgba(255,255,255,.08)}
-  body.dark .mobileNav button{color:#a3a9b4}
-  body.dark .mobileNav button.active{color:#fee500}
 }

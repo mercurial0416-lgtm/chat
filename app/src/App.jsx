@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./lib/supabase";
 import { registerWebPush } from "./push";
 
@@ -42,7 +42,7 @@ function uniq(items, key = "id") {
 }
 
 function displayName(user) {
-  return user?.nickname || user?.email || user?.displayName || user?.name || "대화";
+  return user?.nickname || user?.email || user?.displayName || user?.name || user?.title || "상대방";
 }
 
 function Avatar({ user, size = 48 }) {
@@ -108,8 +108,9 @@ function Auth() {
   return (
     <div className="auth">
       <form className="authCard" onSubmit={submit}>
+        <div className="brandBadge">C</div>
         <h1>Chat</h1>
-        <p>친구 일정 · 채팅 공유</p>
+        <p>친구 일정 · 실시간 대화</p>
 
         {mode === "signup" && (
           <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="닉네임" />
@@ -138,6 +139,7 @@ export default function App() {
   const [me, setMe] = useState(null);
   const [tab, setTab] = useState("chats");
   const [room, setRoom] = useState(null);
+  const [moreSection, setMoreSection] = useState("profile");
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
@@ -208,14 +210,25 @@ export default function App() {
     setRoom(null);
   }
 
+  function openMyProfile() {
+    setMoreSection("profile");
+    setRoom(null);
+    setTab("more");
+  }
+
   if (booting) return <div className="loading">불러오는 중...</div>;
   if (!session) return <Auth />;
   if (!me) return <div className="loading">프로필 불러오는 중...</div>;
 
+  const title = TABS.find(([key]) => key === tab)?.[1] || "";
+
   return (
     <div className="appShell">
       <nav className="rail">
-        <Avatar user={me} size={42} />
+        <button className="railProfile" onClick={openMyProfile}>
+          <Avatar user={me} size={42} />
+        </button>
+
         {TABS.map(([key, label]) => (
           <button key={key} className={tab === key ? "active" : ""} onClick={() => switchTab(key)}>
             <span>{label.slice(0, 1)}</span>
@@ -226,17 +239,18 @@ export default function App() {
 
       <main className="main">
         <header className="top">
-          <h1>{TABS.find(([key]) => key === tab)?.[1]}</h1>
-          <div className="topMe">
+          <h1>{title}</h1>
+          <button className="topMe" onClick={openMyProfile}>
             <Avatar user={me} size={32} />
             <span>{me.nickname}</span>
-          </div>
+          </button>
         </header>
 
         <div className={tab === "chats" ? "content split" : "content"}>
           {tab === "friends" && (
             <Friends
               me={me}
+              openProfile={openMyProfile}
               openRoom={(nextRoom) => {
                 setRoom(nextRoom);
                 setTab("chats");
@@ -248,7 +262,7 @@ export default function App() {
             <>
               <Chats me={me} room={room} setRoom={setRoom} />
               <section className="detail">
-                {room ? <Room me={me} room={room} /> : <Empty title="대화방 선택" sub="채팅 목록에서 대화를 열어줘." />}
+                {room ? <Room me={me} room={room} /> : <Empty title="대화방 선택" sub="친구 탭에서 채팅을 시작하거나 목록에서 대화를 열어줘." />}
               </section>
               {room && (
                 <div className="mobileRoom">
@@ -259,7 +273,7 @@ export default function App() {
           )}
 
           {tab === "calendar" && <Calendar me={me} />}
-          {tab === "more" && <More me={me} reloadMe={() => loadMe(session.user)} />}
+          {tab === "more" && <More me={me} section={moreSection} setSection={setMoreSection} reloadMe={() => loadMe(session.user)} />}
         </div>
 
         <MobileNav tab={tab} setTab={switchTab} />
@@ -283,7 +297,7 @@ function MobileNav({ tab, setTab }) {
   );
 }
 
-function Friends({ me, openRoom }) {
+function Friends({ me, openProfile, openRoom }) {
   const [users, setUsers] = useState([]);
   const [query, setQuery] = useState("");
   const [msg, setMsg] = useState("");
@@ -316,15 +330,17 @@ function Friends({ me, openRoom }) {
   return (
     <section className="page friendsPage">
       <h2 className="mobileTitle">친구</h2>
+
       <input className="search" placeholder="친구/이메일 검색" value={query} onChange={(e) => setQuery(e.target.value)} />
 
-      <div className="myProfile">
+      <button className="myProfile" onClick={openProfile}>
         <Avatar user={me} />
         <div className="meta">
           <b>{me.nickname}</b>
-          <span>{me.status_message || me.email}</span>
+          <span>{me.status_message || "내 프로필 수정"}</span>
         </div>
-      </div>
+        <em>수정</em>
+      </button>
 
       <h3>전체 사용자 {filtered.length}</h3>
 
@@ -332,7 +348,7 @@ function Friends({ me, openRoom }) {
         <div className="row" key={user.id}>
           <Avatar user={user} />
           <div className="meta">
-            <b>{user.nickname || user.email}</b>
+            <b>{displayName(user)}</b>
             <span>{user.status_message || user.email}</span>
           </div>
           <button onClick={() => startDM(user)}>채팅</button>
@@ -352,7 +368,7 @@ async function createDM(me, user) {
     const { data, error } = await supabase.rpc("get_or_create_dm", { other_user_id: user.id });
     if (!error && data) {
       const id = Array.isArray(data) ? data[0]?.id || data[0]?.room_id || data[0] : data;
-      return { id, displayName: label, name: label, updated_at: now(), last_message: "" };
+      return { id, displayName: label, updated_at: now(), last_message: "" };
     }
   } catch {
     // fallback
@@ -365,8 +381,9 @@ async function createDM(me, user) {
     if (!myRooms.error && !otherRooms.error) {
       const mine = new Set((myRooms.data || []).map((x) => x.room_id));
       const existing = (otherRooms.data || []).find((x) => mine.has(x.room_id));
+
       if (existing?.room_id) {
-        return { id: existing.room_id, displayName: label, name: label, updated_at: now(), last_message: "" };
+        return { id: existing.room_id, displayName: label, updated_at: now(), last_message: "" };
       }
     }
   } catch {
@@ -374,9 +391,6 @@ async function createDM(me, user) {
   }
 
   const variants = [
-    { name: label, room_type: "dm", type: "dm", created_by: me.id, last_message: "", updated_at: now() },
-    { room_type: "dm", type: "dm", created_by: me.id, last_message: "", updated_at: now() },
-    { type: "dm", created_by: me.id, last_message: "", updated_at: now() },
     { created_by: me.id, last_message: "", updated_at: now() },
     { created_by: me.id },
     {},
@@ -396,17 +410,17 @@ async function createDM(me, user) {
 
   if (!room) throw lastError || new Error("대화방 생성 실패");
 
-  const { error: memberError } = await supabase.from("chat_room_members").upsert(
-    [
-      { room_id: room.id, user_id: me.id },
-      { room_id: room.id, user_id: user.id },
-    ],
-    { onConflict: "room_id,user_id" }
-  );
+  const memberRows = [
+    { room_id: room.id, user_id: me.id },
+    { room_id: room.id, user_id: user.id },
+  ];
 
-  if (memberError) throw memberError;
+  const insertMembers = await supabase.from("chat_room_members").insert(memberRows);
+  if (insertMembers.error && !String(insertMembers.error.message || "").includes("duplicate")) {
+    throw insertMembers.error;
+  }
 
-  return { ...room, displayName: label, name: label };
+  return { ...room, displayName: label, last_message: "" };
 }
 
 function Chats({ me, room, setRoom }) {
@@ -425,6 +439,7 @@ function Chats({ me, room, setRoom }) {
       if (memberResult.error) throw memberResult.error;
 
       const roomIds = uniq(memberResult.data || [], "room_id").map((x) => x.room_id);
+
       if (!roomIds.length) {
         setRooms([]);
         return;
@@ -437,6 +452,7 @@ function Chats({ me, room, setRoom }) {
       let profiles = new Map();
 
       const memberAll = await supabase.from("chat_room_members").select("room_id,user_id").in("room_id", roomIds);
+
       if (!memberAll.error) {
         members = memberAll.data || [];
         const otherIds = uniq(members.filter((x) => x.user_id !== me.id), "user_id").map((x) => x.user_id);
@@ -444,17 +460,20 @@ function Chats({ me, room, setRoom }) {
         if (otherIds.length) {
           const profileResult = await supabase.from("profiles").select("*").in("id", otherIds);
           if (!profileResult.error) {
-            profiles = new Map((profileResult.data || []).map((p) => [p.id, p]));
+            profiles = new Map((profileResult.data || []).map((profile) => [profile.id, profile]));
           }
         }
       }
 
       const output = (roomResult.data || []).map((item) => {
-        const other = members.find((m) => m.room_id === item.id && m.user_id !== me.id);
+        const other = members.find((member) => member.room_id === item.id && member.user_id !== me.id);
         const otherProfile = other ? profiles.get(other.user_id) : null;
-        const label = item.name || item.title || displayName(otherProfile) || "대화";
 
-        return { ...item, displayName: label };
+        return {
+          ...item,
+          displayName: displayName(otherProfile),
+          avatar_url: otherProfile?.avatar_url,
+        };
       });
 
       setRooms(
@@ -475,10 +494,11 @@ function Chats({ me, room, setRoom }) {
       </div>
 
       {rooms.map((item) => {
-        const label = item.displayName || item.name || item.title || "대화";
+        const label = item.displayName || "상대방";
+
         return (
           <button key={item.id} className={`chatRow ${room?.id === item.id ? "active" : ""}`} onClick={() => setRoom(item)}>
-            <Avatar user={{ nickname: label }} />
+            <Avatar user={{ nickname: label, avatar_url: item.avatar_url }} />
             <div className="meta">
               <b>{label}</b>
               <span>{item.last_message || "대화를 시작해보세요"}</span>
@@ -559,7 +579,7 @@ function Room({ me, room, onBack }) {
     }
   }
 
-  const title = room.displayName || room.name || room.title || "대화";
+  const title = room.displayName || "상대방";
   const visibleMessages = messages.filter((message) => String(message.content ?? message.message ?? "").trim());
 
   return (
@@ -645,23 +665,26 @@ function Calendar({ me }) {
     let lastError = null;
 
     for (const column of columns) {
-      const row = {
-        [column]: me.id,
-        title: value,
-        start_at: `${date}T09:00:00`,
-        end_at: `${date}T10:00:00`,
-      };
+      for (const withEnd of [true, false]) {
+        const row = {
+          [column]: me.id,
+          title: value,
+          start_at: `${date}T09:00:00`,
+        };
 
-      const { error } = await supabase.from("calendar_events").insert(row);
+        if (withEnd) row.end_at = `${date}T10:00:00`;
 
-      if (!error) {
-        setOwnerColumn(column);
-        setTitle("");
-        load();
-        return;
+        const { error } = await supabase.from("calendar_events").insert(row);
+
+        if (!error) {
+          setOwnerColumn(column);
+          setTitle("");
+          load();
+          return;
+        }
+
+        lastError = error;
       }
-
-      lastError = error;
     }
 
     setMsg(errText(lastError));
@@ -671,9 +694,13 @@ function Calendar({ me }) {
     <section className="page cal">
       <h2 className="mobileTitle">캘린더</h2>
 
+      <div className="calHero">
+        <b>{date}</b>
+        <button onClick={() => setDate(todayKey())}>오늘</button>
+      </div>
+
       <div className="calTop">
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        <button onClick={() => setDate(todayKey())}>오늘</button>
       </div>
 
       <form className="addBar" onSubmit={add}>
@@ -694,19 +721,17 @@ function Calendar({ me }) {
   );
 }
 
-function More({ me, reloadMe }) {
-  const [section, setSection] = useState("profile");
-
+function More({ me, section, setSection, reloadMe }) {
   return (
     <section className="morePage">
       <div className="moreMenu">
-        <div className="profileCard" onClick={() => setSection("profile")}>
+        <button className="profileCard" onClick={() => setSection("profile")}>
           <Avatar user={me} />
           <div>
             <b>{me.nickname}</b>
-            <span>{me.status_message || me.email}</span>
+            <span>{me.status_message || "내 프로필 수정"}</span>
           </div>
-        </div>
+        </button>
 
         <button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}>프로필</button>
         <button className={section === "notify" ? "active" : ""} onClick={() => setSection("notify")}>알림</button>
@@ -760,9 +785,19 @@ function Profile({ me, reloadMe }) {
   return (
     <div className="form">
       <h2>프로필</h2>
+
+      <div className="profilePreview">
+        <Avatar user={{ ...me, nickname, avatar_url: avatar }} size={64} />
+        <div>
+          <b>{nickname || me.email}</b>
+          <span>{status || "상태메시지 없음"}</span>
+        </div>
+      </div>
+
       <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="닉네임" />
       <input value={status} onChange={(e) => setStatus(e.target.value)} placeholder="상태메시지" />
       <input value={avatar} onChange={(e) => setAvatar(e.target.value)} placeholder="프로필 이미지 URL" />
+
       <button className="primary" onClick={save}>저장</button>
       <Notice>{msg}</Notice>
     </div>
@@ -818,10 +853,12 @@ function Settings({ me, reloadMe }) {
   return (
     <div className="form">
       <h2>설정</h2>
+
       <label className="check">
         <input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} />
         다크모드
       </label>
+
       <button className="primary" onClick={save}>저장</button>
       <button onClick={() => supabase.auth.signOut().then(() => location.reload())}>로그아웃</button>
       <Notice>{msg}</Notice>
