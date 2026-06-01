@@ -5,53 +5,6 @@ import { registerWebPush } from "./push";
 
 
 
-/* final compact patch: light default + more settings gear */
-if (typeof window !== "undefined" && !window.__finalCompactPatch) {
-  window.__finalCompactPatch = true;
-
-  const syncTheme = () => {
-    const isDark = document.body.classList.contains("dark");
-    document.body.classList.toggle("theme-light", !isDark);
-    document.documentElement.dataset.theme = isDark ? "dark" : "light";
-  };
-
-  const openSettingsFromMore = () => {
-    const buttons = Array.from(document.querySelectorAll(".morePage .moreMenu button, .morePage button"));
-    const target = buttons.find((button) => (button.textContent || "").trim().includes("설정"));
-    if (target) target.click();
-  };
-
-  const ensureMoreGear = () => {
-    const more = document.querySelector(".morePage");
-    if (!more || more.querySelector(".finalSettingsBtn")) return;
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "finalSettingsBtn";
-    btn.title = "설정";
-    btn.setAttribute("aria-label", "설정");
-    btn.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      openSettingsFromMore();
-    });
-    more.appendChild(btn);
-  };
-
-  const tick = () => {
-    syncTheme();
-    ensureMoreGear();
-  };
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", tick, { once: true });
-  } else {
-    tick();
-  }
-
-  new MutationObserver(tick).observe(document.documentElement, { childList: true, subtree: true, attributes: true });
-  setInterval(tick, 800);
-}
-
 /* v18: 더보기 내 프로필 카드 클릭 시 프로필 설정 열기 */
 if (typeof window !== "undefined" && !window.__v18MoreProfileClickPatch) {
   window.__v18MoreProfileClickPatch = true;
