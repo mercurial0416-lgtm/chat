@@ -5,8 +5,8 @@ import { registerWebPush } from "./push";
 const TABS = [
   { key: "home", label: "홈", icon: "home" },
   { key: "chats", label: "채팅", icon: "chat" },
-  { key: "calendar", label: "일정", icon: "calendar" },
-  { key: "more", label: "설정", icon: "settings" },
+  { key: "calendar", label: "캘린더", icon: "calendar" },
+  { key: "more", label: "더보기", icon: "settings" },
 ];
 
 const safeError = (err) => err?.message || err?.error_description || err?.error || String(err || "오류");
@@ -877,8 +877,8 @@ function Calendar({ me }) {
     <section className="page calendar">
       <Header
         eyebrow="Schedule"
-        title="일정"
-        text="오늘과 약속을 관리해요"
+        title="캘린더"
+        text="오늘 일정과 약속을 관리해요"
         right={<button className="pillButton" onClick={() => setDate(dateKey())}>오늘</button>}
       />
 
@@ -915,7 +915,7 @@ function Calendar({ me }) {
 function More({ me, section, setSection, reloadMe }) {
   return (
     <section className="page more">
-      <Header eyebrow="Account" title="설정" text="프로필과 앱 설정" />
+      <Header eyebrow="Account" title="더보기" text="프로필과 앱 설정" />
 
       <button className="accountCard" onClick={() => setSection("profile")}>
         <Avatar user={me} size={66} online />
