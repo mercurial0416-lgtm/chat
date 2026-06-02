@@ -2,112 +2,51 @@ name: Patch File
 
 on:
   workflow_dispatch:
-    inputs:
-      patch_file:
-        description: "실행할 패치 파일 경로 예: patches/final-baseline.sh"
-        required: true
-        default: "patches/final-baseline.sh"
-        type: string
-      run_build:
-        description: "패치 후 app 빌드 실행"
-        required: true
-        default: true
-        type: boolean
-      commit_message:
-        description: "커밋 메시지"
-        required: false
-        default: "apply patch file"
-        type: string
 
 permissions:
   contents: write
-
-concurrency:
-  group: patch-file-main
-  cancel-in-progress: true
 
 jobs:
   patch:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout full history
         uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
-
-      - name: Check patch file
-        run: |
-          set -euo pipefail
-
-          PATCH_FILE="${{ inputs.patch_file }}"
-
-          echo "PATCH_FILE=$PATCH_FILE"
-
-          if [ -z "$PATCH_FILE" ]; then
-            echo "patch_file is empty"
-            exit 1
-          fi
-
-          if [ ! -f "$PATCH_FILE" ]; then
-            echo "Patch file not found: $PATCH_FILE"
-            echo "Existing patch files:"
-            find patches -maxdepth 2 -type f 2>/dev/null || true
-            exit 1
-          fi
-
-          echo "=== patch preview ==="
-          sed -n '1,80p' "$PATCH_FILE"
-
-      - name: Run patch file
-        run: |
-          set -euo pipefail
-
-          PATCH_FILE="${{ inputs.patch_file }}"
-
-          chmod +x "$PATCH_FILE"
-          bash "$PATCH_FILE"
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node
-        if: ${{ inputs.run_build }}
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
+          cache: npm
 
-      - name: Build app
-        if: ${{ inputs.run_build }}
+      - name: Install dependencies
         run: |
-          set -euo pipefail
-
-          cd app
-
           if [ -f package-lock.json ]; then
             npm ci
           else
             npm install
           fi
 
-          npm run build
+      - name: Run patch
+        run: |
+          chmod +x patches/final-baseline.sh
+          bash patches/final-baseline.sh
 
       - name: Commit and push
         run: |
-          set -euo pipefail
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes to commit"
+            exit 0
+          fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add -A
-
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-            exit 0
-          fi
-
-          git commit -m "${{ inputs.commit_message }}"
+          git commit -m "rollback before instant realtime chat request"
           git push origin HEAD:main
-
-          echo "LOCAL:"
-          git rev-parse HEAD
-
-          echo "REMOTE:"
-          git ls-remote origin refs/heads/main
