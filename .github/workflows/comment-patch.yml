@@ -10,9 +10,7 @@ permissions:
 
 jobs:
   apply:
-    if: >
-      github.event.comment.user.login == github.repository_owner &&
-      contains(github.event.comment.body, '/apply-patch')
+    if: ${{ contains(github.event.comment.body, '/apply-patch') && (github.event.comment.author_association == 'OWNER' || github.event.comment.author_association == 'COLLABORATOR') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -23,7 +21,7 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract patch from comment
+      - name: Extract script from comment
         run: |
           set -euo pipefail
 
@@ -35,22 +33,22 @@ jobs:
           event = json.loads(Path("${{ github.event_path }}").read_text())
           body = event["comment"]["body"]
 
-          match = re.search(r"```(?:diff|patch)?\s*\n(.*?)\n```", body, re.S)
+          match = re.search(r"```(?:bash|sh)\s*\n(.*?)\n```", body, re.S)
 
           if not match:
-              raise SystemExit("No fenced patch block found. Use ```diff ... ```")
+              raise SystemExit("No fenced bash block found. Use ```bash ... ```")
 
-          patch = match.group(1).strip() + "\n"
-          Path("/tmp/comment.patch").write_text(patch, encoding="utf-8")
+          script = match.group(1).strip() + "\n"
+          Path("/tmp/comment-patch.sh").write_text(script, encoding="utf-8")
 
-          print("=== patch preview ===")
-          print(patch[:4000])
+          print("=== script preview ===")
+          print(script[:4000])
           PY
 
-      - name: Apply patch
+      - name: Run comment script
         run: |
           set -euo pipefail
-          git apply --whitespace=fix /tmp/comment.patch
+          bash /tmp/comment-patch.sh
 
       - name: Setup Node
         uses: actions/setup-node@v4
