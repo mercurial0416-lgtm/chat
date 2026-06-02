@@ -3,14 +3,15 @@ name: Patch File
 on:
   workflow_dispatch:
     inputs:
-      patch_url:
-        description: "Raw patch URL"
+      patch_file:
+        description: "실행할 패치 파일 경로"
         required: true
+        default: "patches/final-baseline.sh"
         type: string
       commit_message:
-        description: "Commit message"
+        description: "커밋 메시지"
         required: false
-        default: "apply patch"
+        default: "patch update"
         type: string
 
 permissions:
@@ -28,17 +29,19 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download patch
+      - name: Check patch file
         run: |
           set -euo pipefail
-          curl -L "${{ inputs.patch_url }}" -o /tmp/mobile.patch
-          echo "=== patch preview ==="
-          sed -n '1,200p' /tmp/mobile.patch
+          PATCH_FILE="${{ inputs.patch_file }}"
+          echo "PATCH_FILE=$PATCH_FILE"
+          test -f "$PATCH_FILE"
+          sed -n '1,160p' "$PATCH_FILE"
 
-      - name: Apply patch
+      - name: Run patch file
         run: |
           set -euo pipefail
-          git apply --whitespace=fix /tmp/mobile.patch
+          PATCH_FILE="${{ inputs.patch_file }}"
+          bash "$PATCH_FILE"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -55,16 +58,12 @@ jobs:
       - name: Commit and push
         run: |
           set -euo pipefail
-
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           git add -A
-
           if git diff --cached --quiet; then
             echo "No changes to commit"
             exit 0
           fi
-
           git commit -m "${{ inputs.commit_message }}"
           git push origin HEAD:main
