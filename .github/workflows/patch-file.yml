@@ -11,15 +11,11 @@ on:
       commit_message:
         description: "커밋 메시지"
         required: false
-        default: "rollback before instant realtime chat request"
+        default: "patch update"
         type: string
 
 permissions:
   contents: write
-
-concurrency:
-  group: patch-file-main
-  cancel-in-progress: true
 
 jobs:
   patch:
@@ -45,8 +41,7 @@ jobs:
             exit 1
           fi
 
-          echo "=== patch preview ==="
-          sed -n '1,120p' "$PATCH_FILE"
+          sed -n '1,160p' "$PATCH_FILE"
 
       - name: Run patch file
         run: |
@@ -64,11 +59,7 @@ jobs:
         run: |
           set -euo pipefail
           cd app
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install --no-audit --no-fund
-          fi
+          npm install --no-audit --no-fund
           npm run build
 
       - name: Commit and push
