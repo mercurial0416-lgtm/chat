@@ -1,43 +1,48 @@
-import { supabase } from './lib/supabase';
-import { VAPID_PUBLIC_KEY } from './pushConfig';
+import { supabase } from "./lib/supabase";
+import { VAPID_PUBLIC_KEY } from "./pushConfig";
 
-function urlBase64ToUint8Array(base64String) {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; i += 1) outputArray[i] = rawData.charCodeAt(i);
-  return outputArray;
+function keyToBytes(key) {
+  const padding = "=".repeat((4 - (key.length % 4)) % 4);
+  const base64 = (key + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map((char) => char.charCodeAt(0)));
 }
 
 export async function registerWebPush(userId) {
-  if (!('serviceWorker' in navigator)) throw new Error('Service Worker 미지원');
-  if (!('PushManager' in window)) throw new Error('Web Push 미지원');
-  if (!('Notification' in window)) throw new Error('Notification 미지원');
+  if (!userId) throw new Error("로그인 정보 없음");
+  if (!("Notification" in window)) throw new Error("브라우저 알림 미지원");
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) throw new Error("Web Push 미지원");
+  if (!VAPID_PUBLIC_KEY) throw new Error("VAPID 공개키가 비어있음");
 
   const permission = await Notification.requestPermission();
-  if (permission !== 'granted') throw new Error('알림 권한 거부됨');
+  if (permission !== "granted") throw new Error("알림 권한 허용 필요");
 
-  const registration = await navigator.serviceWorker.register('/sw.js');
+  const registration = await navigator.serviceWorker.register("/sw.js", {
+    scope: "/",
+    updateViaCache: "none",
+  });
+
   await navigator.serviceWorker.ready;
-  let subscription = await registration.pushManager.getSubscription();
 
-  if (!subscription) {
-    subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-    });
-  }
+  const old = await registration.pushManager.getSubscription();
+  if (old) await old.unsubscribe().catch(() => {});
 
-  const { error } = await supabase.from('push_subscriptions').upsert(
+  const subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: keyToBytes(VAPID_PUBLIC_KEY),
+  });
+
+  const { error } = await supabase.from("push_subscriptions").upsert(
     {
       user_id: userId,
       endpoint: subscription.endpoint,
       subscription: subscription.toJSON(),
       user_agent: navigator.userAgent,
+      updated_at: new Date().toISOString(),
     },
-    { onConflict: 'endpoint' }
+    { onConflict: "endpoint" }
   );
+
   if (error) throw error;
   return subscription;
 }

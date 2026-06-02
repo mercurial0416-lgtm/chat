@@ -1,1557 +1,2499 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import './styles.css';
-import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './lib/supabase';
-import { registerWebPush } from './push';
+import React, {useEffect, useMemo, useRef, useState} from "react";
+import { supabase } from "./lib/supabase";
+import { registerWebPush } from "./push";
 
-const PATCH_VERSION = 'v7-reviewed-20260601';
+const TABS = [
+  { key: "home", label: "홈", icon: "home" },
+  { key: "chats", label: "대화", icon: "chat" },
+  { key: "calendar", label: "캘린더", icon: "calendar" },
+  { key: "more", label: "더보기", icon: "settings" },
+];
 
-const TABS = {
-  FRIENDS: 'friends',
-  CHATS: 'chats',
-  CALENDAR: 'calendar',
-  MORE: 'more',
-};
+const safeError = (err) => err?.message || err?.error_description || err?.error || String(err || "오류");
+const nowIso = () => new Date().toISOString();
 
-function errText(err) {
-  if (!err) return '알 수 없는 오류';
-  if (typeof err === 'string') return err;
-  return err.message || err.error_description || err.error || JSON.stringify(err);
-}
+async function showBrowserNotification(title, options = {}) {
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
 
-function cx(...items) {
-  return items.filter(Boolean).join(' ');
-}
-
-function formatTime(value) {
-  if (!value) return '';
-  const d = new Date(value);
-  const now = new Date();
-  if (d.toDateString() === now.toDateString()) {
-    return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-  }
-  return d.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' });
-}
-
-function dateKey(value) {
-  const d = new Date(value);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function toInputDateTime(value) {
-  const d = value ? new Date(value) : new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mi = String(d.getMinutes()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
-}
-
-function ago(value) {
-  if (!value) return '기록 없음';
-  const diff = Math.max(0, Date.now() - new Date(value).getTime());
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return '방금 전';
-  if (min < 60) return `${min}분 전`;
-  const hour = Math.floor(min / 60);
-  if (hour < 24) return `${hour}시간 전`;
-  return `${Math.floor(hour / 24)}일 전`;
-}
-
-async function authFetch(path, payload, label) {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
-    method: 'POST',
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const text = await res.text();
-  let data = {};
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    data = { message: text };
-  }
-
-  if (!res.ok) {
-    throw new Error(data.msg || data.message || data.error_description || data.error || `${label} 실패`);
-  }
-
-  return data;
-}
-
-function saveSession(data) {
-  if (!data?.access_token || !data?.refresh_token) return;
-
-  const session = {
-    access_token: data.access_token,
-    refresh_token: data.refresh_token,
-    expires_in: data.expires_in || 3600,
-    expires_at: data.expires_at || Math.floor(Date.now() / 1000) + (data.expires_in || 3600),
-    token_type: data.token_type || 'bearer',
-    user: data.user,
+  const payload = {
+    icon: "/icon.svg",
+    badge: "/icon.svg",
+    ...options,
   };
 
-  localStorage.setItem('chat-auth-session', JSON.stringify(session));
-  localStorage.setItem('sb-nwenbkthlpzlpfklgonb-auth-token', JSON.stringify(session));
-  supabase.auth.setSession({ access_token: data.access_token, refresh_token: data.refresh_token }).catch(() => {});
-}
-
-function getSavedSession() {
   try {
-    return JSON.parse(localStorage.getItem('chat-auth-session') || 'null');
-  } catch {
-    return null;
-  }
-}
+    if ("serviceWorker" in navigator) {
+      let registration = await navigator.serviceWorker.getRegistration("/");
 
-async function callPush(body) {
-  const res = await fetch('/api/send-chat-push', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const text = await res.text();
-  let data = {};
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    data = { raw: text };
-  }
-  if (!res.ok) throw new Error(data.error || text || '푸시 실패');
-  return data;
-}
-
-async function uploadFile(file, prefix = 'files') {
-  const safeName = file.name.replace(/[^\w가-힣.\-]/g, '_');
-  const path = `${prefix}/${Date.now()}_${safeName}`;
-  const { error } = await supabase.storage.from('chat_uploads').upload(path, file, {
-    cacheControl: '3600',
-    upsert: false,
-  });
-  if (error) throw error;
-  const { data } = supabase.storage.from('chat_uploads').getPublicUrl(path);
-  return { url: data.publicUrl, name: file.name, size: file.size };
-}
-
-function Avatar({ src, name, size = 44 }) {
-  return (
-    <div className="avatar" style={{ width: size, height: size }}>
-      {src ? <img src={src} alt="" /> : <span>{(name || '?').slice(0, 1)}</span>}
-    </div>
-  );
-}
-
-function Empty({ children }) {
-  return <div className="empty">{children}</div>;
-}
-
-function Notice({ children }) {
-  if (!children) return null;
-  return <div className="notice">{children}</div>;
-}
-
-function Modal({ title, children, onClose, wide = false }) {
-  return (
-    <div className="modalBackdrop" onMouseDown={onClose}>
-      <div className={cx('modal', wide && 'wide')} onMouseDown={(e) => e.stopPropagation()}>
-        <div className="modalHeader">
-          <h2>{title}</h2>
-          <button onClick={onClose}>×</button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function AuthView() {
-  const [mode, setMode] = useState('signup');
-  const [nickname, setNickname] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState('');
-
-  async function submit(e) {
-    e.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setMsg('');
-
-    try {
-      const cleanEmail = email.trim();
-      const cleanPassword = password.trim();
-      const cleanNickname = nickname.trim() || cleanEmail.split('@')[0] || '익명';
-      if (!cleanEmail || !cleanPassword) throw new Error('이메일/비밀번호 입력 필요');
-      if (cleanPassword.length < 6) throw new Error('비밀번호는 최소 6자 이상');
-
-      if (mode === 'signup') {
-        const data = await authFetch(
-          'signup',
-          { email: cleanEmail, password: cleanPassword, data: { nickname: cleanNickname } },
-          '가입'
-        );
-        if (data.access_token) {
-          saveSession(data);
-          location.href = '/?fresh=' + Date.now();
-          return;
-        }
-        setMode('login');
-        setMsg('가입 완료. 로그인으로 들어가면 됨.');
-        return;
+      if (!registration) {
+        registration = await Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise((resolve) => setTimeout(() => resolve(null), 1200)),
+        ]);
       }
 
-      const data = await authFetch(
-        'token?grant_type=password',
-        { email: cleanEmail, password: cleanPassword },
-        '로그인'
-      );
-      saveSession(data);
-      location.href = '/?fresh=' + Date.now();
+      if (registration?.showNotification) {
+        await registration.showNotification(title, payload);
+        return;
+      }
+    }
+  } catch {}
+
+  try {
+    new Notification(title, payload);
+  } catch {}
+}
+
+
+function dateKey(value = new Date()) {
+  const d = new Date(value);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function timeOnly(value) {
+  if (!value) return "";
+  try {
+    return new Date(value).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
+function dateTime(value) {
+  if (!value) return "";
+  try {
+    return new Date(value).toLocaleString("ko-KR", {
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+}
+
+function uniqBy(items, key = "id") {
+  const seen = new Set();
+  return (items || []).filter((item) => {
+    const value = typeof key === "function" ? key(item) : item?.[key];
+    if (!value || seen.has(value)) return false;
+    seen.add(value);
+    return true;
+  });
+}
+
+
+const SHIFT_ANCHORS = {
+  "1": "2026-06-08",
+  "2": "2026-06-02",
+  "3": "2026-06-20",
+  "4": "2026-06-14",
+};
+
+const KR_HOLIDAYS_2026 = {
+  "2026-01-01": "신정",
+  "2026-02-16": "설날",
+  "2026-02-17": "설날",
+  "2026-02-18": "설날",
+  "2026-03-01": "삼일절",
+  "2026-03-02": "삼일절 대체공휴일",
+  "2026-05-01": "근로자의 날",
+  "2026-05-05": "어린이날",
+  "2026-05-24": "부처님오신날",
+  "2026-05-25": "부처님오신날 대체공휴일",
+  "2026-06-03": "지방선거일",
+  "2026-06-06": "현충일",
+  "2026-07-17": "제헌절",
+  "2026-08-15": "광복절",
+  "2026-08-17": "광복절 대체공휴일",
+  "2026-09-24": "추석",
+  "2026-09-25": "추석",
+  "2026-09-26": "추석",
+  "2026-10-03": "개천절",
+  "2026-10-05": "개천절 대체공휴일",
+  "2026-10-09": "한글날",
+  "2026-12-25": "성탄절",
+};
+
+function parseKeyGlobal(key) {
+  const [y, m, d] = String(key).split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function dayNumberGlobal(key) {
+  const d = parseKeyGlobal(key);
+  return Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
+}
+
+function shiftIndexFor(teamNo, key) {
+  const anchor = SHIFT_ANCHORS[String(teamNo)] || SHIFT_ANCHORS["1"];
+  const diff = dayNumberGlobal(key) - dayNumberGlobal(anchor);
+  return ((diff % 24) + 24) % 24;
+}
+
+function shiftForTeam(teamNo, key = dateKey()) {
+  const i = shiftIndexFor(teamNo, key);
+  if (i <= 5) return "A";
+  if (i <= 7) return "휴";
+  if (i <= 13) return "B";
+  if (i <= 15) return "휴";
+  if (i <= 21) return "C";
+  return "휴";
+}
+
+function shiftDayForTeam(teamNo, key = dateKey()) {
+  const i = shiftIndexFor(teamNo, key);
+  if (i <= 5) return `${i + 1}일차`;
+  if (i <= 7) return `휴${i - 5}`;
+  if (i <= 13) return `${i - 7}일차`;
+  if (i <= 15) return `휴${i - 13}`;
+  if (i <= 21) return `${i - 15}일차`;
+  return `휴${i - 21}`;
+}
+
+function nextOffForTeam(teamNo, fromKey = dateKey()) {
+  for (let i = 0; i < 32; i += 1) {
+    const d = parseKeyGlobal(fromKey);
+    d.setDate(d.getDate() + i);
+    const key = dateKey(d);
+    if (shiftForTeam(teamNo, key) === "휴") {
+      return { key, days: i };
+    }
+  }
+  return null;
+}
+
+function normalWorkForKey(key = dateKey()) {
+  const d = parseKeyGlobal(key);
+  const holiday = KR_HOLIDAYS_2026[key];
+  if (holiday) return { label: "휴", detail: holiday, className: "normalHoliday", dayClass: "holiday" };
+  if (d.getDay() === 0) return { label: "휴", detail: "일요일", className: "normalHoliday", dayClass: "holiday" };
+  if (d.getDay() === 6) return { label: "휴", detail: "토요일", className: "normalSat", dayClass: "saturday" };
+  return { label: "통상", detail: "통상근무", className: "normalWork", dayClass: "weekday" };
+}
+
+function workSummaryForProfile(profile, key = dateKey()) {
+  const mode = profile?.work_mode || "shift";
+  if (mode === "normal") {
+    const normal = normalWorkForKey(key);
+    return normal.label === "통상" ? "오늘 통상근무" : `오늘 ${normal.detail}`;
+  }
+  const team = profile?.shift_team || "1";
+  const shift = shiftForTeam(team, key);
+  const dayLabel = shiftDayForTeam(team, key);
+  const nextOff = nextOffForTeam(team, key);
+  const offText = nextOff ? ` · 다음 휴무 ${nextOff.days === 0 ? "오늘" : `${nextOff.days}일 후`}` : "";
+  return `${team}조 ${shift} ${dayLabel}${offText}`;
+}
+
+function displayName(user) {
+  return user?.nickname || user?.displayName || user?.name || user?.title || user?.email || "상대방";
+}
+
+function initial(user) {
+  return displayName(user).trim().slice(0, 1).toUpperCase() || "?";
+}
+
+function Icon({ name, size = 22 }) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2.2,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    "aria-hidden": true,
+  };
+
+  if (name === "home") {
+    return (
+      <svg {...common}>
+        <path d="M3 11.5 12 4l9 7.5" />
+        <path d="M5.5 10.5V20h13v-9.5" />
+        <path d="M9.5 20v-6h5v6" />
+      </svg>
+    );
+  }
+
+  if (name === "chat") {
+    return (
+      <svg {...common}>
+        <path d="M5 6.8C5 5.25 6.25 4 7.8 4h8.4C17.75 4 19 5.25 19 6.8v6.4c0 1.55-1.25 2.8-2.8 2.8H11l-4.5 3.2V16H7.8C6.25 16 5 14.75 5 13.2V6.8Z" />
+        <path d="M8.5 9h7" />
+        <path d="M8.5 12h4.5" />
+      </svg>
+    );
+  }
+
+  if (name === "calendar") {
+    return (
+      <svg {...common}>
+        <path d="M7 3.8v3" />
+        <path d="M17 3.8v3" />
+        <path d="M5.5 6h13A2.5 2.5 0 0 1 21 8.5v10A2.5 2.5 0 0 1 18.5 21h-13A2.5 2.5 0 0 1 3 18.5v-10A2.5 2.5 0 0 1 5.5 6Z" />
+        <path d="M3.5 10h17" />
+        <path d="M8 14h.01" />
+        <path d="M12 14h.01" />
+        <path d="M16 14h.01" />
+      </svg>
+    );
+  }
+
+  if (name === "settings") {
+    return (
+      <svg {...common}>
+        <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.36a1.7 1.7 0 0 0-1 .5 1.7 1.7 0 0 0-.5 1V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-.5-1 1.7 1.7 0 0 0-1-.5 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.64 15a1.7 1.7 0 0 0-.5-1 1.7 1.7 0 0 0-1-.5H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1-.5 1.7 1.7 0 0 0 .5-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.64a1.7 1.7 0 0 0 1-.5 1.7 1.7 0 0 0 .5-1V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 .5 1 1.7 1.7 0 0 0 1 .5 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.36 9c.2.36.38.75.5 1.16.12.4.44.73.84.84H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
+      </svg>
+    );
+  }
+
+  if (name === "search") {
+    return (
+      <svg {...common}>
+        <circle cx="10.5" cy="10.5" r="6.5" />
+        <path d="m16 16 4 4" />
+      </svg>
+    );
+  }
+
+  if (name === "send") {
+    return (
+      <svg {...common}>
+        <path d="M21 3 10 14" />
+        <path d="m21 3-7 18-4-7-7-4 18-7Z" />
+      </svg>
+    );
+  }
+
+  if (name === "back") {
+    return (
+      <svg {...common}>
+        <path d="M15 18 9 12l6-6" />
+      </svg>
+    );
+  }
+
+  if (name === "bell") {
+    return (
+      <svg {...common}>
+        <path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z" />
+        <path d="M10 21h4" />
+      </svg>
+    );
+  }
+
+  return null;
+}
+
+function Avatar({ user, size = 48, online = false }) {
+  return (
+    <div className="avatarWrap" style={{ width: size, height: size }}>
+      <div className="avatar">
+        {user?.avatar_url ? <img src={user.avatar_url} alt="" /> : <span>{initial(user)}</span>}
+      </div>
+      {online && <i />}
+    </div>
+  );
+}
+
+function Toast({ children }) {
+  if (!children) return null;
+  return <div className="toast">{String(children)}</div>;
+}
+
+function Empty({ title, text }) {
+  return (
+    <div className="empty">
+      <div className="emptyIcon">+</div>
+      <b>{title}</b>
+      <p>{text}</p>
+    </div>
+  );
+}
+
+function Header({ eyebrow, title, text, right }) {
+  return (
+    <header className="header">
+      <div>
+        {eyebrow && <span>{eyebrow}</span>}
+        <h1>{title}</h1>
+        {text && <p>{text}</p>}
+      </div>
+      {right}
+    </header>
+  );
+}
+
+function Auth() {
+  const [mode, setMode] = useState("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [nickname, setNickname] = useState("");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true);
+    setMsg("");
+
+    try {
+      if (!email.trim()) throw new Error("이메일 입력 필요");
+      if (password.length < 6) throw new Error("비밀번호 6자 이상");
+
+      if (mode === "signup") {
+        const { error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: { data: { nickname: nickname.trim() || email.split("@")[0] } },
+        });
+        if (error) throw error;
+        setMode("login");
+        setMsg("가입 완료. 로그인해줘.");
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+        if (error) throw error;
+        location.reload();
+      }
     } catch (err) {
-      setMsg(errText(err));
+      setMsg(safeError(err));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="authPage">
-      <div className="authCard">
-        <div className="logo">💬</div>
-        <h1>실시간 채팅</h1>
-        <p>친구 · 채팅 · 캘린더 · 위치공유</p>
-        <form onSubmit={submit} className="authForm">
-          {mode === 'signup' && <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="닉네임" />}
-          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="이메일" type="email" />
-          <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="비밀번호 6자 이상" type="password" />
-          <button disabled={busy}>{busy ? '처리중...' : mode === 'signup' ? '가입하기' : '로그인'}</button>
-        </form>
-        <button className="linkButton" onClick={() => setMode(mode === 'signup' ? 'login' : 'signup')}>
-          {mode === 'signup' ? '이미 계정 있음 → 로그인' : '계정 없음 → 가입하기'}
-        </button>
-        <Notice>{msg}</Notice>
-      </div>
-    </div>
-  );
-}
-
-function FriendsPanel({ me, onOpenDirectRoom, onLocationRequest }) {
-  const [friends, setFriends] = useState([]);
-  const [requests, setRequests] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState(null);
-  const [msg, setMsg] = useState('');
-
-  async function load() {
-    try {
-      const [friendsRes, requestsRes, usersRes] = await Promise.all([
-        supabase.rpc('get_my_friends'),
-        supabase.rpc('get_friend_requests'),
-        supabase.from('profiles').select('id,email,nickname,avatar_url,status_message,birthday').neq('id', me.id).order('nickname'),
-      ]);
-      if (friendsRes.error) throw friendsRes.error;
-      if (requestsRes.error) throw requestsRes.error;
-      if (usersRes.error) throw usersRes.error;
-      setFriends(friendsRes.data || []);
-      setRequests(requestsRes.data || []);
-      setUsers(usersRes.data || []);
-    } catch (err) {
-      setMsg(errText(err));
-    }
-  }
-
-  useEffect(() => {
-    load();
-    const channel = supabase
-      .channel('friends-watch')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, load)
-      .subscribe();
-    return () => supabase.removeChannel(channel);
-  }, []);
-
-  async function runRpc(name, args, success) {
-    try {
-      const { error } = await supabase.rpc(name, args);
-      if (error) throw error;
-      if (success) setMsg(success);
-      await load();
-    } catch (err) {
-      setMsg(errText(err));
-    }
-  }
-
-  const friendIds = new Set(friends.map((f) => f.user_id));
-  const filterText = query.trim().toLowerCase();
-  const filter = (item) => `${item.nickname || ''} ${item.email || ''}`.toLowerCase().includes(filterText);
-  const visibleFriends = friends.filter(filter);
-  const visibleUsers = users.filter(filter);
-
-  return (
-    <div className="panelPage friendPage">
-      <section className="listPane">
-        <input className="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="친구/이메일 검색" />
-
-        <button className="profileRow self" onClick={() => setSelected({ ...me, user_id: me.id, self: true })}>
-          <Avatar src={me.avatar_url} name={me.nickname} />
-          <div>
-            <b>{me.nickname || '나'}</b>
-            <span>{me.status_message || me.email}</span>
-          </div>
-        </button>
-
-        {requests.length > 0 && <h3>받은 친구 요청</h3>}
-        {requests.map((r) => (
-          <div className="profileRow" key={r.friendship_id}>
-            <Avatar src={r.avatar_url} name={r.nickname} />
-            <div>
-              <b>{r.nickname}</b>
-              <span>친구 요청</span>
-            </div>
-            <button className="small yellow" onClick={() => runRpc('accept_friend_request', { p_friendship_id: r.friendship_id })}>수락</button>
-            <button className="small" onClick={() => runRpc('reject_friend_request', { p_friendship_id: r.friendship_id })}>거절</button>
-          </div>
-        ))}
-
-        <h3>친구 {friends.length}</h3>
-        {visibleFriends.map((f) => (
-          <div className="profileRow" key={f.user_id}>
-            <button className="rowButton" onClick={() => setSelected(f)}>
-              <Avatar src={f.avatar_url} name={f.nickname} />
-              <div>
-                <b>{f.favorite ? '⭐ ' : ''}{f.nickname}</b>
-                <span>{f.status_message || f.email}</span>
-              </div>
-            </button>
-            <button className="small yellow" onClick={() => onOpenDirectRoom(f.user_id)}>채팅</button>
-          </div>
-        ))}
-        {visibleFriends.length === 0 && <div className="miniEmpty">친구 없음</div>}
-
-        <h3>전체 유저</h3>
-        {visibleUsers.map((u) => (
-          <div className="profileRow" key={u.id}>
-            <button className="rowButton" onClick={() => setSelected({ ...u, user_id: u.id })}>
-              <Avatar src={u.avatar_url} name={u.nickname} />
-              <div>
-                <b>{u.nickname || '익명'}</b>
-                <span>{u.email}</span>
-              </div>
-            </button>
-            {friendIds.has(u.id) ? (
-              <button className="small yellow" onClick={() => onOpenDirectRoom(u.id)}>채팅</button>
-            ) : (
-              <button className="small" onClick={() => runRpc('send_friend_request', { p_addressee_id: u.id }, '친구 요청 보냄')}>추가</button>
-            )}
-          </div>
-        ))}
-        <Notice>{msg}</Notice>
-      </section>
-
-      <section className="detailPane desktopOnly">
-        <FriendDetail
-          profile={selected}
-          isFriend={selected && friendIds.has(selected.user_id)}
-          onChat={onOpenDirectRoom}
-          onLocation={onLocationRequest}
-          onRpc={runRpc}
-        />
-      </section>
-
-      {selected && (
-        <div className="mobileOnly">
-          <Modal title="프로필" onClose={() => setSelected(null)}>
-            <FriendDetail
-              profile={selected}
-              isFriend={friendIds.has(selected.user_id)}
-              onChat={onOpenDirectRoom}
-              onLocation={onLocationRequest}
-              onRpc={runRpc}
-            />
-          </Modal>
+    <main className="authPage">
+      <form className="authCard" onSubmit={submit}>
+        <div className="brand">
+          <div>R</div>
+          <span>Rift</span>
         </div>
-      )}
-    </div>
-  );
-}
 
-function FriendDetail({ profile, isFriend, onChat, onLocation, onRpc }) {
-  if (!profile) return <Empty>친구를 선택하면 프로필이 보임</Empty>;
-  if (profile.self) return <Empty>내 프로필은 더보기에서 수정 가능</Empty>;
+        <section>
+          <h1>{mode === "login" ? "다시 만나서 반가워요" : "새 계정 만들기"}</h1>
+          <p>친구, 채팅, 일정을 한 곳에서 관리해요.</p>
+        </section>
 
-  return (
-    <div className="friendDetail">
-      <Avatar src={profile.avatar_url} name={profile.nickname} size={92} />
-      <h2>{profile.nickname || '익명'}</h2>
-      <p>{profile.status_message || profile.email || '상태메시지 없음'}</p>
-      {profile.birthday && <span className="pill">🎂 {profile.birthday}</span>}
-      <div className="actionStack">
-        {isFriend ? (
-          <>
-            <button className="yellow" onClick={() => onChat(profile.user_id)}>1:1 채팅</button>
-            <button onClick={() => onLocation(profile.user_id)}>위치공유 요청</button>
-            <button onClick={() => onRpc('delete_friend', { p_user_id: profile.user_id })}>친구 삭제</button>
-            <button className="danger" onClick={() => onRpc('block_user', { p_user_id: profile.user_id })}>차단</button>
-          </>
-        ) : (
-          <>
-            <button className="yellow" onClick={() => onRpc('send_friend_request', { p_addressee_id: profile.user_id }, '친구 요청 보냄')}>친구 추가</button>
-            <button className="danger" onClick={() => onRpc('block_user', { p_user_id: profile.user_id })}>차단</button>
-          </>
+        {mode === "signup" && (
+          <label className="field">
+            <span>닉네임</span>
+            <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="닉네임" />
+          </label>
         )}
-      </div>
-    </div>
-  );
-}
 
-function ChatList({ activeRoom, onOpenRoom }) {
-  const [rooms, setRooms] = useState([]);
-  const [query, setQuery] = useState('');
-  const [groupOpen, setGroupOpen] = useState(false);
-  const [msg, setMsg] = useState('');
-
-  async function load() {
-    try {
-      const { data, error } = await supabase.rpc('get_my_chat_rooms');
-      if (error) throw error;
-      setRooms(data || []);
-    } catch (err) {
-      setMsg(errText(err));
-    }
-  }
-
-  useEffect(() => {
-    load();
-    const channel = supabase
-      .channel('rooms-watch')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_room_members' }, load)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_rooms' }, load)
-      .subscribe();
-    return () => supabase.removeChannel(channel);
-  }, []);
-
-  const visibleRooms = rooms.filter((r) => `${r.title || ''} ${r.last_message || ''}`.toLowerCase().includes(query.toLowerCase()));
-
-  return (
-    <div className="chatList">
-      <div className="chatSearchRow">
-        <input className="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="채팅방/메시지 검색" />
-        <button className="round" onClick={() => setGroupOpen(true)}>＋</button>
-      </div>
-
-      {visibleRooms.map((room) => (
-        <button
-          className={cx('chatItem', activeRoom?.room_id === room.room_id && 'selected')}
-          key={room.room_id}
-          onClick={() => onOpenRoom(room)}
-        >
-          <Avatar src={room.avatar_url} name={room.title} />
-          <div>
-            <b>{room.pinned ? '📌 ' : ''}{room.muted ? '🔕 ' : ''}{room.title || '채팅'}</b>
-            <span>{room.last_message || '아직 메시지 없음'}</span>
-          </div>
-          <aside>
-            <time>{formatTime(room.last_message_at)}</time>
-            {Number(room.unread_count) > 0 && <em>{Number(room.unread_count) > 99 ? '99+' : room.unread_count}</em>}
-          </aside>
-        </button>
-      ))}
-
-      {visibleRooms.length === 0 && <Empty>채팅방 없음<br />친구 탭에서 1:1 채팅을 시작해봐.</Empty>}
-      <Notice>{msg}</Notice>
-      {groupOpen && <GroupModal onClose={() => setGroupOpen(false)} onOpenRoom={onOpenRoom} />}
-    </div>
-  );
-}
-
-function GroupModal({ onClose, onOpenRoom }) {
-  const [friends, setFriends] = useState([]);
-  const [picked, setPicked] = useState([]);
-  const [title, setTitle] = useState('');
-  const [msg, setMsg] = useState('');
-
-  useEffect(() => {
-    supabase.rpc('get_my_friends').then(({ data }) => setFriends(data || []));
-  }, []);
-
-  function toggle(id) {
-    setPicked((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  }
-
-  async function create() {
-    try {
-      const { data: roomId, error } = await supabase.rpc('create_group_room', {
-        p_title: title.trim() || '그룹채팅',
-        p_member_ids: picked,
-      });
-      if (error) throw error;
-      const { data: rooms } = await supabase.rpc('get_my_chat_rooms');
-      const nextRoom = (rooms || []).find((r) => r.room_id === roomId) || { room_id: roomId, title: title.trim() || '그룹채팅' };
-      onOpenRoom(nextRoom);
-      onClose();
-    } catch (err) {
-      setMsg(errText(err));
-    }
-  }
-
-  return (
-    <Modal title="그룹방 만들기" onClose={onClose}>
-      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="방 이름" />
-      <div className="pickList">
-        {friends.map((f) => (
-          <button className={cx('pick', picked.includes(f.user_id) && 'on')} key={f.user_id} onClick={() => toggle(f.user_id)}>
-            <Avatar src={f.avatar_url} name={f.nickname} size={34} />
-            <span>{f.nickname}</span>
-          </button>
-        ))}
-      </div>
-      <Notice>{msg}</Notice>
-      <div className="modalButtons">
-        <button onClick={onClose}>취소</button>
-        <button className="yellow" onClick={create}>생성</button>
-      </div>
-    </Modal>
-  );
-}
-
-function ChatRoom({ room, me, onClose }) {
-  const [messages, setMessages] = useState([]);
-  const [members, setMembers] = useState([]);
-  const [text, setText] = useState('');
-  const [reply, setReply] = useState(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [previewImage, setPreviewImage] = useState(null);
-  const [msg, setMsg] = useState('');
-  const [typing, setTyping] = useState('');
-  const bottomRef = useRef(null);
-  const typingChannelRef = useRef(null);
-  const typingTimerRef = useRef(null);
-
-  async function load() {
-    try {
-      const [messagesRes, membersRes] = await Promise.all([
-        supabase
-          .from('chat_messages')
-          .select('id,room_id,sender_id,body,message_type,image_url,file_url,file_name,file_size,audio_url,reply_to_message_id,shared_latitude,shared_longitude,created_at,edited_at,deleted_at,profiles:sender_id(nickname,avatar_url)')
-          .eq('room_id', room.room_id)
-          .order('created_at', { ascending: true })
-          .limit(500),
-        supabase.rpc('get_room_members', { p_room_id: room.room_id }),
-      ]);
-      if (messagesRes.error) throw messagesRes.error;
-      if (membersRes.error) throw membersRes.error;
-      setMessages(messagesRes.data || []);
-      setMembers(membersRes.data || []);
-      await supabase.rpc('mark_room_read', { p_room_id: room.room_id });
-    } catch (err) {
-      setMsg(errText(err));
-    }
-  }
-
-  useEffect(() => {
-    if (!room?.room_id) return;
-    setMessages([]);
-    setMsg('');
-    load();
-
-    const pollTimer = setInterval(load, 1800);
-    const typingChannel = supabase.channel('typing-' + room.room_id, { config: { broadcast: { self: false } } });
-    typingChannel
-      .on('broadcast', { event: 'typing' }, ({ payload }) => {
-        if (payload?.userId === me.id) return;
-        setTyping(`${payload?.nickname || '상대'} 입력중...`);
-        clearTimeout(typingTimerRef.current);
-        typingTimerRef.current = setTimeout(() => setTyping(''), 1200);
-      })
-      .subscribe();
-    typingChannelRef.current = typingChannel;
-
-    return () => {
-      clearInterval(pollTimer);
-      supabase.removeChannel(typingChannel);
-    };
-  }, [room?.room_id]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length, typing]);
-
-  function readState(message) {
-    if (message.sender_id !== me.id) return '';
-    const others = members.filter((m) => m.user_id !== me.id);
-    if (others.length === 0) return '읽음';
-    const readCount = others.filter((m) => m.last_read_at && new Date(m.last_read_at) >= new Date(message.created_at)).length;
-    return readCount === others.length ? '읽음' : `안읽음 ${others.length - readCount}`;
-  }
-
-  async function sendMessage(payload) {
-    const { data, error } = await supabase.from('chat_messages').insert(payload).select('id').single();
-    if (error) throw error;
-    callPush({ messageId: data.id, userId: me.id }).catch(() => {});
-    await load();
-  }
-
-  async function submit(e) {
-    e.preventDefault();
-    const body = text.trim();
-    if (!body) return;
-    setText('');
-    try {
-      await sendMessage({
-        room_id: room.room_id,
-        sender_id: me.id,
-        body,
-        message_type: 'text',
-        reply_to_message_id: reply?.id || null,
-      });
-      setReply(null);
-    } catch (err) {
-      setText(body);
-      setMsg(errText(err));
-    }
-  }
-
-  function changeText(value) {
-    setText(value);
-    typingChannelRef.current?.send({
-      type: 'broadcast',
-      event: 'typing',
-      payload: { userId: me.id, nickname: me.nickname },
-    });
-  }
-
-  async function sendFile(file) {
-    if (!file) return;
-    try {
-      setMsg('업로드중...');
-      const uploaded = await uploadFile(file, `rooms/${room.room_id}`);
-      const isImage = file.type.startsWith('image/');
-      const isAudio = file.type.startsWith('audio/');
-      await sendMessage({
-        room_id: room.room_id,
-        sender_id: me.id,
-        body: isImage ? '사진' : isAudio ? '음성 메시지' : uploaded.name,
-        message_type: isImage ? 'image' : isAudio ? 'voice' : 'file',
-        image_url: isImage ? uploaded.url : null,
-        audio_url: isAudio ? uploaded.url : null,
-        file_url: !isImage && !isAudio ? uploaded.url : null,
-        file_name: uploaded.name,
-        file_size: uploaded.size,
-        reply_to_message_id: reply?.id || null,
-      });
-      setMsg('');
-      setReply(null);
-    } catch (err) {
-      setMsg(errText(err));
-    }
-  }
-
-  async function sendLocation() {
-    if (!navigator.geolocation) {
-      setMsg('위치 기능 미지원');
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          await sendMessage({
-            room_id: room.room_id,
-            sender_id: me.id,
-            body: '위치',
-            message_type: 'location',
-            shared_latitude: position.coords.latitude,
-            shared_longitude: position.coords.longitude,
-          });
-        } catch (err) {
-          setMsg(errText(err));
-        }
-      },
-      (err) => setMsg(err.message || '위치 권한 필요'),
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
-  }
-
-  async function editMessage(message) {
-    const next = prompt('수정할 내용', message.body || '');
-    if (!next) return;
-    const { error } = await supabase.rpc('edit_message', { p_message_id: message.id, p_body: next });
-    if (error) setMsg(errText(error));
-    await load();
-  }
-
-  async function deleteMessage(message) {
-    if (!confirm('메시지 삭제?')) return;
-    const { error } = await supabase.rpc('delete_message', { p_message_id: message.id });
-    if (error) setMsg(errText(error));
-    await load();
-  }
-
-  return (
-    <div className="chatRoom">
-      <header className="roomHeader">
-        <button className="back" onClick={onClose}>‹</button>
-        <div>
-          <b>{room.title || '채팅'}</b>
-          <span>{members.length}명</span>
-        </div>
-        <button className="roomMenuButton" onClick={() => setDrawerOpen(true)}>☰</button>
-      </header>
-
-      <main className="messageArea">
-        {messages.map((message, index) => {
-          const previous = messages[index - 1];
-          const showDate = !previous || new Date(previous.created_at).toDateString() !== new Date(message.created_at).toDateString();
-          const mine = message.sender_id === me.id;
-          return (
-            <React.Fragment key={message.id}>
-              {showDate && <div className="dateLine">{new Date(message.created_at).toLocaleDateString('ko-KR')}</div>}
-              {message.message_type === 'system' ? (
-                <div className="systemMessage">{message.body}</div>
-              ) : (
-                <div className={cx('messageRow', mine ? 'mine' : 'other')}>
-                  {!mine && <Avatar src={message.profiles?.avatar_url} name={message.profiles?.nickname} size={34} />}
-                  <div className="messageStack">
-                    {!mine && <span className="senderName">{message.profiles?.nickname || '익명'}</span>}
-                    {message.reply_to_message_id && <div className="replyPreview">↪ 답장</div>}
-                    <div className="bubble">
-                      {message.deleted_at ? (
-                        '삭제된 메시지'
-                      ) : message.message_type === 'image' && message.image_url ? (
-                        <img className="chatImage" src={message.image_url} alt="" onClick={() => setPreviewImage(message.image_url)} />
-                      ) : message.message_type === 'file' && message.file_url ? (
-                        <a href={message.file_url} target="_blank" rel="noreferrer">📎 {message.file_name || '파일'}</a>
-                      ) : message.message_type === 'voice' && message.audio_url ? (
-                        <audio src={message.audio_url} controls />
-                      ) : message.message_type === 'location' && message.shared_latitude && message.shared_longitude ? (
-                        <a href={`https://www.google.com/maps?q=${message.shared_latitude},${message.shared_longitude}`} target="_blank" rel="noreferrer">📍 위치 보기</a>
-                      ) : (
-                        message.body
-                      )}
-                    </div>
-                    <div className="messageMeta">
-                      <span>{formatTime(message.created_at)}{message.edited_at ? ' · 수정됨' : ''}</span>
-                      {mine && <b>{readState(message)}</b>}
-                    </div>
-                    {!message.deleted_at && (
-                      <div className="messageActions">
-                        <button onClick={() => setReply(message)}>답장</button>
-                        <button onClick={() => navigator.clipboard?.writeText(message.body || '')}>복사</button>
-                        {mine && message.message_type === 'text' && <button onClick={() => editMessage(message)}>수정</button>}
-                        {mine && <button onClick={() => deleteMessage(message)}>삭제</button>}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </React.Fragment>
-          );
-        })}
-        {typing && <div className="typing">{typing}</div>}
-        <Notice>{msg}</Notice>
-        <div ref={bottomRef} />
-      </main>
-
-      {reply && (
-        <div className="replyComposer">
-          <div>
-            <b>답장</b>
-            <span>{reply.body || reply.file_name || reply.message_type}</span>
-          </div>
-          <button onClick={() => setReply(null)}>×</button>
-        </div>
-      )}
-
-      <form className="composer" onSubmit={submit}>
-        <label className="fileLabel">
-          ＋
-          <input type="file" onChange={(e) => sendFile(e.target.files?.[0])} />
+        <label className="field">
+          <span>이메일</span>
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" />
         </label>
-        <button type="button" className="iconButton" onClick={sendLocation}>📍</button>
-        <input value={text} onChange={(e) => changeText(e.target.value)} placeholder="메시지 입력" />
-        <button type="submit" className="sendButton">전송</button>
-      </form>
 
-      {drawerOpen && (
-        <RoomDrawer
-          room={room}
-          members={members}
-          messages={messages}
-          onClose={() => setDrawerOpen(false)}
-          onReload={load}
-        />
-      )}
+        <label className="field">
+          <span>비밀번호</span>
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="6자 이상" />
+        </label>
 
-      {previewImage && (
-        <Modal title="사진 보기" onClose={() => setPreviewImage(null)} wide>
-          <img className="previewImage" src={previewImage} alt="" />
-        </Modal>
-      )}
-    </div>
-  );
-}
-
-function RoomDrawer({ room, members, messages, onClose, onReload }) {
-  const [notice, setNotice] = useState('');
-  const images = messages.filter((m) => m.image_url);
-  const files = messages.filter((m) => m.file_url || m.audio_url);
-
-  async function togglePinned() {
-    const { error } = await supabase.rpc('set_room_pinned', { p_room_id: room.room_id, p_pinned: !room.pinned });
-    if (error) setNotice(errText(error));
-    else setNotice('고정 설정 변경됨');
-  }
-
-  async function toggleMuted() {
-    const { error } = await supabase.rpc('set_room_muted', { p_room_id: room.room_id, p_muted: !room.muted });
-    if (error) setNotice(errText(error));
-    else setNotice('알림 설정 변경됨');
-  }
-
-  async function leaveRoom() {
-    if (!confirm('채팅방 나갈까?')) return;
-    const { error } = await supabase.rpc('leave_room', { p_room_id: room.room_id });
-    if (error) setNotice(errText(error));
-    else location.reload();
-  }
-
-  return (
-    <Modal title="채팅방 서랍" onClose={onClose} wide>
-      <div className="drawerButtons">
-        <button onClick={togglePinned}>📌 방 고정</button>
-        <button onClick={toggleMuted}>🔕 알림 끄기/켜기</button>
-        <button className="danger" onClick={leaveRoom}>🚪 나가기</button>
-      </div>
-      <h3>멤버</h3>
-      <div className="memberGrid">
-        {members.map((member) => (
-          <div key={member.user_id} className="memberItem">
-            <Avatar src={member.avatar_url} name={member.nickname} size={32} />
-            <span>{member.nickname}</span>
-          </div>
-        ))}
-      </div>
-      <h3>사진</h3>
-      <div className="mediaGrid">
-        {images.map((m) => <img key={m.id} src={m.image_url} alt="" />)}
-      </div>
-      <h3>파일/음성</h3>
-      {files.map((m) => (
-        <a className="fileRow" key={m.id} href={m.file_url || m.audio_url} target="_blank" rel="noreferrer">
-          📎 {m.file_name || '음성 메시지'}
-        </a>
-      ))}
-      <Notice>{notice}</Notice>
-    </Modal>
-  );
-}
-
-function CalendarPanel({ me }) {
-  const [cursor, setCursor] = useState(new Date());
-  const [events, setEvents] = useState([]);
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [editorOpen, setEditorOpen] = useState(false);
-  const [editingEvent, setEditingEvent] = useState(null);
-  const [msg, setMsg] = useState('');
-
-  const firstDay = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
-  const startDay = new Date(cursor.getFullYear(), cursor.getMonth(), 1 - firstDay.getDay());
-  const days = Array.from({ length: 42 }, (_, i) => new Date(startDay.getFullYear(), startDay.getMonth(), startDay.getDate() + i));
-
-  async function load() {
-    try {
-      const from = new Date(cursor.getFullYear(), cursor.getMonth(), -7).toISOString();
-      const to = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 8).toISOString();
-      const { data, error } = await supabase.rpc('get_calendar_events', { p_from: from, p_to: to });
-      if (error) throw error;
-      setEvents(data || []);
-    } catch (err) {
-      setMsg(errText(err));
-    }
-  }
-
-  useEffect(() => {
-    load();
-  }, [cursor.getFullYear(), cursor.getMonth()]);
-
-  const selectedEvents = events.filter((e) => dateKey(e.start_at) === dateKey(selectedDate));
-
-  function eventsForDay(day) {
-    return events.filter((e) => dateKey(e.start_at) === dateKey(day));
-  }
-
-  return (
-    <div className="calendarPage">
-      <div className="calendarTop">
-        <button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}>‹</button>
-        <h2>{cursor.getFullYear()}년 {cursor.getMonth() + 1}월</h2>
-        <button onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}>›</button>
-      </div>
-      <div className="calendarTools">
-        <button onClick={() => { const today = new Date(); setCursor(today); setSelectedDate(today); }}>오늘</button>
-        <button className="yellow" onClick={() => { setEditingEvent(null); setEditorOpen(true); }}>일정 추가</button>
-      </div>
-      <div className="weekHeader">{['일', '월', '화', '수', '목', '금', '토'].map((d) => <b key={d}>{d}</b>)}</div>
-      <div className="monthGrid">
-        {days.map((day) => {
-          const items = eventsForDay(day);
-          return (
-            <button
-              className={cx('dayCell', day.getMonth() !== cursor.getMonth() && 'dim', dateKey(day) === dateKey(selectedDate) && 'selected')}
-              key={dateKey(day)}
-              onClick={() => setSelectedDate(day)}
-              onDoubleClick={() => { setSelectedDate(day); setEditingEvent(null); setEditorOpen(true); }}
-            >
-              <b>{day.getDate()}</b>
-              {items.slice(0, 3).map((event) => <span key={event.id}>{event.title}</span>)}
-              {items.length > 3 && <small>+{items.length - 3}</small>}
-            </button>
-          );
-        })}
-      </div>
-      <aside className="eventPanel">
-        <header>
-          <b>{selectedDate.toLocaleDateString('ko-KR')}</b>
-          <button onClick={() => { setEditingEvent(null); setEditorOpen(true); }}>＋</button>
-        </header>
-        {selectedEvents.map((event) => (
-          <button
-            className="eventItem"
-            key={event.id}
-            onClick={() => {
-              if (event.owner_id === me.id) {
-                setEditingEvent(event);
-                setEditorOpen(true);
-              }
-            }}
-          >
-            <b>{event.title}</b>
-            <span>{event.owner_nickname || '나'} · {formatTime(event.start_at)}</span>
-            {event.memo && <small>{event.memo}</small>}
-          </button>
-        ))}
-        {selectedEvents.length === 0 && <div className="miniEmpty">일정 없음</div>}
-      </aside>
-      <Notice>{msg}</Notice>
-      {editorOpen && (
-        <CalendarEditor
-          date={selectedDate}
-          event={editingEvent}
-          onClose={() => setEditorOpen(false)}
-          onSaved={load}
-        />
-      )}
-    </div>
-  );
-}
-
-function CalendarEditor({ date, event, onClose, onSaved }) {
-  const [title, setTitle] = useState(event?.title || '');
-  const [memo, setMemo] = useState(event?.memo || '');
-  const [startAt, setStartAt] = useState(toInputDateTime(event?.start_at || date));
-  const [endAt, setEndAt] = useState(event?.end_at ? toInputDateTime(event.end_at) : '');
-  const [shareMode, setShareMode] = useState(event?.share_mode || 'private');
-  const [msg, setMsg] = useState('');
-
-  async function save() {
-    try {
-      if (!title.trim()) throw new Error('일정 제목 입력 필요');
-      const { error } = await supabase.rpc('save_calendar_event', {
-        p_id: event?.id || null,
-        p_title: title.trim(),
-        p_start_at: new Date(startAt).toISOString(),
-        p_end_at: endAt ? new Date(endAt).toISOString() : null,
-        p_all_day: false,
-        p_memo: memo,
-        p_color: '#FEE500',
-        p_share_mode: shareMode,
-        p_group_room_id: null,
-        p_specific_user_ids: [],
-      });
-      if (error) throw error;
-      await onSaved();
-      onClose();
-    } catch (err) {
-      setMsg(errText(err));
-    }
-  }
-
-  async function remove() {
-    if (!event?.id || !confirm('일정 삭제?')) return;
-    const { error } = await supabase.rpc('delete_calendar_event', { p_id: event.id });
-    if (error) setMsg(errText(error));
-    else {
-      await onSaved();
-      onClose();
-    }
-  }
-
-  return (
-    <Modal title={event ? '일정 수정' : '일정 추가'} onClose={onClose}>
-      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="일정 제목" />
-      <textarea value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="메모" />
-      <input type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} />
-      <input type="datetime-local" value={endAt} onChange={(e) => setEndAt(e.target.value)} />
-      <select value={shareMode} onChange={(e) => setShareMode(e.target.value)}>
-        <option value="private">나만</option>
-        <option value="friends">친구공유</option>
-        <option value="public">전체공개</option>
-      </select>
-      <Notice>{msg}</Notice>
-      <div className="modalButtons">
-        {event ? <button className="danger" onClick={remove}>삭제</button> : <button onClick={onClose}>취소</button>}
-        <button className="yellow" onClick={save}>저장</button>
-      </div>
-    </Modal>
-  );
-}
-
-function MorePanel({ me, setMe }) {
-  const [section, setSection] = useState('profile');
-  const sections = [
-    ['profile', '👤 내 프로필'],
-    ['notifications', '🔔 알림센터'],
-    ['location', '📍 위치공유'],
-    ['work', '📅 근무표'],
-    ['settings', '⚙️ 앱 설정'],
-  ];
-
-  return (
-    <div className="morePage">
-      <div className="moreMenu">
-        {sections.map(([key, label]) => (
-          <button key={key} className={section === key ? 'selected' : ''} onClick={() => setSection(key)}>{label}</button>
-        ))}
-      </div>
-      <div className="moreDetail">
-        {section === 'profile' && <ProfileSettings me={me} setMe={setMe} />}
-        {section === 'notifications' && <NotificationSettings me={me} />}
-        {section === 'location' && <LocationManager me={me} />}
-        {section === 'work' && <WorkSettings me={me} />}
-        {section === 'settings' && <AppSettings me={me} setMe={setMe} />}
-      </div>
-    </div>
-  );
-}
-
-function ProfileSettings({ me, setMe }) {
-  const [nickname, setNickname] = useState(me.nickname || '');
-  const [status, setStatus] = useState(me.status_message || '');
-  const [avatar, setAvatar] = useState(me.avatar_url || '');
-  const [birthday, setBirthday] = useState(me.birthday || '');
-  const [msg, setMsg] = useState('');
-
-  async function save() {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({ nickname: nickname.trim() || '익명', status_message: status, avatar_url: avatar || null, birthday: birthday || null })
-        .eq('id', me.id)
-        .select()
-        .single();
-      if (error) throw error;
-      setMe(data);
-      setMsg('프로필 저장됨');
-    } catch (err) {
-      setMsg(errText(err));
-    }
-  }
-
-  async function uploadAvatar(file) {
-    if (!file) return;
-    try {
-      const uploaded = await uploadFile(file, `avatars/${me.id}`);
-      setAvatar(uploaded.url);
-      setMsg('업로드됨. 저장 누르면 반영됨.');
-    } catch (err) {
-      setMsg(errText(err));
-    }
-  }
-
-  return (
-    <div className="settingsStack">
-      <Avatar src={avatar} name={nickname} size={76} />
-      <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="닉네임" />
-      <input value={status} onChange={(e) => setStatus(e.target.value)} placeholder="상태메시지" />
-      <input value={avatar} onChange={(e) => setAvatar(e.target.value)} placeholder="프로필 이미지 URL" />
-      <input type="date" value={birthday || ''} onChange={(e) => setBirthday(e.target.value)} />
-      <label className="uploadButton">프로필 사진 업로드<input type="file" accept="image/*" onChange={(e) => uploadAvatar(e.target.files?.[0])} /></label>
-      <button className="yellow" onClick={save}>저장</button>
-      <Notice>{msg}</Notice>
-    </div>
-  );
-}
-
-function NotificationSettings({ me }) {
-  const [items, setItems] = useState([]);
-  const [msg, setMsg] = useState('');
-
-  async function load() {
-    const { data, error } = await supabase.rpc('get_my_notifications');
-    if (error) setMsg(errText(error));
-    else setItems(data || []);
-  }
-
-  useEffect(() => { load(); }, []);
-
-  async function enablePush() {
-    try {
-      await registerWebPush(me.id);
-      setMsg('백그라운드 알림 등록됨');
-    } catch (err) {
-      setMsg(errText(err));
-    }
-  }
-
-  async function testPush() {
-    try {
-      const data = await callPush({ test: true, userId: me.id });
-      setMsg('테스트 요청됨: ' + JSON.stringify(data));
-    } catch (err) {
-      setMsg(errText(err));
-    }
-  }
-
-  async function markRead(id) {
-    await supabase.rpc('mark_notification_read', { p_id: id });
-    load();
-  }
-
-  return (
-    <div className="settingsStack">
-      <button className="yellow" onClick={enablePush}>백그라운드 알림 켜기</button>
-      <button onClick={testPush}>알림 테스트</button>
-      {items.map((n) => (
-        <button className={cx('notificationItem', !n.read_at && 'unread')} key={n.id} onClick={() => markRead(n.id)}>
-          <b>{n.title}</b>
-          <span>{n.body}</span>
-          <small>{ago(n.created_at)}</small>
+        <button className="primaryButton" disabled={busy}>
+          {busy ? "처리중..." : mode === "login" ? "로그인" : "가입하기"}
         </button>
-      ))}
-      {items.length === 0 && <div className="miniEmpty">알림 없음</div>}
-      <Notice>{msg}</Notice>
-    </div>
-  );
-}
 
-function LocationManager({ me }) {
-  const [locations, setLocations] = useState([]);
-  const [requests, setRequests] = useState([]);
-  const [watching, setWatching] = useState(false);
-  const [msg, setMsg] = useState('');
-  const watchRef = useRef(null);
+        <button type="button" className="linkButton" onClick={() => setMode(mode === "login" ? "signup" : "login")}>
+          {mode === "login" ? "계정 만들기" : "로그인으로 돌아가기"}
+        </button>
 
-  async function load() {
-    const [locRes, reqRes] = await Promise.all([supabase.rpc('get_visible_locations'), supabase.rpc('get_location_requests')]);
-    if (!locRes.error) setLocations(locRes.data || []);
-    if (!reqRes.error) setRequests(reqRes.data || []);
-  }
-
-  useEffect(() => {
-    load();
-    const timer = setInterval(load, 10000);
-    return () => {
-      clearInterval(timer);
-      if (watchRef.current != null) navigator.geolocation?.clearWatch(watchRef.current);
-    };
-  }, []);
-
-  function startWatch() {
-    if (!navigator.geolocation) {
-      setMsg('위치 기능 미지원');
-      return;
-    }
-    watchRef.current = navigator.geolocation.watchPosition(
-      async (pos) => {
-        const { error } = await supabase.rpc('upsert_live_location', {
-          p_latitude: pos.coords.latitude,
-          p_longitude: pos.coords.longitude,
-          p_accuracy: pos.coords.accuracy,
-          p_heading: pos.coords.heading,
-          p_speed: pos.coords.speed,
-        });
-        if (error) setMsg(errText(error));
-        else {
-          setWatching(true);
-          load();
-        }
-      },
-      (err) => setMsg(err.message || '위치 권한 필요'),
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
-    );
-    setWatching(true);
-  }
-
-  function stopWatch() {
-    if (watchRef.current != null) navigator.geolocation.clearWatch(watchRef.current);
-    watchRef.current = null;
-    setWatching(false);
-  }
-
-  async function respond(id, accept) {
-    const { error } = await supabase.rpc('respond_location_share', { p_request_id: id, p_accept: accept });
-    if (error) setMsg(errText(error));
-    load();
-  }
-
-  async function stopSession(id) {
-    const { error } = await supabase.rpc('stop_location_share', { p_session_id: id });
-    if (error) setMsg(errText(error));
-    load();
-  }
-
-  const pending = requests.filter((r) => r.receiver_id === me.id && r.status === 'pending');
-
-  return (
-    <div className="settingsStack">
-      <p className="helpText">서로 승인해야 위치가 보임. 앱이 꺼지면 마지막 위치와 몇 분 전인지 표시됨.</p>
-      <button className={watching ? 'danger' : 'yellow'} onClick={watching ? stopWatch : startWatch}>{watching ? '내 위치 전송 중지' : '내 위치 전송 시작'}</button>
-      {pending.map((r) => (
-        <div className="requestItem" key={r.id}>
-          <b>{r.requester_nickname}</b>
-          <span>{r.duration_minutes}분 위치공유 요청</span>
-          <button className="yellow" onClick={() => respond(r.id, true)}>승인</button>
-          <button onClick={() => respond(r.id, false)}>거절</button>
-        </div>
-      ))}
-      {locations.map((loc) => (
-        <div className="locationCard" key={loc.session_id}>
-          <div>
-            <b>{loc.nickname}</b>
-            <span>{loc.updated_at ? `마지막 위치 · ${ago(loc.updated_at)}` : '위치 기록 없음'}</span>
-          </div>
-          {loc.latitude && loc.longitude ? (
-            <a href={`https://www.google.com/maps?q=${loc.latitude},${loc.longitude}`} target="_blank" rel="noreferrer">지도 열기 · 정확도 약 {Math.round(loc.accuracy || 0)}m</a>
-          ) : (
-            <small>상대가 아직 위치 전송을 시작하지 않음</small>
-          )}
-          <button onClick={() => stopSession(loc.session_id)}>공유 중지</button>
-        </div>
-      ))}
-      {locations.length === 0 && <div className="miniEmpty">공유 중인 위치 없음</div>}
-      <Notice>{msg}</Notice>
-    </div>
-  );
-}
-
-function WorkSettings() {
-  const [mode, setMode] = useState('normal');
-  const [team, setTeam] = useState(1);
-  const [anchor, setAnchor] = useState('2026-01-01');
-  const [msg, setMsg] = useState('');
-
-  async function save() {
-    const { error } = await supabase.rpc('save_work_shift_settings', {
-      p_mode: mode,
-      p_shift_team: Number(team),
-      p_anchor_date: anchor,
-    });
-    setMsg(error ? errText(error) : '근무표 저장됨');
-  }
-
-  return (
-    <div className="settingsStack">
-      <label>근무표 모드</label>
-      <select value={mode} onChange={(e) => setMode(e.target.value)}>
-        <option value="normal">통상근무</option>
-        <option value="shift4x3">4조3교대</option>
-      </select>
-      <label>내 조</label>
-      <select value={team} onChange={(e) => setTeam(e.target.value)}>
-        <option value="1">1조</option>
-        <option value="2">2조</option>
-        <option value="3">3조</option>
-        <option value="4">4조</option>
-      </select>
-      <label>기준일</label>
-      <input type="date" value={anchor} onChange={(e) => setAnchor(e.target.value)} />
-      <button className="yellow" onClick={save}>저장</button>
-      <Notice>{msg}</Notice>
-    </div>
-  );
-}
-
-function AppSettings({ me, setMe }) {
-  const [dark, setDark] = useState(Boolean(me.dark_mode));
-  const [fontSize, setFontSize] = useState(me.font_size || 'normal');
-  const [msg, setMsg] = useState('');
-
-  async function save() {
-    const { data, error } = await supabase.from('profiles').update({ dark_mode: dark, font_size: fontSize }).eq('id', me.id).select().single();
-    if (error) {
-      setMsg(errText(error));
-      return;
-    }
-    setMe(data);
-    document.body.classList.toggle('dark', Boolean(data.dark_mode));
-    document.body.dataset.fontSize = data.font_size || 'normal';
-    setMsg('설정 저장됨');
-  }
-
-  function logout() {
-    localStorage.removeItem('chat-auth-session');
-    localStorage.removeItem('sb-nwenbkthlpzlpfklgonb-auth-token');
-    supabase.auth.signOut();
-    location.reload();
-  }
-
-  return (
-    <div className="settingsStack">
-      <label className="checkLine"><input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} />다크모드</label>
-      <label>글자 크기</label>
-      <select value={fontSize} onChange={(e) => setFontSize(e.target.value)}>
-        <option value="small">작게</option>
-        <option value="normal">보통</option>
-        <option value="large">크게</option>
-      </select>
-      <button className="yellow" onClick={save}>설정 저장</button>
-      <button className="danger" onClick={logout}>로그아웃</button>
-      <Notice>{msg}</Notice>
-    </div>
-  );
-}
-
-function LocationRequestModal({ targetId, onClose }) {
-  const [duration, setDuration] = useState(60);
-  const [msg, setMsg] = useState('');
-
-  async function requestShare() {
-    const { error } = await supabase.rpc('request_location_share', { p_receiver_id: targetId, p_duration_minutes: duration });
-    if (error) setMsg(errText(error));
-    else {
-      setMsg('위치 공유 요청 보냄');
-      setTimeout(onClose, 700);
-    }
-  }
-
-  return (
-    <Modal title="위치 공유 요청" onClose={onClose}>
-      <p className="helpText">상대가 승인해야 서로 위치가 보임.</p>
-      <select value={duration} onChange={(e) => setDuration(Number(e.target.value))}>
-        <option value={15}>15분</option>
-        <option value={60}>1시간</option>
-        <option value={480}>8시간</option>
-      </select>
-      <Notice>{msg}</Notice>
-      <div className="modalButtons">
-        <button onClick={onClose}>취소</button>
-        <button className="yellow" onClick={requestShare}>요청</button>
-      </div>
-    </Modal>
-  );
-}
-
-
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { error: null };
-  }
-
-  static getDerivedStateFromError(error) {
-    return { error };
-  }
-
-  componentDidCatch(error, info) {
-    console.error('APP_RENDER_ERROR', error, info);
-  }
-
-  render() {
-    if (this.state.error) {
-      return (
-        <div className="crashScreen">
-          <h1>앱 화면 오류</h1>
-          <p>화면이 빈칸으로 멈추지 않도록 오류 내용을 표시합니다.</p>
-          <pre>{this.state.error?.message || String(this.state.error)}</pre>
-          <button onClick={() => location.reload()}>새로고침</button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-function AppInner() {
-  const [session, setSession] = useState(null);
-  const [me, setMe] = useState(null);
-  const [tab, setTab] = useState(TABS.CHATS);
-  const [room, setRoom] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [locationTarget, setLocationTarget] = useState(null);
-
-  async function loadMe(user) {
-    if (!user) return null;
-    const fallback = {
-      id: user.id,
-      email: user.email,
-      nickname: user.user_metadata?.nickname || user.email?.split('@')[0] || '익명',
-      avatar_url: null,
-      status_message: '',
-      dark_mode: false,
-      font_size: 'normal',
-    };
-
-    try {
-      await supabase.from('profiles').upsert({ id: user.id, email: user.email, nickname: fallback.nickname });
-      const { data } = await supabase
-        .from('profiles')
-        .select('id,email,nickname,avatar_url,status_message,birthday,dark_mode,font_size')
-        .eq('id', user.id)
-        .maybeSingle();
-      const profile = data || fallback;
-      setMe(profile);
-      document.body.classList.toggle('dark', Boolean(profile.dark_mode));
-      document.body.dataset.fontSize = profile.font_size || 'normal';
-      return profile;
-    } catch {
-      setMe(fallback);
-      return fallback;
-    }
-  }
-
-  useEffect(() => {
-    let alive = true;
-    navigator.serviceWorker?.register('/sw.js').catch(() => {});
-
-    async function boot() {
-      const saved = getSavedSession();
-      if (saved?.access_token && saved?.refresh_token && saved?.user) {
-        setSession(saved);
-        setMe({
-          id: saved.user.id,
-          email: saved.user.email,
-          nickname: saved.user.user_metadata?.nickname || saved.user.email?.split('@')[0] || '익명',
-        });
-        setLoading(false);
-        supabase.auth.setSession({ access_token: saved.access_token, refresh_token: saved.refresh_token }).catch(() => {});
-        loadMe(saved.user).catch(() => {});
-        return;
-      }
-
-      const { data } = await supabase.auth.getSession();
-      if (!alive) return;
-      const next = data?.session || null;
-      setSession(next);
-      if (next?.user) await loadMe(next.user);
-      setLoading(false);
-    }
-
-    boot().catch(() => setLoading(false));
-
-    const { data: authSub } = supabase.auth.onAuthStateChange((_event, next) => {
-      setSession(next);
-      if (next?.user) loadMe(next.user).finally(() => setLoading(false));
-      else {
-        setMe(null);
-        setLoading(false);
-      }
-    });
-
-    return () => {
-      alive = false;
-      authSub.subscription.unsubscribe();
-    };
-  }, []);
-
-  async function openDirectRoom(userId) {
-    try {
-      const { data: roomId, error } = await supabase.rpc('get_or_create_direct_room', { p_other_user_id: userId });
-      if (error) throw error;
-      const { data: rooms, error: roomError } = await supabase.rpc('get_my_chat_rooms');
-      if (roomError) throw roomError;
-      const nextRoom = (rooms || []).find((r) => r.room_id === roomId) || { room_id: roomId, title: '채팅' };
-      setRoom(nextRoom);
-      setTab(TABS.CHATS);
-    } catch (err) {
-      alert(errText(err));
-    }
-  }
-
-  const navItems = [
-    [TABS.FRIENDS, '친구', '👤'],
-    [TABS.CHATS, '채팅', '💬'],
-    [TABS.CALENDAR, '캘린더', '📅'],
-    [TABS.MORE, '더보기', '•••'],
-  ];
-
-  if (loading) return <div className="loading">불러오는 중...</div>;
-  if (!session || !me) return <AuthView />;
-
-  const tabTitle = tab === TABS.FRIENDS ? '친구' : tab === TABS.CHATS ? '채팅' : tab === TABS.CALENDAR ? '캘린더' : '더보기';
-
-  const currentContent = tab === TABS.FRIENDS ? (
-    <FriendsPanel me={me} onOpenDirectRoom={openDirectRoom} onLocationRequest={setLocationTarget} />
-  ) : tab === TABS.CHATS ? (
-    <ChatList activeRoom={room} onOpenRoom={setRoom} />
-  ) : tab === TABS.CALENDAR ? (
-    <CalendarPanel me={me} />
-  ) : (
-    <MorePanel me={me} setMe={setMe} />
-  );
-
-  return (
-    <div className="appShell">
-      <aside className="sideRail">
-        <Avatar src={me.avatar_url} name={me.nickname} size={42} />
-        {navItems.map(([key, label, icon]) => (
-          <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)} title={label}>
-            <span>{icon}</span>
-            <small>{label}</small>
-          </button>
-        ))}
-      </aside>
-
-      <section className="mainArea">
-        <header className="topBar">
-          <h1>{tabTitle}</h1>
-          <div className="userPill"><span>{me.nickname}</span><Avatar src={me.avatar_url} name={me.nickname} size={32} /></div>
-        </header>
-
-        <div className={cx('bodyArea', tab === TABS.CHATS && 'chatBody')}>
-          <section className="primaryPane">{currentContent}</section>
-          {tab === TABS.CHATS && (
-            <section className="desktopRoomPane">
-              {room ? <ChatRoom room={room} me={me} onClose={() => setRoom(null)} /> : <Empty>채팅방을 선택하면 여기 열림</Empty>}
-            </section>
-          )}
-        </div>
-      </section>
-
-      <nav className="bottomNav">
-        {navItems.map(([key, label, icon]) => (
-          <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>
-            <span>{icon}</span>
-            <small>{label}</small>
-          </button>
-        ))}
-      </nav>
-
-      {room && tab === TABS.CHATS && (
-        <div className="mobileRoomPane">
-          <ChatRoom room={room} me={me} onClose={() => setRoom(null)} />
-        </div>
-      )}
-
-      {locationTarget && <LocationRequestModal targetId={locationTarget} onClose={() => setLocationTarget(null)} />}
-    </div>
+        <Toast>{msg}</Toast>
+      </form>
+    </main>
   );
 }
 
 export default function App() {
+  const [booting, setBooting] = useState(true);
+  const [session, setSession] = useState(null);
+  const [me, setMe] = useState(null);
+  const [tab, setTab] = useState("home");
+  const [room, setRoom] = useState(null);
+  const [moreSection, setMoreSection] = useState("profile");
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+
+    async function boot() {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!alive) return;
+
+        setSession(data.session || null);
+        if (data.session?.user) await loadMe(data.session.user);
+      } catch (err) {
+        setMsg(safeError(err));
+      } finally {
+        if (alive) setBooting(false);
+      }
+    }
+
+    boot();
+
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession || null);
+      if (nextSession?.user) loadMe(nextSession.user);
+      else setMe(null);
+    });
+
+    return () => {
+      alive = false;
+      data?.subscription?.unsubscribe?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    document.body.classList.toggle("dark", !!me?.dark_mode);
+  }, [me?.dark_mode]);
+
+  useEffect(() => {
+    const savedSize = localStorage.getItem("rift_font_size") || "normal";
+    document.body.dataset.fontSize = savedSize;
+  }, []);
+
+  
+  useEffect(() => {
+    function handleOpenCalendarDate(event) {
+      const targetDate = event?.detail?.date || localStorage.getItem("rift_open_calendar_date") || dateKey();
+
+      localStorage.setItem("rift_open_calendar_date", targetDate);
+      setRoom(null);
+      setTab("calendar");
+    }
+
+    window.addEventListener("rift-open-calendar-date", handleOpenCalendarDate);
+
+    return () => {
+      window.removeEventListener("rift-open-calendar-date", handleOpenCalendarDate);
+    };
+  }, []);
+
+  async function loadMe(user) {
+    try {
+      let { data, error } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
+      if (error) throw error;
+
+      if (!data) {
+        const row = {
+          id: user.id,
+          email: user.email,
+          nickname: user.user_metadata?.nickname || user.email?.split("@")[0] || "사용자",
+        };
+        await supabase.from("profiles").upsert(row);
+        data = row;
+      }
+
+      setMe(data);
+    } catch (err) {
+      setMe({
+        id: user.id,
+        email: user.email,
+        nickname: user.email?.split("@")[0] || "사용자",
+      });
+      setMsg(safeError(err));
+    }
+  }
+
+  function openProfile() {
+    setMoreSection("profile");
+    setRoom(null);
+    setTab("more");
+  }
+
+  function switchTab(next) {
+    setTab(next);
+    setRoom(null);
+  }
+
+  if (booting) return <main className="loading">불러오는 중...</main>;
+  if (!session) return <Auth />;
+  if (!me) return <main className="loading">프로필 불러오는 중...</main>;
+
   return (
-    <ErrorBoundary>
-      <AppInner />
-    </ErrorBoundary>
+    <div className="app">
+      <BackExitGuard />
+      <aside className="rail">
+        <button className="railProfile" onClick={openProfile}>
+          <Avatar user={me} size={44} online />
+        </button>
+
+        {TABS.map((item) => (
+          <button key={item.key} className={tab === item.key ? "active" : ""} onClick={() => switchTab(item.key)}>
+            <Icon name={item.icon} size={22} />
+            <small>{item.label}</small>
+          </button>
+        ))}
+      </aside>
+
+      <main className={tab === "chats" ? "main split" : "main"}>
+        {tab === "home" && (
+          <Home
+            me={me}
+            openProfile={openProfile}
+            openRoom={(nextRoom) => {
+              setRoom(nextRoom);
+              setTab("chats");
+            }}
+          />
+        )}
+
+        {tab === "chats" && (
+          <>
+            <Chats me={me} activeRoom={room} setRoom={setRoom} />
+            <section className="chatPane">
+              {room ? <Room me={me} room={room} /> : <Empty title="대화방 선택" text="홈에서 친구를 선택하거나 채팅 목록을 열어줘." />}
+            </section>
+            {room && (
+              <section className="mobileRoom">
+                <Room me={me} room={room} onBack={() => setRoom(null)} />
+              </section>
+            )}
+          </>
+        )}
+
+        {tab === "calendar" && <Calendar me={me} />}
+
+        {tab === "more" && (
+          <More
+            me={me}
+            section={moreSection}
+            setSection={setMoreSection}
+            reloadMe={() => loadMe(session.user)}
+          />
+        )}
+
+        <BottomNav tab={tab} setTab={switchTab} />
+      </main>
+
+      <Toast>{msg}</Toast>
+    </div>
   );
 }
+
+
+function BackExitGuard() {
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const allowExitRef = useRef(false);
+
+  useEffect(() => {
+    const guardState = {
+      riftBackGuard: true,
+      t: Date.now(),
+    };
+
+    try {
+      window.history.replaceState(
+        {
+          ...(window.history.state || {}),
+          riftRoot: true,
+        },
+        "",
+        window.location.href
+      );
+
+      window.history.pushState(guardState, "", window.location.href);
+    } catch {}
+
+    function onPopState() {
+      if (allowExitRef.current) return;
+
+      setShowExitConfirm(true);
+
+      setTimeout(() => {
+        try {
+          window.history.pushState(
+            {
+              riftBackGuard: true,
+              t: Date.now(),
+            },
+            "",
+            window.location.href
+          );
+        } catch {}
+      }, 0);
+    }
+
+    function onBeforeUnload(event) {
+      if (allowExitRef.current) return;
+
+      event.preventDefault();
+      event.returnValue = "";
+    }
+
+    window.addEventListener("popstate", onPopState);
+    window.addEventListener("beforeunload", onBeforeUnload);
+
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
+  }, []);
+
+  function stay() {
+    setShowExitConfirm(false);
+  }
+
+  function exitApp() {
+    allowExitRef.current = true;
+    setShowExitConfirm(false);
+
+    try {
+      window.history.go(-2);
+    } catch {
+      try {
+        window.history.back();
+      } catch {}
+    }
+  }
+
+  if (!showExitConfirm) return null;
+
+  return (
+    <section className="backExitOverlay">
+      <div className="backExitPanel">
+        <div className="backExitIcon">↩</div>
+        <b>앱을 나갈까요?</b>
+        <p>뒤로가기를 한 번 더 누른 것처럼 앱을 종료하거나 이전 화면으로 이동합니다.</p>
+
+        <div className="backExitActions">
+          <button onClick={stay}>계속 사용</button>
+          <button className="danger" onClick={exitApp}>나가기</button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function BottomNav({ tab, setTab }) {
+  return (
+    <nav className="bottomNav">
+      {TABS.map((item) => (
+        <button key={item.key} className={tab === item.key ? "active" : ""} onClick={() => setTab(item.key)}>
+          <Icon name={item.icon} size={22} />
+          <span>{item.label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function Home({ me, openProfile, openRoom }) {
+  const [users, setUsers] = useState([]);
+  const [query, setQuery] = useState("");
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    loadUsers();
+    const timer = setInterval(loadUsers, 8000);
+    return () => clearInterval(timer);
+  }, []);
+
+  async function loadUsers() {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .neq("id", me.id)
+        .order("nickname");
+
+      if (error) throw error;
+
+      setUsers(uniqBy(data || []));
+    } catch (err) {
+      setMsg(safeError(err));
+    }
+  }
+
+  async function startDM(user) {
+    try {
+      const nextRoom = await createDM(me, user);
+      openRoom(nextRoom);
+    } catch (err) {
+      setMsg(`대화방 생성 실패: ${safeError(err)}`);
+    }
+  }
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return users.filter((user) => `${user.nickname || ""} ${user.email || ""}`.toLowerCase().includes(q));
+  }, [users, query]);
+
+  return (
+    <section className="page home">
+      <Header
+        eyebrow="Rift"
+        title="친구"
+        text={`내 상태 · ${workSummaryForProfile(me)}`}
+        right={<button className="roundIcon" onClick={openProfile}><Avatar user={me} size={36} online /></button>}
+      />
+
+      <button className="profileHero" onClick={openProfile}>
+        <Avatar user={me} size={50} online />
+        <div>
+          <span>내 프로필</span>
+          <b>{me.nickname}</b>
+          <p>{me.status_message || workSummaryForProfile(me)}</p>
+        </div>
+        <em>편집</em>
+      </button>
+
+      <div className="searchBar">
+        <span>⌕</span>
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="친구, 이메일 검색" />
+      </div>
+
+      <div className="sectionTitle"><b>전체 사용자</b><span>{filtered.length}</span></div>
+
+      <div className="list">
+        {filtered.map((user) => (
+          <article className="personCard" key={user.id}>
+            <Avatar user={user} size={44} online />
+            <div>
+              <b>{displayName(user)}</b>
+              <p>{workSummaryForProfile(user)}</p>
+              <small className="friendSub">{user.status_message || user.email}</small>
+            </div>
+            <button onClick={() => startDM(user)}>대화</button>
+          </article>
+        ))}
+      </div>
+
+      {!filtered.length && <Empty title="사용자 없음" text="가입한 사용자가 여기에 표시돼." />}
+      <Toast>{msg}</Toast>
+    </section>
+  );
+}
+
+
+async function createDM(me, user) {
+  const label = displayName(user);
+
+  try {
+    const { data, error } = await supabase.rpc("get_or_create_dm", { other_user_id: user.id });
+
+    if (!error && data) {
+      const id = Array.isArray(data) ? data[0]?.id || data[0]?.room_id || data[0] : data;
+      return {
+        id,
+        displayName: label,
+        avatar_url: user.avatar_url,
+        is_group: false,
+        last_message: "",
+        updated_at: nowIso(),
+      };
+    }
+  } catch {}
+
+  try {
+    const mine = await supabase.from("chat_room_members").select("room_id").eq("user_id", me.id);
+    const other = await supabase.from("chat_room_members").select("room_id").eq("user_id", user.id);
+
+    if (!mine.error && !other.error) {
+      const mineSet = new Set((mine.data || []).map((item) => item.room_id));
+      const existing = (other.data || []).find((item) => mineSet.has(item.room_id));
+
+      if (existing?.room_id) {
+        return {
+          id: existing.room_id,
+          displayName: label,
+          avatar_url: user.avatar_url,
+          is_group: false,
+          last_message: "",
+          updated_at: nowIso(),
+        };
+      }
+    }
+  } catch {}
+
+  const variants = [
+    { name: label, room_type: "dm", type: "dm", created_by: me.id, last_message: "", updated_at: nowIso() },
+    { room_type: "dm", type: "dm", created_by: me.id, last_message: "", updated_at: nowIso() },
+    { created_by: me.id },
+    {},
+  ];
+
+  let room = null;
+  let lastError = null;
+
+  for (const row of variants) {
+    const { data, error } = await supabase.from("chat_rooms").insert(row).select("*").single();
+
+    if (!error && data) {
+      room = data;
+      break;
+    }
+
+    lastError = error;
+  }
+
+  if (!room) throw lastError || new Error("대화방 생성 실패");
+
+  const insertMembers = await supabase.from("chat_room_members").insert([
+    { room_id: room.id, user_id: me.id },
+    { room_id: room.id, user_id: user.id },
+  ]);
+
+  if (insertMembers.error && !String(insertMembers.error.message || "").includes("duplicate")) {
+    throw insertMembers.error;
+  }
+
+  return { ...room, displayName: label, avatar_url: user.avatar_url, is_group: false, last_message: "" };
+}
+
+
+
+function Chats({ me, activeRoom, setRoom }) {
+  const [rooms, setRooms] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [showCreate, setShowCreate] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [selected, setSelected] = useState({});
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    loadAll();
+    const timer = setInterval(loadRooms, 2500);
+    return () => clearInterval(timer);
+  }, []);
+
+  async function loadAll() {
+    await Promise.all([loadRooms(), loadUsers()]);
+  }
+
+  async function loadUsers() {
+    const { data } = await supabase.from("profiles").select("*").neq("id", me.id).order("nickname");
+    setUsers(uniqBy(data || []));
+  }
+
+  async function loadRooms() {
+    try {
+      const memberResult = await supabase.from("chat_room_members").select("room_id").eq("user_id", me.id);
+      if (memberResult.error) throw memberResult.error;
+
+      const roomIds = uniqBy(memberResult.data || [], "room_id").map((item) => item.room_id);
+
+      if (!roomIds.length) {
+        setRooms([]);
+        return;
+      }
+
+      const roomResult = await supabase.from("chat_rooms").select("*").in("id", roomIds);
+      if (roomResult.error) throw roomResult.error;
+
+      const allMembers = await supabase.from("chat_room_members").select("room_id,user_id").in("room_id", roomIds);
+      const members = allMembers.error ? [] : allMembers.data || [];
+
+      const profileIds = uniqBy(members.filter((member) => member.user_id !== me.id), "user_id").map((member) => member.user_id);
+
+      let profiles = new Map();
+
+      if (profileIds.length) {
+        const profileResult = await supabase.from("profiles").select("*").in("id", profileIds);
+
+        if (!profileResult.error) {
+          profiles = new Map((profileResult.data || []).map((profile) => [profile.id, profile]));
+        }
+      }
+
+      const nextRooms = (roomResult.data || []).map((room) => {
+        const roomMembers = members.filter((member) => member.room_id === room.id);
+        const isGroup = room.room_type === "group" || room.type === "group" || roomMembers.length > 2;
+        const otherMember = roomMembers.find((member) => member.user_id !== me.id);
+        const otherProfile = otherMember ? profiles.get(otherMember.user_id) : null;
+
+        return {
+          ...room,
+          is_group: isGroup,
+          displayName: isGroup ? room.name || `그룹 ${roomMembers.length}명` : displayName(otherProfile),
+          avatar_url: isGroup ? "" : otherProfile?.avatar_url,
+          member_count: roomMembers.length,
+        };
+      });
+
+      setRooms(
+        uniqBy(nextRooms).sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0))
+      );
+    } catch (err) {
+      setMsg(safeError(err));
+    }
+  }
+
+  async function createGroup(event) {
+    event.preventDefault();
+
+    const memberIds = Object.entries(selected).filter(([, value]) => value).map(([id]) => id);
+
+    if (!groupName.trim()) {
+      setMsg("그룹 이름 입력 필요");
+      return;
+    }
+
+    if (!memberIds.length) {
+      setMsg("초대할 사람 선택 필요");
+      return;
+    }
+
+    try {
+      const variants = [
+        { name: groupName.trim(), room_type: "group", type: "group", created_by: me.id, last_message: "", updated_at: nowIso() },
+        { name: groupName.trim(), created_by: me.id, last_message: "", updated_at: nowIso() },
+        { created_by: me.id },
+      ];
+
+      let room = null;
+      let lastError = null;
+
+      for (const row of variants) {
+        const { data, error } = await supabase.from("chat_rooms").insert(row).select("*").single();
+
+        if (!error && data) {
+          room = data;
+          break;
+        }
+
+        lastError = error;
+      }
+
+      if (!room) throw lastError || new Error("그룹 생성 실패");
+
+      const rows = [me.id, ...memberIds].map((userId) => ({ room_id: room.id, user_id: userId }));
+      const { error: memberError } = await supabase.from("chat_room_members").insert(rows);
+
+      if (memberError && !String(memberError.message || "").includes("duplicate")) throw memberError;
+
+      setGroupName("");
+      setSelected({});
+      setShowCreate(false);
+      await loadRooms();
+      setRoom({ ...room, displayName: groupName.trim(), is_group: true, member_count: rows.length });
+    } catch (err) {
+      setMsg(safeError(err));
+    }
+  }
+
+  return (
+    <section className="page chats">
+      <Header
+        eyebrow="Messages"
+        title="대화"
+        text="1:1 대화와 그룹 대화"
+        right={<button className="pillButton" onClick={() => setShowCreate(true)}>그룹+</button>}
+      />
+
+      <div className="list">
+        {rooms.map((room) => (
+          <button key={room.id} className={`chatCard ${activeRoom?.id === room.id ? "active" : ""}`} onClick={() => setRoom(room)}>
+            <Avatar user={{ nickname: room.is_group ? "그" : room.displayName, avatar_url: room.avatar_url }} size={44} online={!room.is_group} />
+            <div>
+              <b>{room.displayName || "대화방"}</b>
+              <p>{room.is_group ? `${room.member_count || 0}명 · ${room.last_message || "그룹 대화"}` : room.last_message || "아직 메시지가 없어요"}</p>
+            </div>
+            <time>{dateTime(room.updated_at || room.created_at)}</time>
+          </button>
+        ))}
+      </div>
+
+      {!rooms.length && <Empty title="대화방 없음" text="친구를 누르거나 그룹을 만들어줘." />}
+
+      {showCreate && (
+        <section className="sheet">
+          <form className="sheetPanel" onSubmit={createGroup}>
+            <header>
+              <b>그룹 대화 만들기</b>
+              <button type="button" onClick={() => setShowCreate(false)}>×</button>
+            </header>
+
+            <label className="field">
+              <span>방 이름</span>
+              <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="예: 근무조 단톡" />
+            </label>
+
+            <div className="memberPick">
+              {users.map((user) => (
+                <label key={user.id}>
+                  <input type="checkbox" checked={!!selected[user.id]} onChange={(e) => setSelected((prev) => ({ ...prev, [user.id]: e.target.checked }))} />
+                  <Avatar user={user} size={34} online />
+                  <span>{displayName(user)}</span>
+                </label>
+              ))}
+            </div>
+
+            <button className="primaryButton">만들기</button>
+          </form>
+        </section>
+      )}
+
+      <Toast>{msg}</Toast>
+    </section>
+  );
+}
+
+
+
+function Room({ me, room, onBack }) {
+  const [messages, setMessages] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [memberProfiles, setMemberProfiles] = useState({});
+  const [readMap, setReadMap] = useState({});
+  const [text, setText] = useState("");
+  const [msg, setMsg] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [showAttach, setShowAttach] = useState(false);
+  const [showScheduleSheet, setShowScheduleSheet] = useState(false);
+  const [scheduleMode, setScheduleMode] = useState("pick");
+  const [shareEvents, setShareEvents] = useState([]);
+  const [shareQuery, setShareQuery] = useState("");
+  const [shareTitle, setShareTitle] = useState("");
+  const [shareDate, setShareDate] = useState(dateKey());
+  const [shareTime, setShareTime] = useState("18:00");
+  const [shareNotify, setShareNotify] = useState("60");
+
+  const bottom = useRef(null);
+  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!room?.id) return undefined;
+
+    let alive = true;
+
+    loadMessages();
+    loadMembers();
+
+    const topic = `room-${room.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const channel = supabase
+      .channel(topic)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages", filter: `room_id=eq.${room.id}` }, () => {
+        if (alive) loadMessages();
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_message_reads" }, () => {
+        if (alive) loadReadReceipts(messages);
+      })
+      .subscribe();
+
+    const timer = setInterval(() => {
+      if (alive) loadMessages();
+    }, 1800);
+
+    return () => {
+      alive = false;
+      clearInterval(timer);
+      try { supabase.removeChannel(channel); } catch {}
+    };
+  }, [room?.id]);
+
+  useEffect(() => {
+    bottom.current?.scrollIntoView({ block: "end" });
+  }, [messages.length]);
+
+  async function loadMembers() {
+    if (!room?.id) return;
+
+    const { data } = await supabase
+      .from("chat_room_members")
+      .select("user_id")
+      .eq("room_id", room.id);
+
+    const rows = data || [];
+    setMembers(rows);
+
+    const ids = rows.map((item) => item.user_id).filter(Boolean);
+
+    if (ids.length) {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("*")
+        .in("id", ids);
+
+      setMemberProfiles(Object.fromEntries((profiles || []).map((profile) => [profile.id, profile])));
+    }
+  }
+
+  async function loadReadReceipts(sourceMessages) {
+    const ids = (sourceMessages || []).map((item) => item.id).filter(Boolean);
+    if (!ids.length) {
+      setReadMap({});
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("chat_message_reads")
+      .select("message_id,user_id,read_at")
+      .in("message_id", ids);
+
+    if (error) return;
+
+    const next = {};
+    for (const item of data || []) {
+      if (!next[item.message_id]) next[item.message_id] = [];
+      next[item.message_id].push(item);
+    }
+
+    setReadMap(next);
+  }
+
+  async function markRead(sourceMessages) {
+    const rows = (sourceMessages || [])
+      .filter((item) => item.id && item.sender_id && item.sender_id !== me.id)
+      .map((item) => ({
+        message_id: item.id,
+        user_id: me.id,
+        read_at: nowIso(),
+      }));
+
+    if (!rows.length) return;
+
+    await supabase
+      .from("chat_message_reads")
+      .upsert(rows, { onConflict: "message_id,user_id" })
+      .then(() => {});
+  }
+
+  async function loadMessages() {
+    if (!room?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("chat_messages")
+        .select("*")
+        .eq("room_id", room.id)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+
+      const rows = data || [];
+      setMessages(rows);
+      markRead(rows);
+      loadReadReceipts(rows);
+    } catch (err) {
+      setMsg(safeError(err));
+    }
+  }
+
+  function parseMessage(message) {
+    const raw = String(message?.content ?? message?.message ?? "").trim();
+    if (!raw) return { type: "empty", text: "" };
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && parsed.type) return parsed;
+    } catch {}
+
+    if (raw.startsWith("image::")) return { type: "image", url: raw.slice(7) };
+
+    if (raw.startsWith("location::")) {
+      const [lat, lng] = raw.slice(10).split(",").map(Number);
+      return { type: "location", lat, lng, url: `https://maps.google.com/?q=${lat},${lng}` };
+    }
+
+    return { type: "text", text: raw };
+  }
+
+  async function insertMessage(payload, pushText) {
+    const raw = typeof payload === "string" ? payload : JSON.stringify(payload);
+
+    const variants = [
+      { room_id: room.id, sender_id: me.id, content: raw, message: raw, created_at: nowIso() },
+      { room_id: room.id, sender_id: me.id, content: raw, created_at: nowIso() },
+      { room_id: room.id, sender_id: me.id, message: raw, created_at: nowIso() },
+    ];
+
+    let sent = false;
+    let lastError = null;
+
+    for (const row of variants) {
+      const { error } = await supabase.from("chat_messages").insert(row);
+      if (!error) {
+        sent = true;
+        break;
+      }
+      lastError = error;
+    }
+
+    if (!sent) throw lastError || new Error("메시지 저장 실패");
+
+    await supabase
+      .from("chat_rooms")
+      .update({ last_message: pushText, updated_at: nowIso() })
+      .eq("id", room.id);
+
+    await supabase.functions.invoke("send-chat-push", {
+      body: {
+        room_id: room.id,
+        content: pushText,
+        sender_name: me.nickname || me.email || "친구",
+      },
+    }).catch(() => {});
+
+    loadMessages();
+  }
+
+  async function send(event) {
+    event.preventDefault();
+    const value = text.trim();
+    if (!value) return;
+
+    setText("");
+
+    try {
+      await insertMessage(value, value);
+    } catch (err) {
+      setText(value);
+      setMsg(safeError(err));
+    }
+  }
+
+  async function sendImage(file) {
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setMsg("이미지 파일만 보낼 수 있음");
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      setMsg("사진은 10MB 이하만 가능");
+      return;
+    }
+
+    setUploading(true);
+    setShowAttach(false);
+    setMsg("");
+
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+      const path = `${me.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("chat-images")
+        .upload(path, file, { cacheControl: "3600", upsert: false, contentType: file.type });
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from("chat-images").getPublicUrl(path);
+      const url = data?.publicUrl;
+      if (!url) throw new Error("사진 URL 생성 실패");
+
+      await insertMessage({ type: "image", url, name: file.name, size: file.size }, "사진을 보냈습니다");
+    } catch (err) {
+      setMsg(`사진 전송 실패: ${safeError(err)}`);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (cameraInputRef.current) cameraInputRef.current.value = "";
+    }
+  }
+
+  function sendLocation() {
+    if (!navigator.geolocation) {
+      setMsg("이 브라우저는 위치 기능을 지원하지 않음");
+      return;
+    }
+
+    setUploading(true);
+    setShowAttach(false);
+    setMsg("위치 확인 중...");
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const lat = Number(position.coords.latitude.toFixed(6));
+          const lng = Number(position.coords.longitude.toFixed(6));
+          const url = `https://maps.google.com/?q=${lat},${lng}`;
+
+          await insertMessage({ type: "location", lat, lng, url }, "위치를 보냈습니다");
+          setMsg("");
+        } catch (err) {
+          setMsg(`위치 전송 실패: ${safeError(err)}`);
+        } finally {
+          setUploading(false);
+        }
+      },
+      (error) => {
+        setUploading(false);
+        setMsg(error.code === 1 ? "위치 권한이 거부됨" : "위치를 가져오지 못함");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
+    );
+  }
+
+  
+  function scheduleDateOf(item) {
+    return String(item?.start_at || item?.date || dateKey()).slice(0, 10);
+  }
+
+  function scheduleTimeOf(item) {
+    const raw = item?.start_at || "";
+
+    if (raw.includes("T")) return raw.slice(11, 16);
+
+    return item?.time || "09:00";
+  }
+
+  function scheduleDateTimeLabel(item) {
+    return `${scheduleDateOf(item)} ${scheduleTimeOf(item)}`;
+  }
+
+  function notifyAtFor(startAt, minutes) {
+    const value = Number(minutes || 0);
+
+    if (!value) return null;
+
+    const d = new Date(startAt);
+    d.setMinutes(d.getMinutes() - value);
+
+    return d.toISOString();
+  }
+
+  function notifyText(minutes) {
+    const value = Number(minutes || 0);
+
+    if (!value) return "알림 없음";
+    if (value === 10) return "10분 전 알림";
+    if (value === 60) return "1시간 전 알림";
+    if (value === 1440) return "하루 전 알림";
+
+    return `${value}분 전 알림`;
+  }
+
+  function eventOwnerName(item) {
+    const id = item?.created_by || item?.user_id || item?.owner_id;
+
+    if (!id) return "등록자";
+    if (id === me.id) return "나";
+
+    const profile = memberProfiles[id];
+
+    return profile?.nickname || profile?.email || "친구";
+  }
+
+  function toSchedulePayload(item, source = "calendar") {
+    return {
+      type: "schedule",
+      source,
+      event_id: item.id || null,
+      title: item.title || "일정",
+      date: scheduleDateOf(item),
+      time: scheduleTimeOf(item),
+      start_at: item.start_at || `${scheduleDateOf(item)}T${scheduleTimeOf(item)}:00`,
+      end_at: item.end_at || null,
+      notify_minutes: Number(item.notify_minutes || 0),
+      owner: eventOwnerName(item),
+      owner_id: item.created_by || item.user_id || item.owner_id || "",
+      shared_by: me.nickname || me.email || "나",
+    };
+  }
+
+  async function openScheduleShareSheet() {
+    setShowAttach(false);
+    setShowScheduleSheet(true);
+    setScheduleMode("pick");
+    setShareQuery("");
+    setMsg("");
+
+    await loadShareEvents();
+  }
+
+  async function loadShareEvents() {
+    try {
+      const start = `${dateKey()}T00:00:00`;
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + 90);
+      const end = `${dateKey(endDate)}T23:59:59`;
+
+      const { data, error } = await supabase
+        .from("calendar_events")
+        .select("*")
+        .gte("start_at", start)
+        .lte("start_at", end)
+        .order("start_at", { ascending: true })
+        .limit(80);
+
+      if (error) throw error;
+
+      setShareEvents(data || []);
+    } catch (err) {
+      setMsg(`공유할 일정 불러오기 실패: ${safeError(err)}`);
+    }
+  }
+
+  async function shareExistingEvent(item) {
+    try {
+      const payload = toSchedulePayload(item, "calendar");
+
+      await insertMessage(payload, `일정 공유: ${payload.title}`);
+
+      setShowScheduleSheet(false);
+      setMsg("일정 공유됨");
+    } catch (err) {
+      setMsg(`일정 공유 실패: ${safeError(err)}`);
+    }
+  }
+
+  async function createAndShareSchedule(event) {
+    event.preventDefault();
+
+    const value = shareTitle.trim();
+
+    if (!value) {
+      setMsg("일정 제목을 입력해줘");
+      return;
+    }
+
+    setUploading(true);
+
+    try {
+      const startAt = `${shareDate}T${shareTime || "09:00"}:00`;
+      const end = new Date(startAt);
+      end.setHours(end.getHours() + 1);
+
+      const row = {
+        user_id: me.id,
+        owner_id: me.id,
+        created_by: me.id,
+        title: value,
+        start_at: startAt,
+        end_at: end.toISOString(),
+        calendar_type: "shared",
+        notify_minutes: Number(shareNotify || 0),
+        notify_at: notifyAtFor(startAt, shareNotify),
+        updated_at: nowIso(),
+      };
+
+      const { data, error } = await supabase
+        .from("calendar_events")
+        .insert(row)
+        .select("*")
+        .single();
+
+      if (error) throw error;
+
+      const payload = toSchedulePayload(data || row, "new");
+
+      await insertMessage(payload, `일정 공유: ${payload.title}`);
+
+      setShareTitle("");
+      setShowScheduleSheet(false);
+      setMsg("새 일정 만들고 공유됨");
+
+      await supabase.functions.invoke("send-calendar-push", {
+        body: {
+          title: value,
+          date: shareDate,
+          calendar_type: "shared",
+          actor_name: me.nickname || me.email || "친구",
+        },
+      }).catch(() => {});
+    } catch (err) {
+      setMsg(`새 일정 공유 실패: ${safeError(err)}`);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function saveSharedSchedule(parsed) {
+    try {
+      const startAt = parsed.start_at || `${parsed.date || dateKey()}T${parsed.time || "09:00"}:00`;
+      const end = new Date(startAt);
+      end.setHours(end.getHours() + 1);
+
+      const row = {
+        user_id: me.id,
+        owner_id: me.id,
+        created_by: me.id,
+        title: parsed.title || "공유 일정",
+        start_at: startAt,
+        end_at: parsed.end_at || end.toISOString(),
+        calendar_type: "shared",
+        notify_minutes: Number(parsed.notify_minutes || 0),
+        notify_at: notifyAtFor(startAt, parsed.notify_minutes || 0),
+        updated_at: nowIso(),
+      };
+
+      const { error } = await supabase.from("calendar_events").insert(row);
+
+      if (error) throw error;
+
+      setMsg("내 일정에 저장됨");
+    } catch (err) {
+      setMsg(`일정 저장 실패: ${safeError(err)}`);
+    }
+  }
+
+  function openScheduleDate(parsed) {
+    const targetDate = parsed.date || scheduleDateOf(parsed);
+
+    localStorage.setItem("rift_open_calendar_date", targetDate);
+
+    window.dispatchEvent(
+      new CustomEvent("rift-open-calendar-date", {
+        detail: { date: targetDate },
+      })
+    );
+  }
+
+  function readLabel(message) {
+    if (message.sender_id !== me.id) return "";
+    const reads = readMap[message.id] || [];
+    const otherReads = reads.filter((item) => item.user_id !== me.id);
+    return otherReads.length ? "읽음" : "안읽음";
+  }
+
+  function renderMessageBody(message) {
+    const parsed = parseMessage(message);
+
+    if (parsed.type === "image") {
+      return (
+        <a className="imageBubble" href={parsed.url} target="_blank" rel="noreferrer">
+          <img src={parsed.url} alt={parsed.name || "사진"} />
+        </a>
+      );
+    }
+
+    if (parsed.type === "location") {
+      return (
+        <a className="locationBubble" href={parsed.url || `https://maps.google.com/?q=${parsed.lat},${parsed.lng}`} target="_blank" rel="noreferrer">
+          <b>📍 위치 공유</b>
+          <span>{parsed.lat}, {parsed.lng}</span>
+          <em>지도 열기</em>
+        </a>
+      );
+    }
+
+    if (parsed.type === "schedule") {
+      const mine = parsed.owner_id === me.id || parsed.shared_by === me.nickname || message.sender_id === me.id;
+
+      return (
+        <article className="richScheduleCard">
+          <div className="richScheduleTop">
+            <span>📅</span>
+            <div>
+              <b>일정 공유</b>
+              <small>{parsed.source === "new" ? "새 일정" : "캘린더 일정"}</small>
+            </div>
+          </div>
+
+          <strong>{parsed.title || "일정"}</strong>
+
+          <div className="richScheduleMeta">
+            <p><em>날짜</em>{parsed.date || scheduleDateOf(parsed)} {parsed.time || scheduleTimeOf(parsed)}</p>
+            <p><em>등록자</em>{parsed.owner || "등록자"}</p>
+            <p><em>공유자</em>{parsed.shared_by || "친구"}</p>
+            <p><em>알림</em>{notifyText(parsed.notify_minutes)}</p>
+          </div>
+
+          <div className="richScheduleActions">
+            <button type="button" onClick={() => openScheduleDate(parsed)}>캘린더 보기</button>
+            {!mine && <button type="button" onClick={() => saveSharedSchedule(parsed)}>내 일정에 저장</button>}
+          </div>
+        </article>
+      );
+    }
+
+    return <div className="bubble">{parsed.text}</div>;
+  }
+
+  const visibleMessages = messages.filter((message) => parseMessage(message).type !== "empty");
+  const otherProfile = Object.values(memberProfiles).find((profile) => profile.id !== me.id);
+  const roomStatus = room.is_group ? `${members.length || room.member_count || 0}명` : otherProfile ? workSummaryForProfile(otherProfile) : `${visibleMessages.length}개의 메시지`;
+
+  return (
+    <div className="room">
+      <header className="roomHeader">
+        {onBack && <button className="iconButton" onClick={onBack}>‹</button>}
+
+        <Avatar
+          user={{ nickname: room.is_group ? "그" : room.displayName, avatar_url: room.avatar_url }}
+          size={40}
+          online={!room.is_group}
+        />
+
+        <div>
+          <b>{room.displayName || "대화방"}</b>
+          <p>{roomStatus}</p>
+        </div>
+      </header>
+
+      <div className="messages">
+        {visibleMessages.map((message) => {
+          const mine = message.sender_id === me.id;
+
+          return (
+            <div key={message.id || message.created_at} className={`message ${mine ? "mine" : "other"}`}>
+              {renderMessageBody(message)}
+              <span>{timeOnly(message.created_at)} {readLabel(message)}</span>
+            </div>
+          );
+        })}
+        <div ref={bottom} />
+      </div>
+
+      <form className="composer plusComposer" onSubmit={send}>
+        <input ref={fileInputRef} className="hiddenFile" type="file" accept="image/*" onChange={(event) => sendImage(event.target.files?.[0])} />
+        <input ref={cameraInputRef} className="hiddenFile" type="file" accept="image/*" capture="environment" onChange={(event) => sendImage(event.target.files?.[0])} />
+
+        <button type="button" className={`plusButton ${showAttach ? "active" : ""}`} onClick={() => setShowAttach((prev) => !prev)} disabled={uploading}>+</button>
+
+        <input value={text} onChange={(e) => setText(e.target.value)} placeholder={uploading ? "전송 중..." : "메시지 입력"} disabled={uploading} />
+        <button disabled={uploading}>➤</button>
+      </form>
+
+      {showAttach && (
+        <section className="attachSheet" onClick={() => setShowAttach(false)}>
+          <div className="attachPanel" onClick={(event) => event.stopPropagation()}>
+            <div className="attachHandle" />
+            <div className="attachTop">
+              <b>보내기</b>
+              <button onClick={() => setShowAttach(false)}>×</button>
+            </div>
+
+            <div className="attachGrid">
+              <button onClick={() => cameraInputRef.current?.click()}><span className="attachIcon camera">📷</span><b>카메라</b><small>바로 촬영</small></button>
+              <button onClick={() => fileInputRef.current?.click()}><span className="attachIcon photo">🖼️</span><b>사진</b><small>앨범 선택</small></button>
+              <button onClick={sendLocation}><span className="attachIcon location">📍</span><b>친구위치</b><small>현재 위치 공유</small></button>
+              <button onClick={openScheduleShareSheet}><span className="attachIcon schedule">📅</span><b>일정공유</b><small>캘린더 연결</small></button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      
+      {showScheduleSheet && (
+        <section className="scheduleShareSheet">
+          <div className="scheduleSharePanel">
+            <div className="attachHandle" />
+
+            <header className="scheduleShareHeader">
+              <div>
+                <b>일정 공유</b>
+                <p>캘린더 일정 선택하거나 새로 만들어서 채팅에 보내기</p>
+              </div>
+              <button onClick={() => setShowScheduleSheet(false)}>×</button>
+            </header>
+
+            <div className="scheduleModeTabs">
+              <button className={scheduleMode === "pick" ? "active" : ""} onClick={() => setScheduleMode("pick")}>기존 일정</button>
+              <button className={scheduleMode === "new" ? "active" : ""} onClick={() => setScheduleMode("new")}>새 일정</button>
+            </div>
+
+            {scheduleMode === "pick" ? (
+              <>
+                <div className="scheduleSearch">
+                  <span>⌕</span>
+                  <input value={shareQuery} onChange={(event) => setShareQuery(event.target.value)} placeholder="일정 검색" />
+                </div>
+
+                <div className="shareEventList">
+                  {shareEvents
+                    .filter((item) => {
+                      const q = shareQuery.trim().toLowerCase();
+                      if (!q) return true;
+                      return `${item.title || ""} ${scheduleDateTimeLabel(item)} ${eventOwnerName(item)}`.toLowerCase().includes(q);
+                    })
+                    .map((item) => (
+                      <article key={item.id} className="shareEventCard">
+                        <div>
+                          <b>{item.title}</b>
+                          <p>{scheduleDateTimeLabel(item)} · 등록자 {eventOwnerName(item)}</p>
+                          <small>{notifyText(item.notify_minutes)}</small>
+                        </div>
+                        <button onClick={() => shareExistingEvent(item)}>공유</button>
+                      </article>
+                    ))}
+
+                  {!shareEvents.length && (
+                    <div className="shareEmpty">
+                      <b>공유할 일정 없음</b>
+                      <p>새 일정 탭에서 바로 만들어서 보낼 수 있음.</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <form className="newShareForm" onSubmit={createAndShareSchedule}>
+                <label>
+                  일정 제목
+                  <input value={shareTitle} onChange={(event) => setShareTitle(event.target.value)} placeholder="예: 회식, 약속, 근무 변경" />
+                </label>
+
+                <div className="newShareGrid">
+                  <label>
+                    날짜
+                    <input type="date" value={shareDate} onChange={(event) => setShareDate(event.target.value)} />
+                  </label>
+
+                  <label>
+                    시간
+                    <input type="time" value={shareTime} onChange={(event) => setShareTime(event.target.value)} />
+                  </label>
+                </div>
+
+                <label>
+                  알림
+                  <select value={shareNotify} onChange={(event) => setShareNotify(event.target.value)}>
+                    <option value="0">알림 없음</option>
+                    <option value="10">10분 전</option>
+                    <option value="60">1시간 전</option>
+                    <option value="1440">하루 전</option>
+                  </select>
+                </label>
+
+                <button className="primaryButton" disabled={uploading}>
+                  {uploading ? "공유 중..." : "일정 만들고 공유"}
+                </button>
+              </form>
+            )}
+          </div>
+        </section>
+      )}
+
+
+      <Toast>{msg}</Toast>
+    </div>
+  );
+}
+
+
+function Calendar({ me }) {
+  const [date, setDate] = useState(() => localStorage.getItem("rift_open_calendar_date") || dateKey());
+  const [month, setMonth] = useState(() => { const saved = localStorage.getItem("rift_open_calendar_date"); const base = saved ? parseKeyGlobal(saved) : new Date(); return new Date(base.getFullYear(), base.getMonth(), 1); });
+  const [mode, setMode] = useState(() => localStorage.getItem("rift_calendar_mode") || "shift");
+  const [team, setTeam] = useState(() => localStorage.getItem("rift_shift_team") || me.shift_team || "1");
+  const [showNotify, setShowNotify] = useState(false);
+  const [events, setEvents] = useState([]);
+  const [profilesById, setProfilesById] = useState({});
+  const [filterOwner, setFilterOwner] = useState("all");
+  const [editingEvent, setEditingEvent] = useState(null);
+  const [title, setTitle] = useState("");
+  const [notifyMinutes, setNotifyMinutes] = useState("0");
+  const [msg, setMsg] = useState("");
+  const [notifications, setNotifications] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("rift_notifications") || "[]"); } catch { return []; }
+  });
+
+  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+
+  useEffect(() => { localStorage.setItem("rift_calendar_mode", mode); }, [mode]);
+  useEffect(() => { localStorage.setItem("rift_shift_team", team); }, [team]);
+  useEffect(() => { localStorage.setItem("rift_notifications", JSON.stringify(notifications.slice(0, 80))); }, [notifications]);
+  useEffect(() => { loadEvents(); }, [month]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel(`calendar-events-watch-${me.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "calendar_events" }, () => loadEvents())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [me.id]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = Date.now();
+      const fired = JSON.parse(localStorage.getItem("rift_fired_reminders") || "{}");
+
+      for (const item of events) {
+        if (!item.notify_at || fired[item.id]) continue;
+
+        const t = new Date(item.notify_at).getTime();
+        if (Number.isFinite(t) && t <= now && now - t < 65000) {
+          fired[item.id] = true;
+          showBrowserNotification(`일정 알림 · ${item.title}`, {
+            body: `${dateTime(item.start_at)} · 등록자 ${ownerName(item)}`,
+            tag: `calendar-reminder-${item.id}`,
+          });
+        }
+      }
+
+      localStorage.setItem("rift_fired_reminders", JSON.stringify(fired));
+    }, 30000);
+
+    return () => clearInterval(timer);
+  }, [events, profilesById]);
+
+  function keyOf(day) { return dateKey(day); }
+
+  async function saveMyWork(nextMode = mode, nextTeam = team) {
+    setMode(nextMode);
+    setTeam(String(nextTeam));
+
+    localStorage.setItem("rift_calendar_mode", nextMode);
+    localStorage.setItem("rift_shift_team", String(nextTeam));
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        work_mode: nextMode,
+        shift_team: String(nextTeam),
+        updated_at: nowIso(),
+      })
+      .eq("id", me.id);
+
+    if (error) {
+      setMsg(`내 조 저장 실패: ${safeError(error)}`);
+      return;
+    }
+
+    setMsg(nextMode === "shift" ? `내 근무표 ${nextTeam}조로 저장됨` : "내 근무표 통상근무로 저장됨");
+  }
+  function shiftFor(teamNo, key) { return shiftForTeam(teamNo, key); }
+  function shiftDayLabel(teamNo, key) { return shiftDayForTeam(teamNo, key); }
+  function shiftClass(value) { if (value === "A") return "shiftA"; if (value === "B") return "shiftB"; if (value === "C") return "shiftC"; return "shiftOff"; }
+  function normalWorkFor(key) { return normalWorkForKey(key); }
+  function monthTitle() { return `${month.getFullYear()}년 ${month.getMonth() + 1}월`; }
+  function monthRange() {
+    const start = new Date(month.getFullYear(), month.getMonth(), 1);
+    const end = new Date(month.getFullYear(), month.getMonth() + 1, 1);
+    return { start: keyOf(start), end: keyOf(end) };
+  }
+
+  function buildMonthDays() {
+    const first = new Date(month.getFullYear(), month.getMonth(), 1);
+    const startDay = new Date(month.getFullYear(), month.getMonth(), 1 - first.getDay());
+    return Array.from({ length: 42 }, (_, i) => {
+      const d = new Date(startDay);
+      d.setDate(startDay.getDate() + i);
+      return d;
+    });
+  }
+
+  function eventOwnerId(item) { return item?.created_by || item?.user_id || item?.owner_id || ""; }
+  function ownerName(item) {
+    const id = eventOwnerId(item);
+    if (!id) return "등록자 미상";
+    if (id === me.id) return "나";
+    const profile = profilesById[id];
+    return profile?.nickname || profile?.email || "친구";
+  }
+
+  function ownerShort(item) {
+    const name = ownerName(item);
+    if (name === "나") return "나";
+    return name.slice(0, 3);
+  }
+
+  function ownerClass(item) {
+    const id = eventOwnerId(item) || "none";
+    if (id === me.id) return "ownerColor0";
+    const sum = [...id].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+    return `ownerColor${(sum % 5) + 1}`;
+  }
+
+  function notifyAtFor(startAt, minutes) {
+    const value = Number(minutes || 0);
+    if (!value) return null;
+    const d = new Date(startAt);
+    d.setMinutes(d.getMinutes() - value);
+    return d.toISOString();
+  }
+
+  function reminderText(item) {
+    const value = Number(item.notify_minutes || 0);
+    if (!value) return "알림 없음";
+    if (value < 60) return `${value}분 전 알림`;
+    if (value === 60) return "1시간 전 알림";
+    if (value === 1440) return "하루 전 알림";
+    return `${value}분 전 알림`;
+  }
+
+  async function loadEvents() {
+    try {
+      const range = monthRange();
+
+      const { data, error } = await supabase
+        .from("calendar_events")
+        .select("*")
+        .gte("start_at", `${range.start}T00:00:00`)
+        .lt("start_at", `${range.end}T00:00:00`)
+        .order("start_at", { ascending: true });
+
+      if (error) throw error;
+
+      const rows = data || [];
+      setEvents(rows);
+
+      const ids = [...new Set(rows.map(eventOwnerId).filter(Boolean))];
+
+      if (ids.length) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("*")
+          .in("id", ids);
+
+        setProfilesById(Object.fromEntries((profiles || []).map((profile) => [profile.id, profile])));
+      }
+
+      setMsg("");
+    } catch (err) {
+      setMsg(`일정 불러오기 실패: ${safeError(err)}`);
+    }
+  }
+
+  async function requestNotifyPermission() {
+    try {
+      await registerWebPush(me.id);
+      setMsg("백그라운드 알림 등록 완료");
+      showBrowserNotification("Rift 알림 설정 완료", { body: "친구가 일정이나 채팅을 등록하면 알림이 와요." });
+    } catch (err) {
+      setMsg(safeError(err));
+    }
+  }
+
+  function addNotification(body, targetDate, actor = me.nickname || "사용자") {
+    const item = {
+      id: `${Date.now()}-${Math.random()}`,
+      title: `${actor}님이 일정을 등록했습니다`,
+      body: `${body}${targetDate ? " · " + targetDate : ""}`,
+      created_at: new Date().toISOString(),
+      read: false,
+    };
+
+    setNotifications((prev) => [item, ...prev].slice(0, 80));
+    showBrowserNotification(item.title, { body: item.body, tag: "calendar_event" });
+  }
+
+  async function sendBackgroundPush(value, targetDate) {
+    try {
+      await supabase.functions.invoke("send-calendar-push", {
+        body: {
+          title: value,
+          date: targetDate,
+          calendar_type: "shared",
+          actor_name: me.nickname || me.email || "친구",
+        },
+      });
+    } catch {}
+  }
+
+  async function addEvent(event) {
+    event.preventDefault();
+
+    const value = title.trim();
+    if (!value) {
+      setMsg("일정 내용을 입력해줘");
+      return;
+    }
+
+    const startAt = `${date}T09:00:00`;
+    const endAt = `${date}T10:00:00`;
+    const notifyAt = notifyAtFor(startAt, notifyMinutes);
+
+    const row = {
+      user_id: me.id,
+      owner_id: me.id,
+      created_by: me.id,
+      title: value,
+      start_at: startAt,
+      end_at: endAt,
+      calendar_type: "shared",
+      notify_minutes: Number(notifyMinutes || 0),
+      notify_at: notifyAt,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from("calendar_events").insert(row);
+
+    if (error) {
+      setMsg(`일정 추가 실패: ${safeError(error)}`);
+      return;
+    }
+
+    setTitle("");
+    setNotifyMinutes("0");
+    setMsg("일정 추가됨");
+    addNotification(value, date, me.nickname || "나");
+    sendBackgroundPush(value, date);
+    loadEvents();
+  }
+
+  async function updateEvent() {
+    if (!editingEvent) return;
+
+    const nextTitle = window.prompt("수정할 일정 내용", editingEvent.title || "");
+    if (!nextTitle) return;
+
+    const { error } = await supabase
+      .from("calendar_events")
+      .update({
+        title: nextTitle,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", editingEvent.id);
+
+    if (error) {
+      setMsg(`수정 실패: ${safeError(error)}`);
+      return;
+    }
+
+    setEditingEvent(null);
+    setMsg("수정됨");
+    loadEvents();
+  }
+
+  async function deleteEvent(item) {
+    if (!window.confirm(`"${item.title}" 일정을 삭제할까?`)) return;
+
+    const { error } = await supabase.from("calendar_events").delete().eq("id", item.id);
+
+    if (error) {
+      setMsg(`삭제 실패: ${safeError(error)}`);
+      return;
+    }
+
+    setMsg("삭제됨");
+    loadEvents();
+  }
+
+  function changeMonth(diff) { setMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + diff, 1)); }
+  function goToday() {
+    const today = new Date();
+    setDate(keyOf(today));
+    setMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+  }
+  function selectDay(day) {
+    const key = keyOf(day);
+    setDate(key);
+    setMonth(new Date(day.getFullYear(), day.getMonth(), 1));
+  }
+  function markAllRead() { setNotifications((prev) => prev.map((item) => ({ ...item, read: true }))); }
+  function clearNotifications() { setNotifications([]); }
+
+  const monthDays = buildMonthDays();
+  const selectedShift = shiftFor(team, date);
+  const selectedNormal = normalWorkFor(date);
+  const unreadCount = notifications.filter((item) => !item.read).length;
+
+  const filteredEvents = filterOwner === "all" ? events : events.filter((item) => eventOwnerId(item) === filterOwner);
+  const selectedEvents = filteredEvents.filter((item) => String(item.start_at || "").slice(0, 10) === date);
+
+  const eventMap = filteredEvents.reduce((acc, item) => {
+    const key = String(item.start_at || "").slice(0, 10);
+    if (!key) return acc;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(item);
+    return acc;
+  }, {});
+
+  const ownerOptions = [
+    { id: "all", label: "전체" },
+    ...uniqBy(events.map((item) => ({ id: eventOwnerId(item), label: ownerName(item) })).filter((item) => item.id), "id"),
+  ];
+
+  const allTeamShifts = ["1", "2", "3", "4"].map((teamNo) => ({
+    team: teamNo,
+    shift: shiftFor(teamNo, date),
+    dayLabel: shiftDayLabel(teamNo, date),
+  }));
+
+  return (
+    <section className="page calendar timetreeCalendar">
+      <header className="ttHeader">
+        <div>
+          <button className="monthSelect" onClick={goToday}>{monthTitle()} <span>⌄</span></button>
+          <p>{mode === "shift" ? "4조 3교대 공유 캘린더" : "통상근무 공유 캘린더"}</p>
+        </div>
+        <div className="ttActions">
+          <button className="ttIconButton" onClick={() => setShowNotify(true)}>🔔{unreadCount > 0 && <i>{unreadCount}</i>}</button>
+          <button className="ttIconButton" onClick={requestNotifyPermission}>⚙</button>
+        </div>
+      </header>
+
+      <section className="calendarMode slim">
+        <button className={mode === "shift" ? "active" : ""} onClick={() => saveMyWork("shift", team)}>4조 3교대</button>
+        <button className={mode === "normal" ? "active" : ""} onClick={() => saveMyWork("normal", team)}>통상근무</button>
+      </section>
+
+      {mode === "shift" && (
+        <section className="teamPicker slimTeam">
+          {["1", "2", "3", "4"].map((teamNo) => (
+            <button key={teamNo} className={team === teamNo ? "active" : ""} onClick={() => saveMyWork("shift", teamNo)}>{teamNo}조</button>
+          ))}
+        </section>
+      )}
+
+      <section className="myWorkSaveHint">
+        <b>내 근무표 설정</b>
+        <p>
+          {mode === "shift"
+            ? `${team}조 · 오늘 ${shiftFor(team, dateKey())} · 버튼 누르면 내 프로필에 바로 저장됨`
+            : "통상근무 · 내 프로필에 저장됨"}
+        </p>
+      </section>
+
+      <section className="ownerFilter">
+        {ownerOptions.map((item) => (
+          <button key={item.id} className={filterOwner === item.id ? "active" : ""} onClick={() => setFilterOwner(item.id)}>
+            {item.label}
+          </button>
+        ))}
+      </section>
+
+      <section className="ttMonthCard">
+        <div className="ttMonthNav">
+          <button onClick={() => changeMonth(-1)}>‹</button>
+          <b>{monthTitle()}</b>
+          <button onClick={() => changeMonth(1)}>›</button>
+        </div>
+
+        <div className="ttMonthGrid">
+          {weekdays.map((day) => <div key={day} className={`ttWeek ${day === "일" ? "sun" : day === "토" ? "sat" : ""}`}>{day}</div>)}
+
+          {monthDays.map((day) => {
+            const key = keyOf(day);
+            const isOtherMonth = day.getMonth() !== month.getMonth();
+            const isToday = key === dateKey();
+            const isSelected = key === date;
+            const dayEvents = eventMap[key] || [];
+            const shift = shiftFor(team, key);
+            const normal = normalWorkFor(key);
+            const isShiftMode = mode === "shift";
+
+            return (
+              <button
+                key={key}
+                className={["ttDay", isOtherMonth ? "muted" : "", isToday ? "today" : "", isSelected ? "selected" : "", !isShiftMode ? normal.dayClass : ""].join(" ")}
+                onClick={() => selectDay(day)}
+              >
+                <strong>{day.getDate()}</strong>
+                {isShiftMode ? <em className={shiftClass(shift)}>{shift}</em> : <em className={normal.className}>{normal.label}</em>}
+
+                <div className="ttBars">
+                  {dayEvents.slice(0, 2).map((item, index) => (
+                    <span key={item.id || index} className={ownerClass(item)}>{ownerShort(item)} · {item.title}</span>
+                  ))}
+                  {dayEvents.length > 2 && <small>+{dayEvents.length - 2}</small>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="ttSelected">
+        <div className="ttSelectedTop">
+          <div><span>선택 날짜</span><b>{date}</b></div>
+          {mode === "shift" ? <em className={shiftClass(selectedShift)}>{team}조 {selectedShift}</em> : <em className={selectedNormal.className}>{selectedNormal.label}</em>}
+        </div>
+
+        {mode === "shift" ? (
+          <div className="allTeamShift compact">
+            {allTeamShifts.map((item) => (
+              <div key={item.team} className={item.team === team ? "active" : ""}>
+                <span>{item.team}조</span>
+                <b className={shiftClass(item.shift)}>{item.shift}</b>
+                <small>{item.dayLabel}</small>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p>{selectedNormal.detail}</p>
+        )}
+      </section>
+
+      <form className="ttAddForm reminderForm" onSubmit={addEvent}>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`${date} 일정 추가`} />
+        <select value={notifyMinutes} onChange={(e) => setNotifyMinutes(e.target.value)}>
+          <option value="0">알림 없음</option>
+          <option value="10">10분 전</option>
+          <option value="60">1시간 전</option>
+          <option value="1440">하루 전</option>
+        </select>
+        <button>추가</button>
+      </form>
+
+      <section className="ttEventList">
+        {selectedEvents.map((item) => (
+          <article className={`ttEvent ${ownerClass(item)}`} key={item.id}>
+            <div onClick={() => setEditingEvent(item)}>
+              <b>{item.title}</b>
+              <p>{dateTime(item.start_at)} · 등록자 {ownerName(item)} · {reminderText(item)}</p>
+            </div>
+            <div className="eventActions">
+              <button onClick={() => setEditingEvent(item)}>수정</button>
+              <button onClick={() => deleteEvent(item)}>삭제</button>
+            </div>
+          </article>
+        ))}
+      </section>
+
+      {!selectedEvents.length && <Empty title="선택 날짜 일정 없음" text="날짜를 누르고 일정을 추가해줘." />}
+
+      {editingEvent && (
+        <section className="sheet">
+          <div className="sheetPanel editEventPanel">
+            <header>
+              <b>일정 관리</b>
+              <button onClick={() => setEditingEvent(null)}>×</button>
+            </header>
+            <div className="eventDetailBox">
+              <b>{editingEvent.title}</b>
+              <p>{dateTime(editingEvent.start_at)}</p>
+              <p>등록자 {ownerName(editingEvent)}</p>
+              <p>{reminderText(editingEvent)}</p>
+            </div>
+            <button className="primaryButton" onClick={updateEvent}>일정 수정</button>
+            <button className="dangerButton" onClick={() => deleteEvent(editingEvent)}>일정 삭제</button>
+          </div>
+        </section>
+      )}
+
+      {showNotify && (
+        <section className="sheet">
+          <div className="sheetPanel notifyPanel">
+            <header>
+              <div><b>알림</b><p>일정 등록 알림</p></div>
+              <button onClick={() => setShowNotify(false)}>×</button>
+            </header>
+            <div className="notifyTools">
+              <button onClick={requestNotifyPermission}>백그라운드 알림 켜기</button>
+              <button onClick={markAllRead}>모두 읽음</button>
+              <button onClick={clearNotifications}>비우기</button>
+            </div>
+            <div className="notifyList">
+              {notifications.map((item) => (
+                <article key={item.id} className={item.read ? "read" : ""}>
+                  <div className="notifyLogo">✣</div>
+                  <div><b>{item.title}</b><p>{item.body}</p><span>{dateTime(item.created_at)}</span></div>
+                </article>
+              ))}
+              {!notifications.length && <div className="notifyEmpty"><b>알림 없음</b><p>일정을 추가하면 여기에 기록돼.</p></div>}
+            </div>
+          </div>
+        </section>
+      )}
+
+      <Toast>{msg}</Toast>
+    </section>
+  );
+}
+
+
+function More({ me, section, setSection, reloadMe }) {
+  return (
+    <section className="page more">
+      <Header eyebrow="Account" title="더보기" text="프로필과 앱 설정" />
+
+      <button className="accountCard" onClick={() => setSection("profile")}>
+        <Avatar user={me} size={66} online />
+        <div>
+          <span>내 계정</span>
+          <b>{me.nickname}</b>
+          <p>{me.status_message || "내 프로필 수정"}</p>
+        </div>
+      </button>
+
+      <div className="menuGrid">
+        <button className={section === "profile" ? "active" : ""} onClick={() => setSection("profile")}>
+          <b>프로필</b>
+          <span>닉네임 · 사진</span>
+        </button>
+        <button className={section === "notify" ? "active" : ""} onClick={() => setSection("notify")}>
+          <b>알림</b>
+          <span>푸시 설정</span>
+        </button>
+        <button className={section === "location" ? "active" : ""} onClick={() => setSection("location")}>
+          <b>위치</b>
+          <span>위치공유</span>
+        </button>
+        <button className={section === "settings" ? "active" : ""} onClick={() => setSection("settings")}>
+          <b>환경설정</b>
+          <span>테마 · 로그아웃</span>
+        </button>
+      </div>
+
+      <section className="panel">
+        {section === "profile" && <Profile me={me} reloadMe={reloadMe} />}
+        {section === "notify" && <Notify me={me} />}
+        {section === "location" && <Location />}
+        {section === "settings" && <Settings me={me} reloadMe={reloadMe} />}
+      </section>
+    </section>
+  );
+}
+
+function Profile({ me, reloadMe }) {
+  const [nickname, setNickname] = useState(me.nickname || "");
+  const [status, setStatus] = useState(me.status_message || "");
+  const [avatar, setAvatar] = useState(me.avatar_url || "");
+  const [msg, setMsg] = useState("");
+
+  async function save() {
+    const variants = [
+      { nickname, status_message: status, avatar_url: avatar },
+      { nickname },
+    ];
+
+    let lastError = null;
+
+    for (const row of variants) {
+      const { error } = await supabase.from("profiles").update(row).eq("id", me.id);
+
+      if (!error) {
+        setMsg("저장됨");
+        reloadMe();
+        return;
+      }
+
+      lastError = error;
+    }
+
+    setMsg(safeError(lastError));
+  }
+
+  return (
+    <div className="formPanel">
+      <h2>프로필 수정</h2>
+
+      <div className="profilePreview">
+        <Avatar user={{ ...me, nickname, avatar_url: avatar }} size={64} online />
+        <div>
+          <b>{nickname || me.email}</b>
+          <p>{status || "상태메시지 없음"}</p>
+        </div>
+      </div>
+
+      <label className="field">
+        <span>닉네임</span>
+        <input value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="닉네임" />
+      </label>
+
+      <label className="field">
+        <span>상태메시지</span>
+        <input value={status} onChange={(e) => setStatus(e.target.value)} placeholder="상태메시지" />
+      </label>
+
+      <label className="field">
+        <span>프로필 이미지 URL</span>
+        <input value={avatar} onChange={(e) => setAvatar(e.target.value)} placeholder="https://..." />
+      </label>
+
+      <button className="primaryButton" onClick={save}>저장</button>
+      <Toast>{msg}</Toast>
+    </div>
+  );
+}
+
+function Notify({ me }) {
+  const [msg, setMsg] = useState("");
+
+  async function enable() {
+    try {
+      await registerWebPush(me.id);
+      setMsg("알림 등록 완료");
+    } catch (err) {
+      setMsg(safeError(err));
+    }
+  }
+
+  return (
+    <div className="formPanel">
+      <h2>알림</h2>
+      <p>PC/모바일 기기마다 한 번씩 켜야 함.</p>
+      <button className="primaryButton" onClick={enable}>백그라운드 알림 켜기</button>
+      <Toast>{msg}</Toast>
+    </div>
+  );
+}
+
+function Location() {
+  return (
+    <div className="formPanel">
+      <h2>위치공유</h2>
+      <p>승인형 친구 위치공유는 다음 단계에서 붙이면 됨.</p>
+    </div>
+  );
+}
+
+function Settings({ me, reloadMe }) {
+  const [dark, setDark] = useState(!!me.dark_mode);
+  const [fontSize, setFontSize] = useState(() => localStorage.getItem("rift_font_size") || "normal");
+  const [workMode, setWorkMode] = useState(me.work_mode || "shift");
+  const [shiftTeam, setShiftTeam] = useState(me.shift_team || "1");
+  const [msg, setMsg] = useState("");
+
+  function changeFontSize(next) {
+    setFontSize(next);
+    localStorage.setItem("rift_font_size", next);
+    document.body.dataset.fontSize = next;
+  }
+
+  async function save() {
+    const row = {
+      dark_mode: dark,
+      work_mode: workMode,
+      shift_team: shiftTeam,
+      updated_at: nowIso(),
+    };
+
+    const { error } = await supabase.from("profiles").update(row).eq("id", me.id);
+
+    if (error) {
+      setMsg(safeError(error));
+      return;
+    }
+
+    localStorage.setItem("rift_calendar_mode", workMode);
+    localStorage.setItem("rift_shift_team", shiftTeam);
+
+    setMsg("저장됨");
+    reloadMe();
+  }
+
+  return (
+    <div className="formPanel">
+      <h2>환경설정</h2>
+
+      <label className="switchRow">
+        <span>다크모드</span>
+        <input type="checkbox" checked={dark} onChange={(e) => setDark(e.target.checked)} />
+      </label>
+
+      <section className="fontControl">
+        <div><b>글자 크기</b><p>폰에서 보기 편한 크기로 조절</p></div>
+        <div className="fontButtons">
+          <button className={fontSize === "small" ? "active" : ""} onClick={() => changeFontSize("small")}>작게</button>
+          <button className={fontSize === "normal" ? "active" : ""} onClick={() => changeFontSize("normal")}>보통</button>
+          <button className={fontSize === "large" ? "active" : ""} onClick={() => changeFontSize("large")}>크게</button>
+        </div>
+      </section>
+
+      <section className="workSettingBox">
+        <div>
+          <b>내 근무표 공유</b>
+          <p>{workSummaryForProfile({ ...me, work_mode: workMode, shift_team: shiftTeam })}</p>
+        </div>
+
+        <div className="workModeButtons">
+          <button className={workMode === "shift" ? "active" : ""} onClick={() => setWorkMode("shift")}>4조3교대</button>
+          <button className={workMode === "normal" ? "active" : ""} onClick={() => setWorkMode("normal")}>통상근무</button>
+        </div>
+
+        {workMode === "shift" && (
+          <div className="shiftTeamButtons">
+            {["1", "2", "3", "4"].map((teamNo) => (
+              <button key={teamNo} className={shiftTeam === teamNo ? "active" : ""} onClick={() => setShiftTeam(teamNo)}>{teamNo}조</button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <button className="primaryButton" onClick={save}>저장</button>
+      <button className="dangerButton" onClick={() => supabase.auth.signOut().then(() => location.reload())}>로그아웃</button>
+      <Toast>{msg}</Toast>
+    </div>
+  );
+}
+
