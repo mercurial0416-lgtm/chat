@@ -3,15 +3,14 @@ name: Patch File
 on:
   workflow_dispatch:
     inputs:
-      patch_file:
-        description: "실행할 패치 파일 경로"
+      patch_url:
+        description: "Raw patch URL"
         required: true
-        default: "patches/final-baseline.sh"
         type: string
       commit_message:
-        description: "커밋 메시지"
+        description: "Commit message"
         required: false
-        default: "patch update"
+        default: "apply patch"
         type: string
 
 permissions:
@@ -29,26 +28,17 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check patch file
+      - name: Download patch
         run: |
           set -euo pipefail
-          PATCH_FILE="${{ inputs.patch_file }}"
-          echo "PATCH_FILE=$PATCH_FILE"
+          curl -L "${{ inputs.patch_url }}" -o /tmp/mobile.patch
+          echo "=== patch preview ==="
+          sed -n '1,200p' /tmp/mobile.patch
 
-          if [ ! -f "$PATCH_FILE" ]; then
-            echo "::error::Patch file not found: $PATCH_FILE"
-            find . -maxdepth 3 -type f | sort
-            exit 1
-          fi
-
-          sed -n '1,160p' "$PATCH_FILE"
-
-      - name: Run patch file
+      - name: Apply patch
         run: |
           set -euo pipefail
-          PATCH_FILE="${{ inputs.patch_file }}"
-          chmod +x "$PATCH_FILE"
-          bash "$PATCH_FILE"
+          git apply --whitespace=fix /tmp/mobile.patch
 
       - name: Setup Node
         uses: actions/setup-node@v4
