@@ -1,1 +1,45 @@
-set -euo pipefail; echo "=== realtime chat only, keep UI ==="; printf '%s' 'CmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAoKcGF0aCA9IFBhdGgoImFwcC9zcmMvQXBwLmpzeCIpCnMgPSBwYXRoLnJlYWRfdGV4dChlbmNvZGluZz0idXRmLTgiKQpjaGFuZ2VkID0gRmFsc2UKCm9sZF9jaGF0cyA9ICcnJ3VzZUVmZmVjdCgoKSA9PiB7IGxvYWRBbGwoKTsgY29uc3QgdGltZXIgPSBzZXRJbnRlcnZhbChsb2FkUm9vbXMsIDI1MDApOyByZXR1cm4gKCkgPT4gY2xlYXJJbnRlcnZhbCh0aW1lcik7IH0sIFtdKTsnJycKbmV3X2NoYXRzID0gJycndXNlRWZmZWN0KCgpID0+IHsgbG9hZEFsbCgpOyBjb25zdCBjaGFubmVsID0gc3VwYWJhc2UgLmNoYW5uZWwoYGNoYXQtcm9vbS1saXN0LSR7bWUuaWR9LSR7RGF0ZS5ub3coKX0tJHtNYXRoLnJhbmRvbSgpLnRvU3RyaW5nKDM2KS5zbGljZSgyKX1gKSAub24oInBvc3RncmVzX2NoYW5nZXMiLCB7IGV2ZW50OiAiKiIsIHNjaGVtYTogInB1YmxpYyIsIHRhYmxlOiAiY2hhdF9yb29tcyIgfSwgKCkgPT4gbG9hZFJvb21zKCkpIC5vbigicG9zdGdyZXNfY2hhbmdlcyIsIHsgZXZlbnQ6ICIqIiwgc2NoZW1hOiAicHVibGljIiwgdGFibGU6ICJjaGF0X3Jvb21fbWVtYmVycyIgfSwgKCkgPT4gbG9hZFJvb21zKCkpIC5vbigicG9zdGdyZXNfY2hhbmdlcyIsIHsgZXZlbnQ6ICIqIiwgc2NoZW1hOiAicHVibGljIiwgdGFibGU6ICJjaGF0X21lc3NhZ2VzIiB9LCAoKSA9PiBsb2FkUm9vbXMoKSkgLnN1YnNjcmliZSgoc3RhdHVzKSA9PiB7IGlmIChzdGF0dXMgPT09ICJTVUJTQ1JJQkVEIikgbG9hZFJvb21zKCk7IH0pOyBjb25zdCBmYWxsYmFja1RpbWVyID0gc2V0SW50ZXJ2YWwobG9hZFJvb21zLCAxNTAwMCk7IHJldHVybiAoKSA9PiB7IGNsZWFySW50ZXJ2YWwoZmFsbGJhY2tUaW1lcik7IHRyeSB7IHN1cGFiYXNlLnJlbW92ZUNoYW5uZWwoY2hhbm5lbCk7IH0gY2F0Y2gge30gfTsgfSwgW21lLmlkXSk7JycnCgppZiBvbGRfY2hhdHMgaW4gczoKICAgIHMgPSBzLnJlcGxhY2Uob2xkX2NoYXRzLCBuZXdfY2hhdHMsIDEpCiAgICBjaGFuZ2VkID0gVHJ1ZQogICAgcHJpbnQoInBhdGNoZWQgY2hhdCByb29tIGxpc3QgcmVhbHRpbWUiKQplbGlmICJjaGF0LXJvb20tbGlzdC0ke21lLmlkfSIgaW4gcyBvciAicm9vbXMtd2F0Y2giIGluIHM6CiAgICBwcmludCgiY2hhdCByb29tIGxpc3QgcmVhbHRpbWUgYWxyZWFkeSBwcmVzZW50IikKZWxzZToKICAgIHJhaXNlIFN5c3RlbUV4aXQoImNoYXQgcm9vbSBsaXN0IHRhcmdldCBibG9jayBub3QgZm91bmQiKQoKb2xkX3Jvb20gPSAnJyd1c2VFZmZlY3QoKCkgPT4geyBpZiAoIXJvb20/LmlkKSByZXR1cm4gdW5kZWZpbmVkOyBsZXQgYWxpdmUgPSB0cnVlOyBsb2FkTWVzc2FnZXMoKTsgbG9hZE1lbWJlcnMoKTsgY29uc3QgdG9waWMgPSBgcm9vbS0ke3Jvb20uaWR9LSR7RGF0ZS5ub3coKX0tJHtNYXRoLnJhbmRvbSgpLnRvU3RyaW5nKDM2KS5zbGljZSgyKX1gOyBjb25zdCBjaGFubmVsID0gc3VwYWJhc2UgLmNoYW5uZWwodG9waWMpIC5vbigicG9zdGdyZXNfY2hhbmdlcyIsIHsgZXZlbnQ6ICJJTlNFUlQiLCBzY2hlbWE6ICJwdWJsaWMiLCB0YWJsZTogImNoYXRfbWVzc2FnZXMiLCBmaWx0ZXI6IGByb29tX2lkPWVxLiR7cm9vbS5pZH1gIH0sICgpID0+IHsgaWYgKGFsaXZlKSBsb2FkTWVzc2FnZXMoKTsgfSkgLm9uKCJwb3N0Z3Jlc19jaGFuZ2VzIiwgeyBldmVudDogIklOU0VSVCIsIHNjaGVtYTogInB1YmxpYyIsIHRhYmxlOiAiY2hhdF9tZXNzYWdlX3JlYWRzIiB9LCAoKSA9PiB7IGlmIChhbGl2ZSkgbG9hZFJlYWRSZWNlaXB0cyhtZXNzYWdlcyk7IH0pIC5zdWJzY3JpYmUoKTsgY29uc3QgdGltZXIgPSBzZXRJbnRlcnZhbCgoKSA9PiB7IGlmIChhbGl2ZSkgbG9hZE1lc3NhZ2VzKCk7IH0sIDE4MDApOyByZXR1cm4gKCkgPT4geyBhbGl2ZSA9IGZhbHNlOyBjbGVhckludGVydmFsKHRpbWVyKTsgdHJ5IHsgc3VwYWJhc2UucmVtb3ZlQ2hhbm5lbChjaGFubmVsKTsgfSBjYXRjaCB7fSB9OyB9LCBbcm9vbT8uaWRdKTsnJycKbmV3X3Jvb20gPSAnJyd1c2VFZmZlY3QoKCkgPT4geyBpZiAoIXJvb20/LmlkKSByZXR1cm4gdW5kZWZpbmVkOyBsZXQgYWxpdmUgPSB0cnVlOyBsb2FkTWVzc2FnZXMoKTsgbG9hZE1lbWJlcnMoKTsgY29uc3QgdG9waWMgPSBgcm9vbS0ke3Jvb20uaWR9LSR7RGF0ZS5ub3coKX0tJHtNYXRoLnJhbmRvbSgpLnRvU3RyaW5nKDM2KS5zbGljZSgyKX1gOyBjb25zdCBjaGFubmVsID0gc3VwYWJhc2UgLmNoYW5uZWwodG9waWMpIC5vbigicG9zdGdyZXNfY2hhbmdlcyIsIHsgZXZlbnQ6ICIqIiwgc2NoZW1hOiAicHVibGljIiwgdGFibGU6ICJjaGF0X21lc3NhZ2VzIiwgZmlsdGVyOiBgcm9vbV9pZD1lcS4ke3Jvb20uaWR9YCB9LCAoKSA9PiB7IGlmIChhbGl2ZSkgbG9hZE1lc3NhZ2VzKCk7IH0pIC5vbigicG9zdGdyZXNfY2hhbmdlcyIsIHsgZXZlbnQ6ICIqIiwgc2NoZW1hOiAicHVibGljIiwgdGFibGU6ICJjaGF0X21lc3NhZ2VfcmVhZHMiIH0sICgpID0+IHsgaWYgKGFsaXZlKSBsb2FkUmVhZFJlY2VpcHRzKG1lc3NhZ2VzKTsgfSkgLm9uKCJwb3N0Z3Jlc19jaGFuZ2VzIiwgeyBldmVudDogIioiLCBzY2hlbWE6ICJwdWJsaWMiLCB0YWJsZTogImNoYXRfcm9vbV9tZW1iZXJzIiwgZmlsdGVyOiBgcm9vbV9pZD1lcS4ke3Jvb20uaWR9YCB9LCAoKSA9PiB7IGlmIChhbGl2ZSkgeyBsb2FkTWVtYmVycygpOyBsb2FkTWVzc2FnZXMoKTsgfSB9KSAuc3Vic2NyaWJlKChzdGF0dXMpID0+IHsgaWYgKHN0YXR1cyA9PT0gIlNVQlNDUklCRUQiICYmIGFsaXZlKSBsb2FkTWVzc2FnZXMoKTsgfSk7IGNvbnN0IGZhbGxiYWNrVGltZXIgPSBzZXRJbnRlcnZhbCgoKSA9PiB7IGlmIChhbGl2ZSkgbG9hZE1lc3NhZ2VzKCk7IH0sIDE1MDAwKTsgcmV0dXJuICgpID0+IHsgYWxpdmUgPSBmYWxzZTsgY2xlYXJJbnRlcnZhbChmYWxsYmFja1RpbWVyKTsgdHJ5IHsgc3VwYWJhc2UucmVtb3ZlQ2hhbm5lbChjaGFubmVsKTsgfSBjYXRjaCB7fSB9OyB9LCBbcm9vbT8uaWRdKTsnJycKCmlmIG9sZF9yb29tIGluIHM6CiAgICBzID0gcy5yZXBsYWNlKG9sZF9yb29tLCBuZXdfcm9vbSwgMSkKICAgIGNoYW5nZWQgPSBUcnVlCiAgICBwcmludCgicGF0Y2hlZCBjaGF0IHJvb20gbWVzc2FnZXMgcmVhbHRpbWUiKQplbGlmICdmYWxsYmFja1RpbWVyID0gc2V0SW50ZXJ2YWwoKCkgPT4geyBpZiAoYWxpdmUpIGxvYWRNZXNzYWdlcygpOyB9LCAxNTAwMCknIGluIHMgYW5kICd0YWJsZTogImNoYXRfcm9vbV9tZW1iZXJzIiwgZmlsdGVyOiBgcm9vbV9pZD1lcS4ke3Jvb20uaWR9YCcgaW4gczoKICAgIHByaW50KCJjaGF0IHJvb20gbWVzc2FnZXMgcmVhbHRpbWUgYWxyZWFkeSBwcmVzZW50IikKZWxzZToKICAgIHJhaXNlIFN5c3RlbUV4aXQoImNoYXQgcm9vbSBtZXNzYWdlIHRhcmdldCBibG9jayBub3QgZm91bmQiKQoKaWYgY2hhbmdlZDoKICAgIHBhdGgud3JpdGVfdGV4dChzLCBlbmNvZGluZz0idXRmLTgiKQogICAgcHJpbnQoIkFwcC5qc3ggcGF0Y2hlZDsgVUkgbWFya3VwIHVudG91Y2hlZCIpCmVsc2U6CiAgICBwcmludCgibm90aGluZyBjaGFuZ2VkOyBhbHJlYWR5IHBhdGNoZWQiKQo=' | base64 -d | python3; git status --short; echo "=== done ==="
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "=== realtime chat only, keep UI ==="
+
+python3 <<'PY'
+from pathlib import Path
+
+path = Path("app/src/App.jsx")
+s = path.read_text(encoding="utf-8")
+changed = False
+
+old_chats = '''useEffect(() => { loadAll(); const timer = setInterval(loadRooms, 2500); return () => clearInterval(timer); }, []);'''
+
+new_chats = '''useEffect(() => { loadAll(); const channel = supabase .channel(`chat-room-list-${me.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`) .on("postgres_changes", { event: "*", schema: "public", table: "chat_rooms" }, () => loadRooms()) .on("postgres_changes", { event: "*", schema: "public", table: "chat_room_members" }, () => loadRooms()) .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, () => loadRooms()) .subscribe((status) => { if (status === "SUBSCRIBED") loadRooms(); }); const fallbackTimer = setInterval(loadRooms, 15000); return () => { clearInterval(fallbackTimer); try { supabase.removeChannel(channel); } catch {} }; }, [me.id]);'''
+
+if old_chats in s:
+    s = s.replace(old_chats, new_chats, 1)
+    changed = True
+    print("patched chat room list realtime")
+elif "chat-room-list-${me.id}" in s:
+    print("chat room list realtime already patched")
+else:
+    raise SystemExit("chat list target block not found")
+
+old_room = '''useEffect(() => { if (!room?.id) return undefined; let alive = true; loadMessages(); loadMembers(); const topic = `room-${room.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`; const channel = supabase .channel(topic) .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages", filter: `room_id=eq.${room.id}` }, () => { if (alive) loadMessages(); }) .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_message_reads" }, () => { if (alive) loadReadReceipts(messages); }) .subscribe(); const timer = setInterval(() => { if (alive) loadMessages(); }, 1800); return () => { alive = false; clearInterval(timer); try { supabase.removeChannel(channel); } catch {} }; }, [room?.id]);'''
+
+new_room = '''useEffect(() => { if (!room?.id) return undefined; let alive = true; loadMessages(); loadMembers(); const topic = `room-${room.id}-${Date.now()}-${Math.random().toString(36).slice(2)}`; const channel = supabase .channel(topic) .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages", filter: `room_id=eq.${room.id}` }, () => { if (alive) loadMessages(); }) .on("postgres_changes", { event: "*", schema: "public", table: "chat_message_reads" }, () => { if (alive) loadReadReceipts(messages); }) .on("postgres_changes", { event: "*", schema: "public", table: "chat_room_members", filter: `room_id=eq.${room.id}` }, () => { if (alive) { loadMembers(); loadMessages(); } }) .subscribe((status) => { if (status === "SUBSCRIBED" && alive) loadMessages(); }); const fallbackTimer = setInterval(() => { if (alive) loadMessages(); }, 15000); return () => { alive = false; clearInterval(fallbackTimer); try { supabase.removeChannel(channel); } catch {} }; }, [room?.id]);'''
+
+if old_room in s:
+    s = s.replace(old_room, new_room, 1)
+    changed = True
+    print("patched chat room messages realtime")
+elif "fallbackTimer = setInterval(() => { if (alive) loadMessages(); }, 15000)" in s:
+    print("chat room messages realtime already patched")
+else:
+    raise SystemExit("chat room target block not found")
+
+if changed:
+    path.write_text(s, encoding="utf-8")
+
+print("done: UI untouched")
+PY
+
+git status --short
