@@ -3859,7 +3859,11 @@ textarea {
   }
 }
 
-/* === CHAT SAFE OVERFLOW ALIGN FIX START === */
+
+
+/* === CHAT LIST AND BUBBLE STABLE FIX START === */
+
+/* 앱 전체 가로 튐 방지 */
 html,
 body,
 #root {
@@ -3867,166 +3871,69 @@ body,
   overflow-x: hidden !important;
 }
 
-#root,
-#root * {
-  box-sizing: border-box;
-}
-
-/* 대화방 목록/채팅 영역이 긴 문자열 때문에 화면을 밀지 않게 */
-.chatShell,
-.chatMain,
+/* 방 목록 카드가 긴 마지막 메시지 때문에 커지는 것 방지 */
 .chatList,
 .roomList,
-.roomCard,
-.roomMeta,
-.roomTitle,
-.roomLast,
-.roomPreview,
-.messageList,
-.chatMessages {
+[class*="chatList" i],
+[class*="roomList" i] {
   min-width: 0 !important;
-  max-width: 100%;
+  max-width: 100% !important;
+  overflow: hidden !important;
 }
 
-/* 대화방 목록 미리보기는 한 줄 말줄임 */
-.roomLast,
-.roomPreview,
-.roomMeta,
-[class*="roomLast" i],
-[class*="roomPreview" i],
-[class*="roomMeta" i] {
+.chatList *,
+.roomList *,
+[class*="chatList" i] *,
+[class*="roomList" i] * {
   min-width: 0 !important;
+}
+
+/* 방 목록 안의 텍스트는 카드 밖으로 못 나가게 */
+.chatList p,
+.chatList span,
+.roomList p,
+.roomList span,
+[class*="chatList" i] p,
+[class*="chatList" i] span,
+[class*="roomList" i] p,
+[class*="roomList" i] span {
   max-width: 100% !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
-  white-space: nowrap !important;
 }
 
-/* 메시지 행 정렬 보존 */
-.message,
-.chatMessage,
-.messageRow,
-.msgRow,
-[class*="messageRow" i],
-[class*="msgRow" i] {
-  width: 100% !important;
-  min-width: 0 !important;
-}
-
-/* 말풍선 안에서만 긴 글자 줄바꿈 */
-.messageBubble,
-.msgBubble,
-.bubble,
-.messageContent,
-.messageText,
-[class*="bubble" i],
-[class*="messageContent" i],
-[class*="messageText" i] {
-  max-width: min(72%, 720px) !important;
-  min-width: 0 !important;
-  overflow: hidden !important;
-  overflow-wrap: anywhere !important;
-  word-break: break-word !important;
-  white-space: pre-wrap !important;
-}
-
-/* 내 말풍선은 오른쪽 유지 */
-.mine .messageBubble,
-.mine .msgBubble,
-.mine .bubble,
-.mine [class*="bubble" i],
-[class*="mine" i] [class*="bubble" i],
-[class*="own" i] [class*="bubble" i],
-[class*="sent" i] [class*="bubble" i] {
-  margin-left: auto !important;
-}
-
-input,
-textarea {
-  min-width: 0 !important;
-  max-width: 100% !important;
-  overflow-wrap: anywhere !important;
-}
-
-@media (max-width: 720px) {
-  .messageBubble,
-  .msgBubble,
-  .bubble,
-  .messageContent,
-  .messageText,
-  [class*="bubble" i],
-  [class*="messageContent" i],
-  [class*="messageText" i] {
-    max-width: 78vw !important;
-  }
-}
-/* === CHAT SAFE OVERFLOW ALIGN FIX END === */
-
-
-
-/* === CHAT FINAL BUBBLE FIX START === */
-.messageRow {
-  width: 100% !important;
-  display: flex !important;
-  min-width: 0 !important;
-  margin: 8px 0 !important;
-}
-
-.messageRow.mine {
-  justify-content: flex-end !important;
-}
-
-.messageRow.theirs {
-  justify-content: flex-start !important;
-}
-
-.messageBubble {
-  display: inline-flex !important;
-  flex-direction: column !important;
+/* 실제 말풍선 복구: 짧은 글자도 너무 작지 않게 */
+.message {
   width: fit-content !important;
-  min-width: 76px !important;
-  max-width: min(72%, 720px) !important;
-  padding: 12px 16px !important;
-  border-radius: 18px !important;
-  overflow: hidden !important;
+  min-width: 92px !important;
+  max-width: min(68%, 680px) !important;
   overflow-wrap: anywhere !important;
   word-break: break-word !important;
   white-space: pre-wrap !important;
 }
 
-.messageBubble.mine {
+.message.mine {
   margin-left: auto !important;
   margin-right: 0 !important;
 }
 
-.messageBubble.theirs {
+.message:not(.mine) {
   margin-left: 0 !important;
   margin-right: auto !important;
 }
 
-.messageBody {
-  min-width: 0 !important;
+.message * {
   max-width: 100% !important;
   overflow-wrap: anywhere !important;
   word-break: break-word !important;
-  white-space: pre-wrap !important;
-}
-
-.messageMeta {
-  margin-top: 6px !important;
-  font-size: 11px !important;
-  line-height: 1.2 !important;
-  opacity: 0.72 !important;
-  white-space: nowrap !important;
-  align-self: flex-end !important;
 }
 
 @media (max-width: 720px) {
-  .messageBubble {
-    min-width: 68px !important;
+  .message {
+    min-width: 84px !important;
     max-width: 78vw !important;
-    padding: 11px 14px !important;
   }
 }
-/* === CHAT FINAL BUBBLE FIX END === */
+
+/* === CHAT LIST AND BUBBLE STABLE FIX END === */
 

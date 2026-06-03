@@ -188,6 +188,13 @@ function workSummaryForProfile(profile, key = dateKey()) {
   return `${team}조 ${shift} ${dayLabel}${offText}`;
 }
 
+
+function shortPreview(value, max = 24) {
+  const text = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
 function displayName(user) {
   return user?.nickname || user?.displayName || user?.name || user?.title || user?.email || "상대방";
 }
@@ -997,7 +1004,7 @@ function Chats({ me, activeRoom, setRoom }) {
             <Avatar user={{ nickname: room.is_group ? "그" : room.displayName, avatar_url: room.avatar_url }} size={44} online={!room.is_group} />
             <div>
               <b>{room.displayName || "대화방"}</b>
-              <p>{room.is_group ? `${room.member_count || 0}명 · ${room.last_message || "그룹 대화"}` : room.last_message || "아직 메시지가 없어요"}</p>
+              <p>{shortPreview(room.is_group ? `${room.member_count || 0}명 · ${room.last_message || "그룹 대화"}` : room.last_message || "아직 메시지가 없어요", 24)}</p>
             </div>
             <time>{dateTime(room.updated_at || room.created_at)}</time>
           </button>
