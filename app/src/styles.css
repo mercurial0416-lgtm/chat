@@ -3779,3 +3779,82 @@ body.dark .notifyLogo{background:#163524}
     max-width:300px;
   }
 }
+
+/* === long chat text overflow fix === */
+.chatList,
+.chatShell,
+.chatRoom,
+.roomList,
+.roomCard,
+.messageList,
+.messageRow,
+.messageBubble,
+.bubble,
+.chatInputBar {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.roomCard,
+.roomCard *,
+.chatList *,
+.messageBubble,
+.bubble,
+.messageText,
+.messageContent,
+.messageBody {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.roomCard {
+  overflow: hidden;
+}
+
+.roomCard p,
+.roomCard span,
+.roomCard div {
+  min-width: 0;
+}
+
+.messageRow {
+  width: 100%;
+  overflow: hidden;
+}
+
+.messageBubble,
+.bubble {
+  max-width: min(72vw, 680px);
+  overflow: hidden;
+}
+
+.messageBubble *,
+.bubble * {
+  max-width: 100%;
+}
+
+.chatInputBar input,
+.chatInputBar textarea,
+.messageInput,
+input,
+textarea {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .messageBubble,
+  .bubble {
+    max-width: 78vw;
+  }
+
+  .roomCard,
+  .roomCard * {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}
