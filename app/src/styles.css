@@ -3858,3 +3858,68 @@ textarea {
     word-break: break-word;
   }
 }
+
+/* === LONG CHAT TEXT OVERFLOW FIX === */
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden !important;
+}
+
+#root,
+#root * {
+  box-sizing: border-box;
+  min-width: 0 !important;
+}
+
+#root div,
+#root p,
+#root span,
+#root button,
+#root input,
+#root textarea {
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
+[class*="chat" i],
+[class*="room" i],
+[class*="message" i],
+[class*="bubble" i],
+[class*="list" i],
+[class*="card" i] {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
+[class*="message" i],
+[class*="bubble" i] {
+  max-width: min(72vw, 720px) !important;
+  overflow: hidden !important;
+  white-space: pre-wrap !important;
+}
+
+[class*="room" i] span,
+[class*="room" i] p,
+[class*="card" i] span,
+[class*="card" i] p,
+[class*="list" i] span,
+[class*="list" i] p {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+@media (max-width: 720px) {
+  [class*="message" i],
+  [class*="bubble" i] {
+    max-width: 78vw !important;
+  }
+}
+/* === LONG CHAT TEXT OVERFLOW FIX END === */
+

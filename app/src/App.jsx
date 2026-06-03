@@ -864,8 +864,7 @@ function Chats({ me, activeRoom, setRoom }) {
 
   useEffect(() => {
     loadAll();
-    const timer = setInterval(loadRooms, 2500);
-    return () => clearInterval(timer);
+    const channel = supabase.channel("chat-room-list-" + me.id + "-" + Date.now() + "-" + Math.random().toString(36).slice(2)).on("postgres_changes", { event: "*", schema: "public", table: "chat_rooms" }, () => loadRooms()).on("postgres_changes", { event: "*", schema: "public", table: "chat_room_members" }, () => loadRooms()).on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, () => loadRooms()).subscribe((status) => { if (status === "SUBSCRIBED") loadRooms(); }); const fallbackTimer = setInterval(loadRooms, 15000); return () => { clearInterval(fallbackTimer); try { supabase.removeChannel(channel); } catch {} };
   }, []);
 
   async function loadAll() {
@@ -1076,10 +1075,10 @@ function Room({ me, room, onBack }) {
 
     const channel = supabase
       .channel(topic)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages", filter: `room_id=eq.${room.id}` }, () => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages", filter: `room_id=eq.${room.id}` }, () => {
         if (alive) loadMessages();
       })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_message_reads" }, () => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_message_reads" }, () => {
         if (alive) loadReadReceipts(messages);
       })
       .subscribe();
