@@ -1611,16 +1611,19 @@ function Room({ me, room, onBack }) {
 
       <div className="messages">
         {visibleMessages.map((message) => {
-          const mine = message.sender_id === me.id;
-
-          return (
-            <div key={message.id || message.created_at} className={`message ${mine ? "mine" : "other"}`}>
-              {renderMessageBody(message)}
-              <span>{timeOnly(message.created_at)} {readLabel(message)}</span>
+        const mine = message.sender_id === me.id;
+        return (
+          <div key={message.id} className={`messageRow ${mine ? "mine" : "theirs"}`}>
+            <div className={`messageBubble ${mine ? "mine" : "theirs"}`}>
+              <div className="messageBody">{renderMessageBody(message)}</div>
+              <div className="messageMeta">
+                {timeOnly(message.created_at)} {readLabel(message)}
+              </div>
             </div>
-          );
-        })}
-        <div ref={bottom} />
+          </div>
+        );
+      })}
+      <div ref={bottom} />
       </div>
 
       <form className="composer plusComposer" onSubmit={send}>
