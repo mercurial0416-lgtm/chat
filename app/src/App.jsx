@@ -1061,7 +1061,7 @@ function Room({ me, room, onBack }) {
 
   const bottom = useRef(null);
   const fileInputRef = useRef(null);
-  const cameraInputRef = useRef(null);
+  const cameraInputRef = useRef(null); const markedReadRef = useRef(new Set());
 
   useEffect(() => {
     if (!room?.id) return undefined;
@@ -1078,7 +1078,7 @@ function Room({ me, room, onBack }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages", filter: `room_id=eq.${room.id}` }, () => {
         if (alive) loadMessages();
       })
-      .on("postgres_changes", { event: "*", schema: "public", table: "chat_message_reads" }, () => {
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_message_reads" }, () => {
         if (alive) loadReadReceipts(messages);
       })
       .subscribe();
@@ -1144,24 +1144,7 @@ function Room({ me, room, onBack }) {
     setReadMap(next);
   }
 
-  async function markRead(sourceMessages) {
-    const rows = (sourceMessages || [])
-      .filter((item) => item.id && item.sender_id && item.sender_id !== me.id)
-      .map((item) => ({
-        message_id: item.id,
-        user_id: me.id,
-        read_at: nowIso(),
-      }));
-
-    if (!rows.length) return;
-
-    await supabase
-      .from("chat_message_reads")
-      .upsert(rows, { onConflict: "message_id,user_id" })
-      .then(() => {});
-  }
-
-  async function loadMessages() {
+  async function markRead(sourceMessages) { const rows = (sourceMessages || []).filter((item) => item.id && item.sender_id && item.sender_id !== me.id && !markedReadRef.current.has(item.id)) .map((item) => ({ message_id: item.id, user_id: me.id, read_at: nowIso() })); if (!rows.length) return; for (const row of rows) markedReadRef.current.add(row.message_id); await supabase.from("chat_message_reads").upsert(rows, { onConflict: "message_id,user_id", ignoreDuplicates: true }).then(() => {}); } async function loadMessages() {
     if (!room?.id) return;
 
     try {

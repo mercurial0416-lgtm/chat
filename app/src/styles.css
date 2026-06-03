@@ -3859,11 +3859,10 @@ textarea {
   }
 }
 
-/* === LONG CHAT TEXT OVERFLOW FIX === */
+/* === CHAT SAFE OVERFLOW ALIGN FIX START === */
 html,
 body,
 #root {
-  width: 100%;
   max-width: 100%;
   overflow-x: hidden !important;
 }
@@ -3871,55 +3870,94 @@ body,
 #root,
 #root * {
   box-sizing: border-box;
+}
+
+/* 대화방 목록/채팅 영역이 긴 문자열 때문에 화면을 밀지 않게 */
+.chatShell,
+.chatMain,
+.chatList,
+.roomList,
+.roomCard,
+.roomMeta,
+.roomTitle,
+.roomLast,
+.roomPreview,
+.messageList,
+.chatMessages {
   min-width: 0 !important;
+  max-width: 100%;
 }
 
-#root div,
-#root p,
-#root span,
-#root button,
-#root input,
-#root textarea {
-  overflow-wrap: anywhere !important;
-  word-break: break-word !important;
-}
-
-[class*="chat" i],
-[class*="room" i],
-[class*="message" i],
-[class*="bubble" i],
-[class*="list" i],
-[class*="card" i] {
-  min-width: 0 !important;
-  max-width: 100% !important;
-  overflow-wrap: anywhere !important;
-  word-break: break-word !important;
-}
-
-[class*="message" i],
-[class*="bubble" i] {
-  max-width: min(72vw, 720px) !important;
-  overflow: hidden !important;
-  white-space: pre-wrap !important;
-}
-
-[class*="room" i] span,
-[class*="room" i] p,
-[class*="card" i] span,
-[class*="card" i] p,
-[class*="list" i] span,
-[class*="list" i] p {
+/* 대화방 목록 미리보기는 한 줄 말줄임 */
+.roomLast,
+.roomPreview,
+.roomMeta,
+[class*="roomLast" i],
+[class*="roomPreview" i],
+[class*="roomMeta" i] {
   min-width: 0 !important;
   max-width: 100% !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+/* 메시지 행 정렬 보존 */
+.message,
+.chatMessage,
+.messageRow,
+.msgRow,
+[class*="messageRow" i],
+[class*="msgRow" i] {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+/* 말풍선 안에서만 긴 글자 줄바꿈 */
+.messageBubble,
+.msgBubble,
+.bubble,
+.messageContent,
+.messageText,
+[class*="bubble" i],
+[class*="messageContent" i],
+[class*="messageText" i] {
+  max-width: min(72%, 720px) !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  white-space: pre-wrap !important;
+}
+
+/* 내 말풍선은 오른쪽 유지 */
+.mine .messageBubble,
+.mine .msgBubble,
+.mine .bubble,
+.mine [class*="bubble" i],
+[class*="mine" i] [class*="bubble" i],
+[class*="own" i] [class*="bubble" i],
+[class*="sent" i] [class*="bubble" i] {
+  margin-left: auto !important;
+}
+
+input,
+textarea {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow-wrap: anywhere !important;
 }
 
 @media (max-width: 720px) {
-  [class*="message" i],
-  [class*="bubble" i] {
+  .messageBubble,
+  .msgBubble,
+  .bubble,
+  .messageContent,
+  .messageText,
+  [class*="bubble" i],
+  [class*="messageContent" i],
+  [class*="messageText" i] {
     max-width: 78vw !important;
   }
 }
-/* === LONG CHAT TEXT OVERFLOW FIX END === */
-
+/* === CHAT SAFE OVERFLOW ALIGN FIX END === */
